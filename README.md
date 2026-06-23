@@ -1,0 +1,252 @@
+# CareerProof AI by Amaura Labs
+
+CareerProof AI is a proof-backed career SaaS MVP for Indian freshers, students, internship seekers, and early-career candidates.
+
+Positioning: **Build a resume recruiters can trust.**
+
+The product helps users create a Career Vault, calculate a Resume Proof Score, analyze job descriptions, generate honest ATS-friendly resumes, print PDFs, publish public proof portfolios, capture leads, create manual payment orders, approve payments from admin, and collect college pilot leads.
+
+## Features
+
+- Marketing landing page with the CareerProof positioning
+- Free Resume Proof Score lead magnet
+- Signup, login, onboarding, and demo mode when Supabase is missing
+- Career Vault for profile, education, skills, projects, experience, certificates, achievements, and proof links
+- JD analyzer with deterministic fallback when Gemini is missing
+- Proof-backed resume generator with editable bullets and print/PDF export
+- Cover letter and LinkedIn About generator
+- Public proof portfolio with viral footer
+- Pricing page with Free, Student Pro, Lifetime, College Pilot, and manual service packs
+- Provider-based payments: manual, Stripe stub, Razorpay stub, Lemon Squeezy stub
+- Manual payment proof submission and admin approval
+- Referrals and local event tracking
+- Admin dashboard for leads, orders, users, metrics, and testimonials
+- Full Supabase schema with RLS
+
+## Tech Stack
+
+- Next.js 15 App Router
+- TypeScript
+- Tailwind CSS
+- Supabase Auth and Postgres
+- Supabase Row Level Security
+- Gemini API via `@google/genai`
+- Zod validation
+- Vercel deployment
+- System font stack only
+
+## Setup
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+Public pages and the demo dashboard work without Supabase or Gemini. Add env variables when you are ready for production persistence and AI calls.
+
+## Environment Variables
+
+Required for production:
+
+```bash
+NEXT_PUBLIC_APP_URL=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+```
+
+Optional monetization:
+
+```bash
+NEXT_PUBLIC_PAYMENT_MODE=manual
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+LEMONSQUEEZY_API_KEY=
+LEMONSQUEEZY_STORE_ID=
+LEMONSQUEEZY_WEBHOOK_SECRET=
+```
+
+Manual payment:
+
+```bash
+NEXT_PUBLIC_UPI_ID=
+NEXT_PUBLIC_UPI_QR_IMAGE_URL=
+NEXT_PUBLIC_PAYMENT_WHATSAPP=
+NEXT_PUBLIC_SUPPORT_EMAIL=
+```
+
+## Supabase Setup
+
+1. Create a Supabase project.
+2. Copy `Project URL` to `NEXT_PUBLIC_SUPABASE_URL`.
+3. Copy `anon public` key to `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+4. Copy service role key to `SUPABASE_SERVICE_ROLE_KEY`. Never expose this in client code.
+5. Open Supabase SQL editor.
+6. Run `supabase/schema.sql`.
+7. Enable email/password auth in Supabase Auth settings.
+8. Add your deployed URL as an auth redirect URL.
+
+## Admin Setup
+
+After creating your first user, make yourself admin:
+
+```sql
+update public.profiles
+set role = 'admin'
+where email = 'you@example.com';
+```
+
+Admin pages use `profiles.role = 'admin'` in RLS. In local demo mode, `/admin` shows localStorage-backed sample data.
+
+## Gemini Setup
+
+Create a Gemini API key and set:
+
+```bash
+GEMINI_API_KEY=...
+```
+
+Gemini is initialized lazily inside server functions only. If the key is missing or the API fails, the app returns deterministic fallback JSON and keeps working.
+
+## Payment Setup
+
+Default mode is manual:
+
+```bash
+NEXT_PUBLIC_PAYMENT_MODE=manual
+NEXT_PUBLIC_UPI_ID=yourname@upi
+NEXT_PUBLIC_PAYMENT_WHATSAPP=919999999999
+```
+
+Manual flow:
+
+1. User creates an order from `/pricing` or `/billing`.
+2. App shows UPI/WhatsApp instructions.
+3. User submits payment reference and screenshot URL.
+4. Admin opens `/admin/orders`.
+5. Admin approves the order.
+6. User plan updates in demo mode and in Supabase when configured.
+
+Stripe, Razorpay, and Lemon Squeezy files are present under `lib/payments/`. They currently return checkout stubs unless keys are configured. Wire product IDs or checkout APIs there when ready.
+
+## Core Routes
+
+Public:
+
+- `/`
+- `/proof-score`
+- `/pricing`
+- `/college-pilot`
+- `/portfolio/sample`
+- `/sample`
+- `/login`
+- `/signup`
+
+App:
+
+- `/onboarding`
+- `/dashboard`
+- `/vault`
+- `/jobs`
+- `/jobs/new`
+- `/jobs/[id]`
+- `/resumes`
+- `/resumes/new`
+- `/resumes/[id]`
+- `/portfolio-settings`
+- `/billing`
+- `/referrals`
+- `/settings`
+
+Admin:
+
+- `/admin`
+- `/admin/leads`
+- `/admin/orders`
+- `/admin/users`
+- `/admin/metrics`
+- `/admin/testimonials`
+
+API:
+
+- `POST /api/ai/proof-score`
+- `POST /api/ai/analyze-job`
+- `POST /api/ai/generate-resume`
+- `POST /api/ai/generate-cover-letter`
+- `POST /api/ai/generate-linkedin-about`
+- `POST /api/ai/improve-project-bullet`
+- `POST /api/orders/create`
+- `POST /api/orders/submit-proof`
+- `POST /api/admin/orders/approve`
+
+## Deployment to Vercel
+
+1. Push this repo to GitHub.
+2. Import into Vercel.
+3. Add all production env variables.
+4. Set `NEXT_PUBLIC_APP_URL` to your Vercel domain.
+5. Run the Supabase schema.
+6. Create your user and mark it admin.
+7. Test the launch checklist below.
+
+## Test Checklist
+
+- `/` loads and CTAs route correctly
+- `/proof-score` works without login
+- Proof score submission appears in local demo and Supabase when configured
+- `/signup` and `/login` work
+- `/onboarding` saves local vault data
+- `/dashboard` loads
+- `/vault` add/edit/delete/save works
+- `/jobs/new` creates an analysis
+- `/jobs/[id]` shows fit score and can generate resume
+- `/resumes/[id]` edits and prints
+- `/portfolio/sample` works
+- `/pricing` creates an order
+- `/billing` shows pending order and accepts proof
+- `/admin/orders` approves manual payment
+- `/college-pilot` saves a lead
+- Missing Gemini key still returns fallback content
+- Missing Supabase still allows public/demo flows
+- No server secrets are used in client files
+- Mobile layout remains usable
+
+## Launch Checklist
+
+- Supabase connected
+- Gemini connected
+- Payment mode set
+- UPI/payment configured
+- Admin user configured
+- Pricing configured
+- Portfolio sample works
+- Proof score works
+- Resume generation works
+- PDF print works
+- Landing CTAs work
+- Lead capture works
+- Orders work
+- Admin approval works
+
+## Known Limitations
+
+- Stripe, Razorpay, and Lemon Squeezy are provider stubs until checkout products/orders are wired.
+- Local demo mode uses `localStorage`; production persistence requires Supabase.
+- Public portfolio currently renders sample data unless you connect profile/vault reads from Supabase.
+- Admin pages show local demo data before Supabase data adapters are added.
+
+## Next Features
+
+- Real Supabase data adapters for every dashboard page
+- Gateway checkout/webhooks
+- Portfolio templates
+- Batch college dashboard exports
+- Email and WhatsApp automation
+- PDF rendering service if browser print is not enough
