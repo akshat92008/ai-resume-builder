@@ -1,14 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Plus } from "lucide-react";
+import { Briefcase, Plus, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
-import { getDemoJobs } from "@/lib/storage";
 import type { Job } from "@/lib/types";
+import { supabase } from "@/lib/supabase/client";
 
 export default function JobsPage() {
-  const [jobs] = useState<Job[]>(() => getDemoJobs());
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadJobs() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('jobs').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      if (data) setJobs(data);
+      setLoading(false);
+    }
+    loadJobs();
+  }, []);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -26,7 +38,11 @@ export default function JobsPage() {
         </Button>
       </div>
 
-      {jobs.length === 0 ? (
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      ) : jobs.length === 0 ? (
         <EmptyState
           icon={<Briefcase className="h-10 w-10" />}
           title="No job analyses yet"

@@ -56,7 +56,7 @@ function extractSkillWords(text: string) {
     "power bi",
     "machine learning",
     "ai",
-    "gemini",
+    "nvidia",
     "openai",
     "analytics",
     "seo",

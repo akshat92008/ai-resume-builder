@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { adminApproveOrderSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
     const input = adminApproveOrderSchema.parse(await req.json());
+    
+    // Check if requester is admin
+    const userClient = await createServerSupabaseClient();
+    if (!userClient) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const { data: profile } = await userClient.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const supabase = createSupabaseAdminClient();
 
     if (supabase) {
       const approvedBy = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.approved_by)
         ? input.approved_by
-        : null;
+        : user.id;
       const { data: order } = await supabase
         .from("orders")
         .select("id,email,plan,user_id")

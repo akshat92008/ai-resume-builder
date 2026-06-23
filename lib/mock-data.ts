@@ -40,7 +40,7 @@ export const mockVault: UserVault = {
     { id: 'sk-2', name: 'TypeScript', category: 'frontend', proficiency: 'advanced', proof_links: ['https://github.com/akshat-mock/cognition-os'] },
     { id: 'sk-3', name: 'Supabase', category: 'backend', proficiency: 'intermediate', proof_links: ['https://github.com/akshat-mock/reachpilot'] },
     { id: 'sk-4', name: 'Tailwind CSS', category: 'frontend', proficiency: 'advanced', proof_links: [] },
-    { id: 'sk-5', name: 'Gemini AI API', category: 'ai', proficiency: 'intermediate', proof_links: ['https://github.com/akshat-mock/cognition-os'] },
+    { id: 'sk-5', name: 'NVIDIA NIM API', category: 'ai', proficiency: 'intermediate', proof_links: ['https://github.com/akshat-mock/cognition-os'] },
     { id: 'sk-6', name: 'PostgreSQL', category: 'data', proficiency: 'intermediate', proof_links: [] },
   ],
   projects: [
@@ -50,7 +50,7 @@ export const mockVault: UserVault = {
       short_description: 'AI learning and tutor platform with spaced repetition',
       problem_solved: 'Students struggle to extract key concepts from long PDF notes efficiently.',
       target_users: 'University Students',
-      tech_stack: ['Next.js', 'Supabase', 'Gemini API', 'pgvector', 'Tailwind CSS'],
+      tech_stack: ['Next.js', 'Supabase', 'NVIDIA NIM API', 'pgvector', 'Tailwind CSS'],
       features: ['PDF upload and parsing', 'AI Question & Answer', 'Spaced repetition flashcards', 'Learner analytics dashboard'],
       impact: 'Used by 150+ classmates, generated over 5,000 flashcards.',
       github_url: 'https://github.com/akshat-mock/cognition-os',

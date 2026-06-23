@@ -18,8 +18,15 @@ function isBrowser() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-export function makeId(prefixValue: string) {
-  return `${prefixValue}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+export function makeId(prefixValue?: string) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older environments or when crypto is not available
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 export function readLocal<T>(key: string, fallback: T): T {

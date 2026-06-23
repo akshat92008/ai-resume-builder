@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Copy, Download, FileText, Linkedin, Mail, Save, ShieldAlert } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Copy, Download, FileText, Linkedin, Mail, Save, ShieldAlert, Loader2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState } from "@/components/ui";
 import { ResumeEditor } from "@/components/resume/ResumeEditor";
 import { ResumePreview } from "@/components/resume/ResumePreview";
-import { getDemoJobs, getDemoResumes, getDemoVault, saveDemoResumes, upsertDemoResume } from "@/lib/storage";
 import { trackEvent } from "@/lib/events";
+import { supabase } from "@/lib/supabase/client";
 import type { Resume, ResumeContent } from "@/lib/types";
 
 function resumeToText(content: ResumeContent) {
@@ -29,23 +29,76 @@ function resumeToText(content: ResumeContent) {
 
 export default function ResumeDetailPage() {
   const params = useParams<{ id: string }>();
-  const [resume, setResume] = useState<Resume | null>(() => getDemoResumes().find((item) => item.id === params.id) ?? null);
-  const [content, setContent] = useState<ResumeContent | null>(() => getDemoResumes().find((item) => item.id === params.id)?.content_json ?? null);
+  const router = useRouter();
+  const [resume, setResume] = useState<Resume | null>(null);
+  const [content, setContent] = useState<ResumeContent | null>(null);
+  const [jobDescription, setJobDescription] = useState("");
+  const [vault, setVault] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
   const [linkedinAbout, setLinkedinAbout] = useState("");
 
-  const jobDescription = useMemo(() => {
-    if (!resume?.job_id) return "";
-    return getDemoJobs().find((job) => job.id === resume.job_id)?.job_description ?? "";
-  }, [resume]);
+  useEffect(() => {
+    async function loadData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-  function save() {
+      const { data: resumeData } = await supabase.from('resumes').select('*').eq('id', params.id).single();
+      if (resumeData) {
+        setResume(resumeData);
+        setContent(resumeData.content_json);
+        if (resumeData.job_id) {
+          const { data: jobData } = await supabase.from('jobs').select('job_description').eq('id', resumeData.job_id).single();
+          if (jobData) setJobDescription(jobData.job_description);
+        }
+      }
+
+      const [
+        { data: profile },
+        { data: education },
+        { data: skills },
+        { data: projects },
+        { data: experiences },
+        { data: certificates },
+        { data: achievements },
+        { data: proof_links },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('education').select('*').eq('user_id', user.id),
+        supabase.from('skills').select('*').eq('user_id', user.id),
+        supabase.from('projects').select('*').eq('user_id', user.id),
+        supabase.from('experiences').select('*').eq('user_id', user.id),
+        supabase.from('certificates').select('*').eq('user_id', user.id),
+        supabase.from('achievements').select('*').eq('user_id', user.id),
+        supabase.from('proof_links').select('*').eq('user_id', user.id),
+      ]);
+
+      setVault({
+        profile: profile || { full_name: "", email: "", phone: "", city: "", headline: "", summary: "", public_slug: "", linkedin_url: "", github_url: "", portfolio_url: "", target_roles: [], portfolio_public: false },
+        education: education || [],
+        skills: skills || [],
+        projects: projects || [],
+        experiences: experiences || [],
+        certificates: certificates || [],
+        achievements: achievements || [],
+        proof_links: proof_links || [],
+      });
+
+      setLoading(false);
+    }
+    loadData();
+  }, [params.id]);
+
+  async function save() {
     if (!resume || !content) return;
+    setSaving(true);
     const updated = { ...resume, content_json: content };
-    upsertDemoResume(updated);
+    await supabase.from('resumes').update({ content_json: content }).eq('id', resume.id);
     setResume(updated);
     setMessage("Saved resume changes.");
+    setSaving(false);
     window.setTimeout(() => setMessage(""), 1600);
   }
 
@@ -57,33 +110,35 @@ export default function ResumeDetailPage() {
   }
 
   async function generateCoverLetter() {
-    if (!content) return;
+    if (!content || !vault) return;
     const response = await fetch("/api/ai/generate-cover-letter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobDescription: jobDescription || "General fresher application", resume: content, userVault: getDemoVault() }),
+      body: JSON.stringify({ jobDescription: jobDescription || "General fresher application", resume: content, userVault: vault }),
     });
     const data = (await response.json()) as { content?: string };
     setCoverLetter(data.content ?? "Unable to generate cover letter.");
   }
 
   async function generateLinkedInAbout() {
+    if (!vault) return;
     const response = await fetch("/api/ai/generate-linkedin-about", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userVault: getDemoVault() }),
+      body: JSON.stringify({ userVault: vault }),
     });
     const data = (await response.json()) as { content?: string };
     setLinkedinAbout(data.content ?? "Unable to generate LinkedIn About.");
   }
 
-  function deleteResume() {
+  async function deleteResume() {
     if (!resume) return;
-    saveDemoResumes(getDemoResumes().filter((item) => item.id !== resume.id));
-    window.location.href = "/resumes";
+    await supabase.from('resumes').delete().eq('id', resume.id);
+    router.push("/resumes");
   }
 
-  if (!resume || !content) return <LoadingState label="Loading resume..." />;
+  if (loading) return <LoadingState label="Loading resume..." />;
+  if (!resume || !content) return <Alert variant="error">Resume not found</Alert>;
 
   return (
     <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[360px_1fr]">
@@ -123,8 +178,8 @@ export default function ResumeDetailPage() {
         )}
 
         <div className="grid gap-3">
-          <Button onClick={save}>
-            <Save className="mr-2 h-4 w-4" />
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save changes
           </Button>
           <Button variant="outline" onClick={() => window.print()}>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Save, Trash2, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Input, Label, Select, Tabs, Textarea } from "@/components/ui";
 import { CsvInput, Field } from "@/components/vault/VaultForms";
-import { getDemoVault, makeId, saveDemoVault } from "@/lib/storage";
+import { makeId } from "@/lib/storage";
 import { trackEvent } from "@/lib/events";
 import type { Achievement, Certificate, Education, Experience, Project, ProofLink, Skill, UserVault } from "@/lib/types";
+import { supabase } from "@/lib/supabase/client";
 
 const tabs = [
   { id: "profile", label: "Profile" },
@@ -70,25 +71,82 @@ function emptyProofLink(): ProofLink {
 
 export default function VaultPage() {
   const [activeTab, setActiveTab] = useState("profile");
-  const [vault, setVault] = useState<UserVault>(() => getDemoVault());
+  const [vault, setVault] = useState<UserVault | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  function save() {
-    saveDemoVault(vault);
+  useEffect(() => {
+    async function loadVault() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const [
+        { data: profile },
+        { data: education },
+        { data: skills },
+        { data: projects },
+        { data: experiences },
+        { data: certificates },
+        { data: achievements },
+        { data: proof_links },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('education').select('*').eq('user_id', user.id),
+        supabase.from('skills').select('*').eq('user_id', user.id),
+        supabase.from('projects').select('*').eq('user_id', user.id),
+        supabase.from('experiences').select('*').eq('user_id', user.id),
+        supabase.from('certificates').select('*').eq('user_id', user.id),
+        supabase.from('achievements').select('*').eq('user_id', user.id),
+        supabase.from('proof_links').select('*').eq('user_id', user.id),
+      ]);
+
+      setVault({
+        profile: profile || {
+          full_name: "", email: "", phone: "", city: "", headline: "", summary: "", public_slug: "", linkedin_url: "", github_url: "", portfolio_url: "", target_roles: [], portfolio_public: false
+        },
+        education: education || [],
+        skills: skills || [],
+        projects: projects || [],
+        experiences: experiences || [],
+        certificates: certificates || [],
+        achievements: achievements || [],
+        proof_links: proof_links || [],
+      });
+    }
+    loadVault();
+  }, []);
+
+  async function save() {
+    if (!vault) return;
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setSaving(false);
+      return;
+    }
+
+    await supabase.from('profiles').upsert({ ...vault.profile, id: user.id });
+
+    const lists = ['education', 'skills', 'projects', 'experiences', 'certificates', 'achievements', 'proof_links'] as const;
+    for (const list of lists) {
+      await supabase.from(list).delete().eq('user_id', user.id);
+      if (vault[list].length > 0) {
+        await supabase.from(list).insert(vault[list].map(item => ({ ...item, user_id: user.id })));
+      }
+    }
+
     setSaved(true);
+    setSaving(false);
     void trackEvent("vault_updated", { tab: activeTab });
     window.setTimeout(() => setSaved(false), 1800);
   }
 
   function updateProfile<K extends keyof UserVault["profile"]>(key: K, value: UserVault["profile"][K]) {
-    setVault((current) => ({ ...current, profile: { ...current.profile, [key]: value } }));
+    setVault((current) => current ? ({ ...current, profile: { ...current.profile, [key]: value } }) : null);
   }
 
   function updateList(key: VaultListKey, id: string, item: VaultItem) {
-    setVault((current) => {
-      const list = current[key] as unknown as VaultItem[];
-      return { ...current, [key]: list.map((entry) => (entry.id === id ? item : entry)) };
-    });
+    setVault((current) => current ? ({ ...current, [key]: (current[key] as any[]).map((i: any) => (i.id === id ? item : i)) as any }) : null);
   }
 
   function addItem(key: VaultListKey) {
@@ -101,17 +159,19 @@ export default function VaultPage() {
       achievements: emptyAchievement,
       proof_links: emptyProofLink,
     };
-    setVault((current) => {
-      const list = current[key] as unknown as VaultItem[];
-      return { ...current, [key]: [factories[key](), ...list] };
-    });
+    setVault((current) => current ? ({ ...current, [key]: [factories[key](), ...(current[key] as any[])] }) : null);
   }
 
   function deleteItem(key: VaultListKey, id: string) {
-    setVault((current) => {
-      const list = current[key] as unknown as VaultItem[];
-      return { ...current, [key]: list.filter((item) => item.id !== id) };
-    });
+    setVault((current) => current ? ({ ...current, [key]: (current[key] as any[]).filter((i: any) => i.id !== id) as any }) : null);
+  }
+
+  if (!vault) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
   }
 
   return (
@@ -124,8 +184,8 @@ export default function VaultPage() {
         </div>
         <div className="flex items-center gap-3">
           {saved && <Badge variant="secondary">Saved</Badge>}
-          <Button onClick={save}>
-            <Save className="mr-2 h-4 w-4" />
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save vault
           </Button>
         </div>

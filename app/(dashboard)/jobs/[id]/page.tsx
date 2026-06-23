@@ -1,61 +1,113 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, FileText, Mail, Sparkles } from "lucide-react";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState } from "@/components/ui";
-import { getDemoJobs, getDemoVault, makeId, upsertDemoResume } from "@/lib/storage";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState, EmptyState } from "@/components/ui";
 import { trackEvent } from "@/lib/events";
-import type { Job, Resume, ResumeContent, ResumeWarning } from "@/lib/types";
+import type { Job, Resume, ResumeContent, ResumeWarning, UserVault } from "@/lib/types";
+import { supabase } from "@/lib/supabase/client";
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [job] = useState<Job | null>(() => getDemoJobs().find((item) => item.id === params.id) ?? null);
+  const [job, setJob] = useState<Job | null>(null);
+  const [vault, setVault] = useState<UserVault | null>(null);
+  const [loading, setLoading] = useState(true);
   const [loadingResume, setLoadingResume] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
 
+  useEffect(() => {
+    async function loadData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: jobData } = await supabase.from('jobs').select('*').eq('id', params.id).single();
+      if (jobData) setJob(jobData);
+
+      const [
+        { data: profile },
+        { data: education },
+        { data: skills },
+        { data: projects },
+        { data: experiences },
+        { data: certificates },
+        { data: achievements },
+        { data: proof_links },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('education').select('*').eq('user_id', user.id),
+        supabase.from('skills').select('*').eq('user_id', user.id),
+        supabase.from('projects').select('*').eq('user_id', user.id),
+        supabase.from('experiences').select('*').eq('user_id', user.id),
+        supabase.from('certificates').select('*').eq('user_id', user.id),
+        supabase.from('achievements').select('*').eq('user_id', user.id),
+        supabase.from('proof_links').select('*').eq('user_id', user.id),
+      ]);
+
+      setVault({
+        profile: profile || { full_name: "", email: "", phone: "", city: "", headline: "", summary: "", public_slug: "", linkedin_url: "", github_url: "", portfolio_url: "", target_roles: [], portfolio_public: false },
+        education: education || [],
+        skills: skills || [],
+        projects: projects || [],
+        experiences: experiences || [],
+        certificates: certificates || [],
+        achievements: achievements || [],
+        proof_links: proof_links || [],
+      });
+      setLoading(false);
+    }
+    loadData();
+  }, [params.id]);
+
   async function generateResume() {
-    if (!job) return;
+    if (!job || !vault) return;
     setLoadingResume(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const response = await fetch("/api/ai/generate-resume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobAnalysis: job.analysis_json, style: job.style, userVault: getDemoVault() }),
+      body: JSON.stringify({ jobAnalysis: job.analysis_json, style: job.style, userVault: vault }),
     });
     const data = (await response.json()) as {
       content: ResumeContent;
       warnings: ResumeWarning[];
       proofScore: { total: number };
     };
-    const resume: Resume = {
-      id: makeId("resume"),
+
+    const { data: newResume } = await supabase.from('resumes').insert({
+      user_id: user.id,
       job_id: job.id,
       title: `${job.job_title} resume`,
       style: job.style,
       content_json: data.content,
-      warnings: data.warnings ?? [],
       proof_score: data.proofScore?.total ?? 0,
-      created_at: new Date().toISOString(),
-    };
-    upsertDemoResume(resume);
-    await trackEvent("resume_generated", { job_id: job.id, resume_id: resume.id, proof_score: resume.proof_score });
-    router.push(`/resumes/${resume.id}`);
+      warnings: data.warnings ?? [],
+    }).select().single();
+
+    if (newResume) {
+      await trackEvent("resume_generated", { job_id: job.id, resume_id: newResume.id, proof_score: newResume.proof_score });
+      router.push(`/resumes/${newResume.id}`);
+    }
+    setLoadingResume(false);
   }
 
   async function generateCoverLetter() {
-    if (!job) return;
+    if (!job || !vault) return;
     const response = await fetch("/api/ai/generate-cover-letter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobDescription: job.job_description, userVault: getDemoVault() }),
+      body: JSON.stringify({ jobDescription: job.job_description, userVault: vault }),
     });
     const data = (await response.json()) as { content?: string };
     setCoverLetter(data.content ?? "Unable to generate cover letter.");
   }
 
-  if (!job) return <LoadingState label="Loading job analysis..." />;
+  if (loading) return <LoadingState label="Loading job analysis..." />;
+  if (!job || !vault) return <EmptyState title="Not found" description="Job not found." />;
 
   const analysis = job.analysis_json;
 
@@ -113,7 +165,7 @@ export default function JobDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-600">
             {analysis.recommendedProjects.map((projectId) => {
-              const project = getDemoVault().projects.find((item) => item.id === projectId);
+              const project = vault?.projects.find((item) => item.id === projectId);
               return (
                 <div key={projectId} className="rounded-md border bg-slate-50 p-3">
                   {project?.title ?? projectId}

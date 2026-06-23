@@ -12,7 +12,7 @@ The product helps users create a Career Vault, calculate a Resume Proof Score, a
 - Free Resume Proof Score lead magnet
 - Signup, login, onboarding, and demo mode when Supabase is missing
 - Career Vault for profile, education, skills, projects, experience, certificates, achievements, and proof links
-- JD analyzer with deterministic fallback when Gemini is missing
+- JD analyzer with deterministic fallback when NVIDIA NIM is missing
 - Proof-backed resume generator with editable bullets and print/PDF export
 - Cover letter and LinkedIn About generator
 - Public proof portfolio with viral footer
@@ -30,7 +30,7 @@ The product helps users create a Career Vault, calculate a Resume Proof Score, a
 - Tailwind CSS
 - Supabase Auth and Postgres
 - Supabase Row Level Security
-- Gemini API via `@google/genai`
+- NVIDIA NIM API via `openai` SDK
 - Zod validation
 - Vercel deployment
 - System font stack only
@@ -45,7 +45,7 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Public pages and the demo dashboard work without Supabase or Gemini. Add env variables when you are ready for production persistence and AI calls.
+Public pages and the demo dashboard work without Supabase or NVIDIA NIM. Add env variables when you are ready for production persistence and AI calls.
 
 ## Environment Variables
 
@@ -56,7 +56,7 @@ NEXT_PUBLIC_APP_URL=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+NVIDIA_API_KEY=
 ```
 
 Optional monetization:
@@ -105,15 +105,15 @@ where email = 'you@example.com';
 
 Admin pages use `profiles.role = 'admin'` in RLS. In local demo mode, `/admin` shows localStorage-backed sample data.
 
-## Gemini Setup
+## NVIDIA NIM Setup
 
-Create a Gemini API key and set:
+Create a NVIDIA API key and set:
 
-```bash
-GEMINI_API_KEY=...
+```env
+NVIDIA_API_KEY=...
 ```
 
-Gemini is initialized lazily inside server functions only. If the key is missing or the API fails, the app returns deterministic fallback JSON and keeps working.
+NVIDIA NIM is initialized lazily inside server functions only. If the key is missing or the API fails, the app returns deterministic fallback JSON and keeps working.
 
 ## Payment Setup
 
@@ -213,7 +213,7 @@ API:
 - `/billing` shows pending order and accepts proof
 - `/admin/orders` approves manual payment
 - `/college-pilot` saves a lead
-- Missing Gemini key still returns fallback content
+- Missing NVIDIA NIM key still returns fallback content
 - Missing Supabase still allows public/demo flows
 - No server secrets are used in client files
 - Mobile layout remains usable
@@ -221,7 +221,7 @@ API:
 ## Launch Checklist
 
 - Supabase connected
-- Gemini connected
+- NVIDIA NIM connected
 - Payment mode set
 - UPI/payment configured
 - Admin user configured

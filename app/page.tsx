@@ -53,11 +53,12 @@ export default function LandingPage() {
                   <Link href="/signup">Build Proof-Backed Resume</Link>
                 </Button>
               </div>
-              <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-600">
-                <span>Free lead magnet</span>
-                <span>Manual payments ready</span>
-                <span>Supabase + Gemini ready</span>
+              <div className="flex items-center justify-center gap-6 text-sm text-slate-500">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span>Supabase + NVIDIA NIM ready</span>
               </div>
+            </div>
             </div>
 
             <div className="rounded-lg border bg-white p-6 shadow-sm">

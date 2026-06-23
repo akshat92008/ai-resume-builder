@@ -1,14 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
-import { getDemoResumes } from "@/lib/storage";
 import type { Resume } from "@/lib/types";
+import { supabase } from "@/lib/supabase/client";
 
 export default function ResumesPage() {
-  const [resumes] = useState<Resume[]>(() => getDemoResumes());
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadResumes() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('resumes').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      if (data) setResumes(data);
+      setLoading(false);
+    }
+    loadResumes();
+  }, []);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -26,7 +38,11 @@ export default function ResumesPage() {
         </Button>
       </div>
 
-      {resumes.length === 0 ? (
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      ) : resumes.length === 0 ? (
         <EmptyState
           icon={<FileText className="h-10 w-10" />}
           title="No resumes generated"
