@@ -1,7 +1,9 @@
 import { createBrowserClient } from '@supabase/ssr';
 
 export const isSupabaseConfigured = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL && 
+  process.env.NEXT_PUBLIC_SUPABASE_URL.startsWith('http') &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 // If credentials are provided, use real Supabase. Otherwise, provide a mock/dummy client
