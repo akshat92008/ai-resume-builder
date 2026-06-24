@@ -8,7 +8,7 @@ import { AGENT_PLACEHOLDER } from "@/lib/agent/prompts";
 import { applyVaultUpdates } from "@/lib/agent/actions";
 import { runCareerProofAgentCommand } from "@/lib/agent/simple-agent";
 import { runCareerProofAgent } from "@/lib/agents/orchestrator";
-import { getCurrentVault, getJobs, getResumes, saveCurrentVault } from "@/lib/repositories";
+import { getCurrentVault, getJobs, getResumes, saveCurrentVault, saveJob, saveResume } from "@/lib/repositories";
 import type { AgentCommandOutput } from "@/lib/agents/types";
 import type { Job, Resume, UserVault } from "@/lib/types";
 
@@ -45,11 +45,40 @@ export default function DashboardPage() {
 
   const review = useMemo(() => (vault ? runCareerProofAgent({ vault, intent: "check_proof", mode: "dashboard" }) : null), [vault]);
 
-  function runCommand(message: string) {
+  async function runCommand(message: string) {
     if (!vault) return;
     const output = runCareerProofAgentCommand({ userMessage: message, vault, mode: "dashboard" });
     setAgentOutput(output);
     setCommand("");
+
+    if (output.intent === "analyze_job" && output.result.jobFit && output.result.jobFit.jobFitScore > 0) {
+      const newJob = {
+        job_title: "Analyzed Job",
+        company_name: "Unknown",
+        job_description: message,
+        role_category: "software",
+        experience_level: "fresher",
+        analysis_json: output.result.jobFit as any,
+        fit_score: output.result.jobFit.jobFitScore,
+        style: "professional",
+      } as Job;
+      saveJob(newJob).then((saved) => {
+        if (saved) setJobs((prev) => [saved, ...prev]);
+      });
+    }
+
+    if (output.intent === "build_resume" && output.result.resume) {
+      const newResume = {
+        title: "Proof-backed Resume",
+        content_json: output.result.resume.content,
+        style: "professional",
+        proof_score: output.result.proofAudit?.proofScore || 0,
+        warnings: [],
+      } as unknown as Resume;
+      saveResume(newResume).then((saved) => {
+        if (saved) setResumes((prev) => [saved, ...prev]);
+      });
+    }
   }
 
   async function saveExtractedUpdates() {

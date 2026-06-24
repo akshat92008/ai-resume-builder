@@ -32,6 +32,13 @@ export default function SignupPage() {
     await trackEvent("signup", { email });
 
     if (!isSupabaseMode()) {
+      const { getCurrentVault, saveCurrentVault } = await import("@/lib/repositories");
+      const vault = await getCurrentVault();
+      if (vault) {
+        vault.profile.full_name = fullName;
+        vault.profile.email = email;
+        await saveCurrentVault(vault);
+      }
       router.push("/onboarding");
       return;
     }

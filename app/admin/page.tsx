@@ -1,11 +1,10 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BarChart3, CreditCard, FileText, GraduationCap, Users, Loader2 } from "lucide-react";
+import { BarChart3, CreditCard, FileText, GraduationCap, Users } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { getAdminMetrics } from "@/lib/data/admin-repository";
+import { getAdminMetricsServer } from "@/lib/data/admin-actions";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { isSupabaseMode } from "@/lib/data/mode";
+import * as demo from "@/lib/data/demo-storage";
 
 const adminLinks = [
   { href: "/admin/leads", label: "Leads", icon: Users },
@@ -15,22 +14,9 @@ const adminLinks = [
   { href: "/admin/testimonials", label: "Testimonials", icon: FileText },
 ];
 
-export default function AdminPage() {
-  const [metricsData, setMetricsData] = useState<{
-    users: number;
-    orders: number;
-    leads: number;
-    resumes: number;
-    events: number;
-  } | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      const data = await getAdminMetrics();
-      setMetricsData(data);
-    }
-    load();
-  }, []);
+export default async function AdminPage() {
+  const isServerDemo = !isSupabaseMode();
+  const metricsData = isServerDemo ? await demo.getAdminMetrics() : await getAdminMetricsServer();
 
   const metrics = metricsData
     ? [
@@ -69,7 +55,7 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="flex h-32 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+            <span className="text-slate-400">Loading...</span>
           </div>
         )}
 

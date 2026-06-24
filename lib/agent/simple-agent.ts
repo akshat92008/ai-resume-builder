@@ -133,6 +133,7 @@ export function runCareerProofAgentCommand(input: AgentCommandInput): AgentComma
     vault: input.vault,
     userMessage: input.userMessage,
     intent,
+    jobDescription: intent === "analyze_job" ? input.userMessage : undefined,
     currentJob: input.currentJob,
     currentResume: input.currentResume,
     mode: input.mode,

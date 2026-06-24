@@ -1,21 +1,6 @@
 import { isSupabaseMode } from "./mode";
 import * as demo from "./demo-storage";
 import type { Lead, Order, Profile, Testimonial } from "../types";
-import {
-  getAdminOrdersServer,
-  getAdminLeadsServer,
-  getAdminUsersServer,
-  getAdminMetricsServer,
-  getAdminEventsServer,
-  getAdminTestimonialsServer,
-  saveAdminTestimonialServer,
-  deleteAdminTestimonialServer,
-} from "./admin-actions";
-
-export async function getAdminOrders(): Promise<Order[]> {
-  if (!isSupabaseMode()) return demo.getAdminOrders();
-  return getAdminOrdersServer();
-}
 
 export async function approveAdminOrder(orderId: string): Promise<boolean> {
   if (!isSupabaseMode()) return demo.approveAdminOrder(orderId);
@@ -37,11 +22,6 @@ export async function rejectAdminOrder(orderId: string, reason?: string): Promis
   return response.ok;
 }
 
-export async function getAdminLeads(): Promise<Lead[]> {
-  if (!isSupabaseMode()) return demo.getAdminLeads();
-  return getAdminLeadsServer();
-}
-
 export async function updateAdminLeadStatus(leadId: string, status: NonNullable<Lead["status"]>): Promise<Lead | null> {
   if (!isSupabaseMode()) return demo.updateAdminLeadStatus(leadId, status);
   const response = await fetch("/api/admin/leads/update", {
@@ -51,11 +31,6 @@ export async function updateAdminLeadStatus(leadId: string, status: NonNullable<
   });
   const data = await response.json();
   return data.lead ?? null;
-}
-
-export async function getAdminUsers(): Promise<Profile[]> {
-  if (!isSupabaseMode()) return demo.getAdminUsers();
-  return getAdminUsersServer();
 }
 
 export async function updateAdminUserPlan(userId: string, plan: Profile["plan"] = "free"): Promise<boolean> {
@@ -68,27 +43,22 @@ export async function updateAdminUserPlan(userId: string, plan: Profile["plan"] 
   return response.ok;
 }
 
-export async function getAdminMetrics(): Promise<any> {
-  if (!isSupabaseMode()) return demo.getAdminMetrics();
-  return getAdminMetricsServer();
-}
-
-export async function getAdminEvents(): Promise<any[]> {
-  if (!isSupabaseMode()) return demo.getAdminEvents();
-  return getAdminEventsServer();
-}
-
-export async function getAdminTestimonials(): Promise<Testimonial[]> {
-  if (!isSupabaseMode()) return demo.getAdminTestimonials();
-  return getAdminTestimonialsServer();
-}
-
+// Testimonials data fetching is moved to server component, but mutations stay here
 export async function saveAdminTestimonial(testimonial: Omit<Testimonial, "id"> & { id?: string }): Promise<Testimonial> {
   if (!isSupabaseMode()) return demo.saveAdminTestimonial(testimonial);
+  // Need to handle Supabase server action or API route. Wait, saveAdminTestimonial is used by client component. 
+  // We can import server action here? Next.js might complain if this is imported from a Client Component.
+  // Actually, we can just pass the server action as a prop! Or create an API route. 
+  // Let's create an API route or just put 'use server' inside the action and call it.
+  // If we just use fetch, we need an API route. There isn't one for saving testimonials right now.
+  // But wait, the existing code: return saveAdminTestimonialServer(testimonial);
+  // Let's do a dynamic import to avoid module level 'use server' contamination
+  const { saveAdminTestimonialServer } = await import("./admin-actions");
   return saveAdminTestimonialServer(testimonial);
 }
 
 export async function deleteAdminTestimonial(id: string): Promise<void> {
   if (!isSupabaseMode()) return demo.deleteAdminTestimonial(id);
+  const { deleteAdminTestimonialServer } = await import("./admin-actions");
   return deleteAdminTestimonialServer(id);
 }
