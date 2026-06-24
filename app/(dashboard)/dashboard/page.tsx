@@ -1,18 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Briefcase, FileText, Link2, Plus, ShieldAlert, ShieldCheck, Sparkles, Upload, Loader2 } from "lucide-react";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress } from "@/components/ui";
-import { ProofScoreCard } from "@/components/proof/ProofScoreCard";
-import { calculateProofScore } from "@/lib/proof-score";
-import { getPlanLimits } from "@/lib/plans";
-import { getCurrentVault } from "@/lib/repositories";
-import type { UserVault } from "@/lib/types";
+import { Bot, Briefcase, CheckCircle2, FileText, Link2, Loader2, Send, ShieldAlert, Sparkles, Upload } from "lucide-react";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress, Textarea } from "@/components/ui";
+import { AGENT_PLACEHOLDER } from "@/lib/agent/prompts";
+import { applyVaultUpdates } from "@/lib/agent/actions";
+import { runCareerProofAgentCommand } from "@/lib/agent/simple-agent";
+import { runCareerProofAgent } from "@/lib/agents/orchestrator";
+import { getCurrentVault, getJobs, getResumes, saveCurrentVault } from "@/lib/repositories";
+import type { AgentCommandOutput } from "@/lib/agents/types";
+import type { Job, Resume, UserVault } from "@/lib/types";
+
+const quickCommands = [
+  "Build my resume",
+  "Check my proof",
+  "Improve my projects",
+  "Analyze a job",
+  "Publish portfolio",
+];
 
 export default function DashboardPage() {
   const [vault, setVault] = useState<UserVault | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [command, setCommand] = useState("");
+  const [agentOutput, setAgentOutput] = useState<AgentCommandOutput | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [savingUpdates, setSavingUpdates] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("onboarding=success")) {
@@ -20,13 +35,34 @@ export default function DashboardPage() {
       window.history.replaceState({}, "", "/dashboard");
     }
     async function load() {
-      const data = await getCurrentVault();
-      setVault(data);
+      const [vaultData, jobData, resumeData] = await Promise.all([getCurrentVault(), getJobs(), getResumes()]);
+      setVault(vaultData);
+      setJobs(jobData ?? []);
+      setResumes(resumeData ?? []);
     }
     load();
   }, []);
 
-  if (!vault) {
+  const review = useMemo(() => (vault ? runCareerProofAgent({ vault, intent: "check_proof", mode: "dashboard" }) : null), [vault]);
+
+  function runCommand(message: string) {
+    if (!vault) return;
+    const output = runCareerProofAgentCommand({ userMessage: message, vault, mode: "dashboard" });
+    setAgentOutput(output);
+    setCommand("");
+  }
+
+  async function saveExtractedUpdates() {
+    if (!vault || !agentOutput?.extractedUpdates.length) return;
+    setSavingUpdates(true);
+    const nextVault = applyVaultUpdates(vault, agentOutput.extractedUpdates);
+    await saveCurrentVault(nextVault);
+    setVault(nextVault);
+    setAgentOutput(runCareerProofAgentCommand({ userMessage: "Check my proof", vault: nextVault, mode: "dashboard" }));
+    setSavingUpdates(false);
+  }
+
+  if (!vault || !review) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
@@ -34,140 +70,200 @@ export default function DashboardPage() {
     );
   }
 
-  const score = calculateProofScore(vault);
-  const plan = vault.profile.plan ?? "free";
-  const limits = getPlanLimits(plan);
-  const vaultCompletion = Math.min(
-    100,
-    Math.round(
-      (Number(Boolean(vault.profile.full_name)) +
-        Number(Boolean(vault.profile.linkedin_url)) +
-        Number(vault.skills.length > 0) +
-        Number(vault.projects.length > 0) +
-        Number(vault.proof_links.length > 0) +
-        Number(vault.education.length > 0)) *
-        (100 / 6),
-    ),
-  );
-
-  const metricCards = [
-    { label: "Current plan", value: plan === "pro" ? "Student Pro" : plan, detail: `${limits.resumes === 9999 ? "Unlimited" : limits.resumes} resumes` },
-    { label: "Vault completion", value: `${vaultCompletion}%`, detail: "Profile, skills, projects, proof" },
-    { label: "Projects", value: vault.projects.length, detail: "Featured proof-backed work" },
-    { label: "Proof links", value: vault.proof_links.length, detail: "Direct evidence links" },
-    { label: "Resumes generated", value: 0, detail: "See total usage in settings" },
-    { label: "Portfolio", value: vault.profile.portfolio_public ? "Public" : "Private", detail: `/portfolio/${vault.profile.public_slug}` },
+  const knownItems = [
+    ["Name", vault.profile.full_name || "I do not know your name yet."],
+    ["Target role", vault.profile.target_roles[0] || "I do not know which job you are applying for."],
+    ["Skills", vault.skills.length ? vault.skills.slice(0, 6).map((skill) => skill.name).join(", ") : "No skills saved yet."],
+    ["Strongest projects", vault.projects.length ? vault.projects.slice(0, 3).map((project) => project.title).join(", ") : "I do not know your strongest project yet."],
+    ["Proof links", `${vault.proof_links.length + vault.projects.filter((project) => project.github_url || project.live_url || project.case_study_url).length} saved`],
+    ["Resume status", review.vaultReport.canGenerateResume ? "Ready to generate a draft" : "Needs more proof"],
+    ["Portfolio status", vault.profile.portfolio_public ? "Public" : "Private"],
   ];
 
-  const actions = [
-    { href: "/proof-score", label: "Get Free Proof Score", icon: ShieldCheck },
-    { href: "/vault", label: "Update Career Vault", icon: Upload },
-    { href: "/jobs/new", label: "Analyze Job Description", icon: Briefcase },
-    { href: "/resumes/new", label: "Generate Resume", icon: FileText },
-    { href: "/portfolio-settings", label: "Publish Portfolio", icon: Link2 },
-    { href: "/pricing", label: "Upgrade to Pro", icon: Sparkles },
-  ];
-
-  const suggestions = [
-    "Your React skill has no proof.",
-    "Add a live demo for your strongest project.",
-    vault.profile.portfolio_public ? "Share your public portfolio link with recruiters." : "Your portfolio is private.",
-    "Generate a job-specific resume before applying.",
-  ];
+  const activeOutput = agentOutput;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-7">
       {showSuccess && (
         <Alert variant="success" className="bg-emerald-50 text-emerald-900 border-emerald-200">
-          <strong>Success!</strong> Your Career Vault is ready. Generate your first proof-backed resume below.
+          <strong>Your Career Memory is ready.</strong> CareerProof Agent found your first improvement steps.
         </Alert>
       )}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Dashboard</p>
-          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-slate-950">
-            Welcome back, {vault.profile.full_name?.split(" ")[0] || "there"}
-          </h1>
-          <p className="mt-2 text-slate-600">Here is the current status of your proof-backed career profile.</p>
+
+      <section className="rounded-lg border bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-700">
+              <Bot className="h-4 w-4" />
+              CareerProof Agent
+            </div>
+            <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-slate-950">
+              Your AI career coach is ready.
+            </h1>
+            <p className="mt-2 text-slate-600">
+              I help you turn your real projects, skills, and proof into recruiter-ready resumes and portfolios.
+            </p>
+          </div>
+          <div className="w-full rounded-md border border-blue-100 bg-blue-50 p-4 lg:w-80">
+            <div className="text-sm font-semibold text-blue-950">Career Memory Score</div>
+            <div className="mt-1 text-4xl font-bold text-blue-950">
+              {review.vaultReport.vaultReadiness}<span className="text-base font-normal text-blue-700">/100</span>
+            </div>
+            <p className="mt-1 text-sm text-blue-900">Measures profile completeness, project depth, and proof coverage.</p>
+            <Progress value={review.vaultReport.vaultReadiness} className="mt-3" />
+          </div>
         </div>
-        <Badge className="w-fit">{score.grade} profile</Badge>
-      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {metricCards.map((card) => (
-          <Card key={card.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">{card.label}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-950">{card.value}</div>
-              <p className="mt-1 text-xs text-slate-500">{card.detail}</p>
-              {card.label === "Vault completion" && <Progress value={vaultCompletion} className="mt-3" />}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+        <div className="mt-6 space-y-3">
+          <Textarea
+            rows={4}
+            value={command}
+            onChange={(event) => setCommand(event.target.value)}
+            placeholder={AGENT_PLACEHOLDER}
+            className="text-base"
+          />
+          <div className="flex flex-wrap gap-2">
+            {quickCommands.map((item) => (
+              <Button key={item} type="button" variant="outline" size="sm" onClick={() => runCommand(item)}>
+                {item}
+              </Button>
+            ))}
+            <Button type="button" size="sm" onClick={() => runCommand(command || "Run agent review")} disabled={!command.trim()}>
+              <Send className="mr-2 h-4 w-4" />
+              Run agent review
+            </Button>
+          </div>
+        </div>
+      </section>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick actions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {actions.map((action) => {
-                const Icon = action.icon;
-                return (
-                  <Button key={action.href} variant="outline" className="h-auto justify-start gap-3 p-4" asChild>
-                    <Link href={action.href}>
-                      <Icon className="h-4 w-4" />
-                      <span className="text-left">{action.label}</span>
-                    </Link>
-                  </Button>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent applications</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border border-dashed bg-slate-50 p-8 text-center">
-                <Briefcase className="mx-auto h-10 w-10 text-slate-300" />
-                <h3 className="mt-3 font-semibold text-slate-950">No saved applications yet</h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">Paste a job description to generate your first tailored resume and cover letter.</p>
-                <Button asChild size="sm" className="mt-4">
-                  <Link href="/jobs/new">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Match Job Description
-                  </Link>
-                </Button>
+      {activeOutput && (
+        <section className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                <Sparkles className="h-4 w-4 text-blue-600" />
+                CareerProof Agent
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <p className="mt-2 text-slate-700">{activeOutput.response}</p>
+            </div>
+            {activeOutput.needsConfirmation && (
+              <Button onClick={saveExtractedUpdates} disabled={savingUpdates}>
+                {savingUpdates ? "Saving..." : "Save to Career Memory"}
+              </Button>
+            )}
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {activeOutput.cards.slice(0, 6).map((card, index) => (
+              <div key={`${card.title}-${index}`} className="rounded-md border bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-semibold text-slate-950">{card.title}</h3>
+                  {typeof card.score === "number" && <Badge variant="secondary">{card.score}/100</Badge>}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{card.body}</p>
+                {card.items && card.items.length > 0 && (
+                  <div className="mt-3 space-y-1 text-sm text-slate-700">
+                    {card.items.slice(0, 4).map((item) => (
+                      <div key={item}>- {item}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
-        <div className="space-y-6">
-          <ProofScoreCard result={score} />
-          <Card className="border-amber-200 bg-amber-50/60">
+      <section className="grid gap-5 lg:grid-cols-[1fr_340px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Here is what I know about you</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {knownItems.map(([label, value]) => (
+              <div key={label} className="rounded-md border bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">{value}</div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-5">
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-amber-900">
-                <ShieldAlert className="h-5 w-5" />
-                Suggestions
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                Your next best action
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {suggestions.map((suggestion) => (
-                <div key={suggestion} className="rounded-md border border-amber-200 bg-white/70 p-3 text-sm text-amber-950">
-                  {suggestion}
-                </div>
+            <CardContent>
+              <p className="text-sm leading-6 text-slate-700">{review.nextActions.primaryNextAction}</p>
+              <Button asChild className="mt-4 w-full">
+                <Link href="/vault">Improve before applying</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-amber-200 bg-amber-50/70">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-amber-950">
+                <ShieldAlert className="h-5 w-5" />
+                Missing proof
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-amber-950">
+              {(review.proofAudit.missingProof.length ? review.proofAudit.missingProof : ["No major proof gaps found."]).slice(0, 5).map((item) => (
+                <div key={item} className="rounded-md border border-amber-200 bg-white/70 p-3">{item}</div>
               ))}
             </CardContent>
           </Card>
         </div>
-      </div>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick actions</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <ActionButton href="/vault" icon={Upload} label="Improve Career Memory" />
+            <ActionButton href="/jobs/new" icon={Briefcase} label="Analyze a job" />
+            <ActionButton href="/resumes/new" icon={FileText} label="Generate resume" />
+            <ActionButton href="/portfolio-settings" icon={Link2} label="Publish portfolio" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent resumes/jobs</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[...resumes.slice(0, 2).map((resume) => ({ href: `/resumes/${resume.id}`, label: resume.title, meta: `Resume Quality Score: ${resume.proof_score}/100` })),
+              ...jobs.slice(0, 2).map((job) => ({ href: `/jobs/${job.id}`, label: job.job_title, meta: `Job Fit Score: ${job.fit_score}/100` }))].map((item) => (
+              <Link key={`${item.href}-${item.label}`} href={item.href} className="block rounded-md border bg-slate-50 p-3 hover:border-blue-200">
+                <div className="text-sm font-semibold text-slate-950">{item.label}</div>
+                <div className="mt-1 text-xs text-slate-500">{item.meta}</div>
+              </Link>
+            ))}
+            {resumes.length === 0 && jobs.length === 0 && (
+              <div className="rounded-md border border-dashed bg-slate-50 p-5 text-center text-sm text-slate-500">
+                Paste a job description or generate your first proof-backed resume.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
     </div>
+  );
+}
+
+function ActionButton({ href, icon: Icon, label }: { href: string; icon: React.ComponentType<{ className?: string }>; label: string }) {
+  return (
+    <Button variant="outline" className="h-auto justify-start gap-3 p-4" asChild>
+      <Link href={href}>
+        <Icon className="h-4 w-4" />
+        <span className="text-left">{label}</span>
+      </Link>
+    </Button>
   );
 }

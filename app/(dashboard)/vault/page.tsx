@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus, Save, Trash2, Loader2 } from "lucide-react";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Input, Label, Select, Tabs, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Input, Label, Progress, Select, Tabs, Textarea } from "@/components/ui";
 import { CsvInput, Field } from "@/components/vault/VaultForms";
+import { expandProjectWithAgent } from "@/lib/agents/project-expander-agent";
 import { makeId } from "@/lib/utils";
 import { trackEvent } from "@/lib/events";
 import type { Achievement, Certificate, Education, Experience, Project, ProofLink, Skill, UserVault } from "@/lib/types";
@@ -131,15 +133,15 @@ export default function VaultPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Career Vault</p>
-          <h1 className="mt-1 font-display text-3xl font-bold text-slate-950">Your source of truth for achievements and proof.</h1>
-          <p className="mt-2 text-slate-600">Add honest evidence once, then use it for resumes, cover letters, LinkedIn, and portfolios.</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Your Career Memory</p>
+          <h1 className="mt-1 font-display text-3xl font-bold text-slate-950">This is what CareerProof Agent remembers about your career.</h1>
+          <p className="mt-2 text-slate-600">Edit anything that is wrong. The agent will keep collecting proof conversationally from the dashboard.</p>
         </div>
         <div className="flex items-center gap-3">
           {saved && <Badge variant="secondary">Saved</Badge>}
           <Button onClick={save} disabled={saving}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save vault
+            Save Career Memory
           </Button>
         </div>
       </div>
@@ -230,6 +232,7 @@ export default function VaultPage() {
           {vault.projects.map((project) => (
             <Card key={project.id}>
               <CardContent className="space-y-4 p-5">
+                <ProjectHealthPanel project={project} targetRole={vault.profile.target_roles[0] ?? ""} />
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Title" value={project.title} onChange={(value) => updateList("projects", project.id, { ...project, title: value })} />
                   <Field label="Role" value={project.role} onChange={(value) => updateList("projects", project.id, { ...project, role: value })} />
@@ -359,8 +362,47 @@ function VaultList({ title, count, onAdd, children }: { title: string; count: nu
           Add
         </Button>
       </div>
-      {count === 0 ? <EmptyState title={`No ${title.toLowerCase()} yet`} description="Add the first item and save your Career Vault." /> : <div className="space-y-4">{children}</div>}
+      {count === 0 ? <EmptyState title={`No ${title.toLowerCase()} yet`} description="Add the first item and save your Career Memory." /> : <div className="space-y-4">{children}</div>}
     </section>
+  );
+}
+
+function ProjectHealthPanel({ project, targetRole }: { project: Project; targetRole: string }) {
+  const health = expandProjectWithAgent(project, targetRole);
+  return (
+    <div className="rounded-md border border-blue-100 bg-blue-50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-blue-950">Project health</div>
+          <p className="mt-1 text-sm text-blue-900">
+            {health.healthLabel}: {health.canGenerateResumeBullet ? "Ready for an honest draft bullet." : "Needs clearer detail before a strong resume bullet."}
+          </p>
+        </div>
+        <Badge className="w-fit bg-white text-blue-700">{health.projectHealth}/100</Badge>
+      </div>
+      <Progress value={health.projectHealth} className="mt-3" />
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-blue-800">Missing details</div>
+          <div className="mt-1 space-y-1 text-sm text-blue-950">
+            {(health.missingDetails.length ? health.missingDetails : ["No major details missing."]).slice(0, 3).map((item) => (
+              <div key={item}>- {item}</div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-blue-800">Targeted questions</div>
+          <div className="mt-1 space-y-1 text-sm text-blue-950">
+            {health.targetedQuestions.slice(0, 3).map((item) => (
+              <div key={item}>- {item}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <Button asChild size="sm" variant="outline" className="mt-4 border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+        <Link href="/dashboard">Improve with Agent</Link>
+      </Button>
+    </div>
   );
 }
 

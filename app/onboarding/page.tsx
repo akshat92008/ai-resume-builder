@@ -1,22 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Progress, Textarea } from "@/components/ui";
+import { Bot, CheckCircle2, Pencil, Plus, Sparkles } from "lucide-react";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress, Textarea } from "@/components/ui";
+import { applyVaultUpdates } from "@/lib/agent/actions";
+import { extractedProfileSummary, extractVaultUpdatesFromText } from "@/lib/agent/context";
+import { ONBOARDING_EXAMPLE } from "@/lib/agent/prompts";
+import { inspectCareerVault } from "@/lib/agents/career-vault-agent";
 import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
-import { makeId } from "@/lib/utils";
 import { trackEvent } from "@/lib/events";
 import type { UserVault } from "@/lib/types";
+import type { VaultUpdate } from "@/lib/agents/types";
 
-const steps = ["Basic profile", "Links", "Top skills", "Top projects", "Proof links"];
+const goals = [
+  "Get internship",
+  "Get placement",
+  "Apply off-campus",
+  "Build portfolio",
+  "Improve resume",
+  "Explore career direction",
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [goal, setGoal] = useState(goals[0]);
+  const [about, setAbout] = useState("");
   const [vault, setVault] = useState<UserVault | null>(null);
-  const [skillsText, setSkillsText] = useState("");
-  const [projectsText, setProjectsText] = useState("");
-  const [proofText, setProofText] = useState("");
+  const [updates, setUpdates] = useState<VaultUpdate[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -27,69 +39,31 @@ export default function OnboardingPage() {
         return;
       }
       setVault(data);
-      setSkillsText(data.skills.map((skill) => skill.name).join(", "));
-      setProjectsText(data.projects.slice(0, 3).map((project) => project.title).join("\n"));
-      setProofText(data.proof_links.map((proof) => proof.url).join("\n"));
     }
     load();
   }, [router]);
 
+  const previewVault = useMemo(() => (vault ? applyVaultUpdates(vault, updates) : null), [vault, updates]);
+  const summary = useMemo(() => extractedProfileSummary(updates), [updates]);
+  const previewReport = previewVault ? inspectCareerVault(previewVault) : null;
+
+  function extractAndContinue() {
+    if (!vault) return;
+    setUpdates(extractVaultUpdatesFromText(vault, about, goal));
+    setStep(2);
+  }
+
   async function finish() {
     if (!vault) return;
     setSaving(true);
-    const nextVault = {
-      ...vault,
-      skills: skillsText
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean)
-        .map((name, index) => ({
-          id: vault.skills[index]?.id ?? makeId("skill"),
-          name,
-          category: vault.skills[index]?.category ?? "other",
-          proficiency: vault.skills[index]?.proficiency ?? "beginner",
-          proof_links: vault.skills[index]?.proof_links ?? [],
-        })),
-      projects: projectsText
-        .split("\n")
-        .map((title) => title.trim())
-        .filter(Boolean)
-        .map((title, index) => ({
-            ...(vault.projects[index] ?? {
-              id: makeId("project"),
-              short_description: "",
-            problem_solved: "",
-            target_users: "",
-            tech_stack: [],
-            features: [],
-            impact: "",
-            github_url: "",
-            live_url: "",
-            screenshots_url: "",
-            case_study_url: "",
-            role: "",
-            start_date: "",
-            end_date: "",
-            status: "completed" as const,
-            tags: [],
-          }),
-          title,
-        })),
-      proof_links: proofText
-        .split("\n")
-        .map((url) => url.trim())
-        .filter(Boolean)
-        .map((url, index) => ({
-          id: vault.proof_links[index]?.id ?? makeId("proof"),
-          title: vault.proof_links[index]?.title ?? "Proof link",
-          url,
-          type: vault.proof_links[index]?.type ?? "other",
-          notes: vault.proof_links[index]?.notes ?? "Added during onboarding",
-        })),
-    };
-    
+    const nextVault = applyVaultUpdates(vault, updates);
     await saveCurrentVault(nextVault);
-    void trackEvent("onboarding_completed", { projects: nextVault.projects.length, skills: nextVault.skills.length });
+    void trackEvent("onboarding_completed", {
+      goal,
+      projects: nextVault.projects.length,
+      skills: nextVault.skills.length,
+      extracted_updates: updates.length,
+    });
     router.push("/dashboard?onboarding=success");
   }
 
@@ -99,127 +73,118 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <main className="mx-auto max-w-3xl">
-        <div className="mb-6">
-          <div className="text-sm font-semibold text-blue-700">Step {step + 1} of {steps.length}</div>
-          <h1 className="mt-2 font-display text-3xl font-bold text-slate-950">{steps[step]}</h1>
-          <Progress value={((step + 1) / steps.length) * 100} className="mt-4" />
+      <main className="mx-auto max-w-3xl space-y-6">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-700">
+            <Bot className="h-4 w-4" />
+            CareerProof Agent onboarding
+          </div>
+          <h1 className="mt-2 font-display text-3xl font-bold text-slate-950">Welcome to CareerProof AI.</h1>
+          <p className="mt-2 text-slate-600">Tell the agent what you already have. It will ask for missing proof later, only when it matters.</p>
+          <Progress value={((step + 1) / 3) * 100} className="mt-5" />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{steps[step]}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {step === 0 && (
-              <>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Name</Label>
-                    <Input value={vault.profile.full_name} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, full_name: event.target.value } })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" value={vault.profile.email} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, email: event.target.value } })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Phone</Label>
-                    <Input value={vault.profile.phone} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, phone: event.target.value } })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>City</Label>
-                    <Input value={vault.profile.city} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, city: event.target.value } })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Course / college</Label>
-                    <Input
-                      value={`${vault.education[0]?.degree || ""}${vault.education[0]?.institution ? `, ${vault.education[0].institution}` : ""}`}
-                      onChange={(event) =>
-                        setVault({
-                          ...vault,
-                          education: [
-                            {
-                              ...(vault.education[0] ?? {
-                                id: makeId("education"),
-                                field: "",
-                                start_year: 0,
-                                end_year: 0,
-                                score: "",
-                                coursework: [],
-                                achievements: "",
-                              }),
-                              degree: event.target.value.split(",")[0]?.trim() ?? "",
-                              institution: event.target.value.split(",").slice(1).join(",").trim(),
-                            },
-                            ...vault.education.slice(1),
-                          ],
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Target role</Label>
-                  <Input value={vault.profile.target_roles[0] ?? ""} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, target_roles: [event.target.value] } })} />
-                </div>
-              </>
-            )}
-
-            {step === 1 && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <p className="md:col-span-2 text-sm text-slate-500 mb-2">These links help recruiters verify your skills. No link yet? Skip for now and add them later.</p>
-                <div className="space-y-2">
-                  <Label>GitHub</Label>
-                  <Input value={vault.profile.github_url} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, github_url: event.target.value } })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>LinkedIn</Label>
-                  <Input value={vault.profile.linkedin_url} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, linkedin_url: event.target.value } })} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Portfolio</Label>
-                  <Input value={vault.profile.portfolio_url} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, portfolio_url: event.target.value } })} />
-                </div>
+        {step === 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>What are you trying to achieve?</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {goals.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setGoal(item)}
+                    className={`rounded-md border p-4 text-left text-sm font-medium transition ${
+                      goal === item ? "border-blue-600 bg-blue-50 text-blue-950" : "border-slate-200 bg-white text-slate-700 hover:border-blue-300"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-2">
-                <Label>Top skills</Label>
-                <Textarea rows={5} value={skillsText} onChange={(event) => setSkillsText(event.target.value)} placeholder="React, TypeScript, Supabase" />
+              <div className="flex justify-end">
+                <Button onClick={() => setStep(1)}>Continue</Button>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
-            {step === 3 && (
-              <div className="space-y-2">
-                <p className="text-sm text-slate-500 mb-2">Add 1–3 projects you want recruiters to trust. Include GitHub/live demo links later.</p>
-                <Label>Top projects</Label>
-                <Textarea rows={7} value={projectsText} onChange={(event) => setProjectsText(event.target.value)} placeholder="One project per line" />
+        {step === 1 && (
+          <Card>
+            <CardHeader>
+              <Sparkles className="h-8 w-8 text-blue-600" />
+              <CardTitle>Tell me about yourself in one paragraph.</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <p className="text-sm leading-6 text-slate-600">
+                Mention your course, target role, skills, and projects naturally. You can skip links for now.
+              </p>
+              <Textarea
+                rows={8}
+                value={about}
+                onChange={(event) => setAbout(event.target.value)}
+                placeholder={ONBOARDING_EXAMPLE}
+              />
+              <div className="flex justify-between gap-3">
+                <Button variant="outline" onClick={() => setStep(0)}>Back</Button>
+                <Button onClick={extractAndContinue} disabled={!about.trim()}>Extract profile</Button>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
-            {step === 4 && (
-              <div className="space-y-2">
-                <Label>Proof links</Label>
-                <Textarea rows={7} value={proofText} onChange={(event) => setProofText(event.target.value)} placeholder="One GitHub/live/certificate link per line" />
+        {step === 2 && (
+          <Card>
+            <CardHeader>
+              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              <CardTitle>Here is what I know about you.</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MemoryItem label="Goal" value={goal} />
+                <MemoryItem label="Target role" value={summary.target || previewVault?.profile.target_roles[0] || "I do not know this yet."} />
+                <MemoryItem label="Course" value={summary.course || previewVault?.education[0]?.degree || "Not added yet"} />
+                <MemoryItem label="Skills" value={summary.skills.length ? summary.skills.join(", ") : "No skills detected yet"} />
+                <MemoryItem label="Projects" value={summary.projects.length ? summary.projects.join(", ") : "No projects detected yet"} />
+                <MemoryItem label="Missing" value={previewReport?.missingFields.slice(0, 4).join(", ") || "No major basics missing"} />
               </div>
-            )}
 
-            <div className="flex justify-between gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0 || saving}>
-                Back
-              </Button>
-              {step === steps.length - 1 ? (
-                <Button type="button" onClick={finish} disabled={saving}>
-                  {saving ? "Saving..." : "Finish onboarding"}
-                </Button>
-              ) : (
-                <Button type="button" onClick={() => setStep((current) => current + 1)} disabled={saving}>Continue</Button>
+              {updates.length === 0 && (
+                <Alert variant="warning">I could not extract much yet. Add a project, skill, or target role in your paragraph before saving.</Alert>
               )}
-            </div>
-          </CardContent>
-        </Card>
+
+              <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+                Your Career Memory is ready. CareerProof Agent found your first improvement steps.
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-3">
+                <Button variant="outline" onClick={() => setStep(1)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+                <Button variant="outline" onClick={() => setStep(1)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add more
+                </Button>
+                <Button onClick={finish} disabled={saving || updates.length === 0}>
+                  {saving ? "Saving..." : "Looks good, save this"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
+    </div>
+  );
+}
+
+function MemoryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-white p-4">
+      <Badge variant="secondary">{label}</Badge>
+      <div className="mt-2 text-sm font-medium text-slate-900">{value}</div>
     </div>
   );
 }

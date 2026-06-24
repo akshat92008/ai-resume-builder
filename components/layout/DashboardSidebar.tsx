@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/vault", label: "Career Vault", icon: UserCircle },
+  { href: "/vault", label: "Career Memory", icon: UserCircle },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/resumes", label: "Resumes", icon: FileText },
   { href: "/portfolio-settings", label: "Portfolio", icon: Link2 },
@@ -67,7 +67,7 @@ export async function DashboardSidebar() {
         <div className="rounded-lg bg-slate-900 p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
             <ShieldCheck className="h-4 w-4" />
-            Vault Proof Score
+            Career Memory Score
           </div>
           <div className="mt-2 text-2xl font-bold text-white">
             {score.total}<span className="text-sm font-normal text-slate-400">/100</span>

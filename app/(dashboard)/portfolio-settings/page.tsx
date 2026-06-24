@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Copy, Eye, Save, Loader2 } from "lucide-react";
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Progress } from "@/components/ui";
+import { reviewPortfolioWithAgent } from "@/lib/agents/portfolio-agent";
+import { auditProof } from "@/lib/agents/proof-auditor-agent";
 import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
 import { canRemoveFooter } from "@/lib/plans";
 import { trackEvent } from "@/lib/events";
@@ -32,12 +34,15 @@ export default function PortfolioSettingsPage() {
 
   const portfolioLink = `${baseUrl}/portfolio/${vault.profile.public_slug || "sample"}`;
   const footerOptional = canRemoveFooter(vault.profile.plan ?? "free");
+  const portfolioReview = reviewPortfolioWithAgent(vault, auditProof(vault));
 
   async function save() {
     if (!vault) return;
-    await saveCurrentVault(vault);
-    setMessage("Portfolio settings saved.");
-    void trackEvent("portfolio_published", { public: vault.profile.portfolio_public, slug: vault.profile.public_slug });
+    const nextVault = { ...vault, profile: { ...vault.profile, portfolio_public: true } };
+    setVault(nextVault);
+    await saveCurrentVault(nextVault);
+    setMessage("Portfolio published.");
+    void trackEvent("portfolio_published", { public: true, slug: nextVault.profile.public_slug });
     window.setTimeout(() => setMessage(""), 1600);
   }
 
@@ -51,13 +56,39 @@ export default function PortfolioSettingsPage() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Public Portfolio</p>
-        <h1 className="font-display text-3xl font-bold text-slate-950">Portfolio settings</h1>
-        <p className="mt-2 text-slate-600">Publish a recruiter link that connects your claims to visible proof.</p>
+        <h1 className="font-display text-3xl font-bold text-slate-950">Do you want to publish your recruiter profile?</h1>
+        <p className="mt-2 text-slate-600">Show your name, target role, top projects, proof links, skills, and contact links in one public page.</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Visibility and slug</CardTitle>
+          <CardTitle>Portfolio readiness</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-4xl font-bold text-slate-950">{portfolioReview.portfolioReadiness}<span className="text-lg font-normal text-slate-400">/100</span></div>
+              <p className="mt-1 text-sm text-slate-600">Portfolio Readiness measures public proof, featured projects, and recruiter-safe profile completeness.</p>
+            </div>
+            <Badge>{vault.profile.portfolio_public ? "Public" : "Private"}</Badge>
+          </div>
+          <Progress value={portfolioReview.portfolioReadiness} />
+          <div className="rounded-md border bg-slate-50 p-4">
+            <div className="font-semibold text-slate-950">{portfolioReview.headline}</div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{portfolioReview.summary}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {vault.skills.slice(0, 8).map((skill) => <Badge key={skill.id} variant="secondary">{skill.name}</Badge>)}
+            </div>
+          </div>
+          {portfolioReview.proofGaps.length > 0 && (
+            <Alert variant="warning">Needs more proof: {portfolioReview.proofGaps[0]}</Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Publish portfolio</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           <label className="flex items-center justify-between gap-4 rounded-lg border p-4 text-sm font-medium">
@@ -85,7 +116,7 @@ export default function PortfolioSettingsPage() {
           <div className="flex flex-wrap gap-3">
             <Button onClick={save}>
               <Save className="mr-2 h-4 w-4" />
-              Save settings
+              Publish portfolio
             </Button>
             <Button variant="outline" onClick={copy}>
               <Copy className="mr-2 h-4 w-4" />
@@ -104,7 +135,7 @@ export default function PortfolioSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Footer and featured proof</CardTitle>
+          <CardTitle>Advanced settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border p-4">

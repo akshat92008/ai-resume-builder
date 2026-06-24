@@ -4,7 +4,7 @@ export function ResumePreview({ content }: { content: ResumeContent }) {
   return (
     <article className="resume-print-page min-h-[1056px] bg-white p-8 text-sm leading-snug text-slate-900 shadow-sm ring-1 ring-slate-200 sm:p-12">
       <header className="mb-6 text-center">
-        <h1 className="text-2xl font-bold uppercase tracking-wide">{content.header.name || "Your Name"}</h1>
+        {content.header.name && <h1 className="text-2xl font-bold uppercase tracking-wide">{content.header.name}</h1>}
         <div className="mt-2 flex flex-wrap justify-center gap-x-2 gap-y-1 text-xs text-slate-600">
           {[content.header.email, content.header.phone, content.header.city].filter(Boolean).map((item) => (
             <span key={item}>{item}</span>

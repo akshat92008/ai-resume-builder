@@ -16,7 +16,7 @@ export function ProofScoreCard({ result }: { result: ProofScoreResult }) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
-          <CardTitle>Resume Proof Score</CardTitle>
+          <CardTitle>Proof Score</CardTitle>
           <Badge className={tone}>{result.grade}</Badge>
         </div>
       </CardHeader>
@@ -25,7 +25,7 @@ export function ProofScoreCard({ result }: { result: ProofScoreResult }) {
           <div className="text-5xl font-bold tracking-tight text-slate-950">
             {result.total}<span className="text-xl font-normal text-slate-400">/100</span>
           </div>
-          <p className="mt-2 text-sm text-slate-500">Every resume claim should connect to proof.</p>
+          <p className="mt-2 text-sm text-slate-500">Measures how many career claims connect to real evidence.</p>
         </div>
         <ProofBreakdown breakdown={result.breakdown} />
       </CardContent>

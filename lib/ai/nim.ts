@@ -7,6 +7,9 @@ import type {
   UserVault,
 } from "../types";
 import { calculateProofScore, submissionToVault } from "../proof-score";
+import { analyzeJobFit } from "@/lib/agents/job-fit-agent";
+import { auditProof } from "@/lib/agents/proof-auditor-agent";
+import { generateResumeWithAgent, sanitizeResumeResult } from "@/lib/agents/resume-agent";
 
 const SYSTEM_PROMPT = `You are CareerProof AI, an honest career assistant for Indian students and freshers. Your job is to improve the presentation of real achievements, not invent credentials. Only use the user's provided profile, education, skills, projects, proof links, certificates, experience, achievements, and job description. If a claim is unsupported, flag it. If the user lacks proof, suggest what proof to add. Never fabricate internships, companies, numbers, awards, certificates, technologies, or results. Generate ATS-friendly, recruiter-readable content. Prioritize specificity, proof, and honesty over hype. Output strict JSON.`;
 
@@ -19,51 +22,6 @@ function getNimClient() {
     apiKey,
     baseURL: "https://integrate.api.nvidia.com/v1",
   });
-}
-
-function unique(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-}
-
-function extractSkillWords(text: string) {
-  const known = [
-    "react",
-    "next.js",
-    "nextjs",
-    "typescript",
-    "javascript",
-    "node.js",
-    "express",
-    "python",
-    "java",
-    "sql",
-    "postgres",
-    "mongodb",
-    "supabase",
-    "firebase",
-    "tailwind",
-    "html",
-    "css",
-    "api",
-    "rest",
-    "graphql",
-    "aws",
-    "docker",
-    "git",
-    "github",
-    "figma",
-    "excel",
-    "power bi",
-    "machine learning",
-    "ai",
-    "nvidia",
-    "openai",
-    "analytics",
-    "seo",
-    "communication",
-  ];
-  const lower = text.toLowerCase();
-  return unique(known.filter((skill) => lower.includes(skill)).map((skill) => skill.replace("nextjs", "Next.js")));
 }
 
 function parseJsonObject<T>(text: string | undefined, fallback: T): T {
@@ -82,156 +40,13 @@ function parseJsonObject<T>(text: string | undefined, fallback: T): T {
 }
 
 export function fallbackJobAnalysis(userVault: UserVault, jobDescription: string): JobAnalysis {
-  const requiredSkills = extractSkillWords(jobDescription);
-  const userSkills = unique([
-    ...userVault.skills.map((skill) => skill.name),
-    ...userVault.projects.flatMap((project) => project.tech_stack),
-  ]);
-  const userSkillsLower = userSkills.map((skill) => skill.toLowerCase());
-  const matchingSkills = requiredSkills.filter((skill) =>
-    userSkillsLower.some((userSkill) => userSkill.includes(skill.toLowerCase()) || skill.toLowerCase().includes(userSkill)),
-  );
-  const missingSkills = requiredSkills.filter((skill) => !matchingSkills.includes(skill));
-  const recommendedProjects = userVault.projects
-    .filter((project) =>
-      project.tech_stack.some((tech) =>
-        matchingSkills.some((skill) => tech.toLowerCase().includes(skill.toLowerCase())),
-      ),
-    )
-    .map((project) => project.id)
-    .slice(0, 3);
-  const fitScore = requiredSkills.length === 0 ? 60 : Math.min(92, Math.max(25, Math.round((matchingSkills.length / requiredSkills.length) * 100)));
-
-  return {
-    requiredSkills: requiredSkills.length ? requiredSkills : ["Role-specific communication", "Project ownership", "Problem solving"],
-    preferredSkills: ["GitHub proof", "Live demo", "Clear project impact"],
-    missingSkills,
-    matchingSkills,
-    recommendedProjects: recommendedProjects.length ? recommendedProjects : userVault.projects.slice(0, 2).map((project) => project.id),
-    fitScore,
-    resumeAngle:
-      matchingSkills.length > 0
-        ? `Lead with proof-backed projects that demonstrate ${matchingSkills.slice(0, 3).join(", ")}.`
-        : "Lead with your strongest verified projects and be explicit about learning gaps.",
-    warnings:
-      missingSkills.length > 0
-        ? [`Do not claim ${missingSkills.slice(0, 3).join(", ")} unless you can attach project or certificate proof.`]
-        : ["Fit looks reasonable. Keep the resume specific and proof-backed."],
-  };
-}
-
-function proofLinksForProject(project: UserVault["projects"][number]) {
-  return [
-    project.github_url ? { label: "GitHub", url: project.github_url } : null,
-    project.live_url ? { label: "Live Demo", url: project.live_url } : null,
-    project.case_study_url ? { label: "Case Study", url: project.case_study_url } : null,
-  ].filter((link): link is { label: string; url: string } => Boolean(link));
+  const proofAudit = auditProof(userVault);
+  return analyzeJobFit(userVault, jobDescription, proofAudit);
 }
 
 export function fallbackResume(userVault: UserVault, jobAnalysis?: JobAnalysis, style = "ATS Formal") {
-  const profile = userVault.profile;
-  const warnings: ResumeWarning[] = [];
-  const recommendedProjectIds = jobAnalysis?.recommendedProjects ?? [];
-  const selectedProjects = [
-    ...userVault.projects.filter((project) => recommendedProjectIds.includes(project.id)),
-    ...userVault.projects.filter((project) => !recommendedProjectIds.includes(project.id)),
-  ].slice(0, style === "Technical Heavy" ? 4 : 3);
-
-  const content: ResumeContent = {
-    header: {
-      name: profile.full_name || "",
-      email: profile.email || "",
-      phone: profile.phone || "",
-      city: profile.city || "",
-      links: [
-        profile.linkedin_url ? { label: "LinkedIn", url: profile.linkedin_url } : null,
-        profile.github_url ? { label: "GitHub", url: profile.github_url } : null,
-        profile.portfolio_url ? { label: "Portfolio", url: profile.portfolio_url } : null,
-      ].filter((link): link is { label: string; url: string } => Boolean(link)),
-    },
-    summary:
-      profile.summary ||
-      `Results-oriented ${profile.target_roles[0] || "professional"} with a strong foundation in modern technologies and a portfolio of verifiable projects. Focused on building scalable solutions, solving complex problems, and contributing effectively to technical teams.`,
-    skills: {
-      technical: unique(userVault.skills.filter((skill) => skill.category !== "soft").map((skill) => skill.name)).slice(0, 14),
-      tools: unique(userVault.projects.flatMap((project) => project.tech_stack)).slice(0, 12),
-      soft: userVault.skills.filter((skill) => skill.category === "soft").map((skill) => skill.name).slice(0, 5),
-    },
-    projects: selectedProjects.map((project) => {
-      const projectProof = proofLinksForProject(project);
-      if (projectProof.length === 0) {
-        warnings.push({
-          type: "missing_proof",
-          message: `${project.title} has no GitHub, live demo, or case study link.`,
-          severity: "medium",
-          suggestedFix: "Attach a public repo, demo, screenshots, or short case study before making strong claims.",
-        });
-      }
-      
-      const isPlaceholder = project.short_description?.includes("added during onboarding");
-      const safeDescription = isPlaceholder ? "" : project.short_description;
-      const features = project.features.length ? project.features : (safeDescription ? [safeDescription] : []);
-      
-      const cleanTitle = project.title
-        .replace(/^([^a-zA-Z0-9]+)/, "") // remove leading symbols
-        .replace(/^[a-z]/, (m) => m.toUpperCase()) // capitalize first letter
-        .replace(/\s*-\s*an?\s+/i, " — "); // "Project - an app" -> "Project — app"
-
-      return {
-        title: cleanTitle,
-        description: safeDescription,
-        techStack: project.tech_stack,
-        proofLinks: projectProof,
-        bullets: [
-          `Architected and developed ${safeDescription || cleanTitle}${project.tech_stack.length ? ` leveraging ${project.tech_stack.slice(0, 4).join(", ")}` : ""}.`,
-          project.problem_solved
-            ? `Solved key challenges: ${project.problem_solved}`
-            : "Mapped core user requirements to technical features to deliver a functional MVP.",
-          features[0]
-            ? `Engineered critical components including ${features.slice(0, 3).join(", ")} as ${project.role || "primary developer"}.`
-            : `Owned end-to-end implementation as ${project.role || "primary developer"}, ensuring clean and maintainable code.`,
-          project.impact ? `Impact: ${project.impact}` : "Demonstrated technical proficiency and problem-solving through verifiable project execution.",
-        ],
-      };
-    }),
-    experience: userVault.experiences.map((experience) => ({
-      company: experience.company,
-      role: experience.role,
-      date: [experience.start_date, experience.end_date].filter(Boolean).join(" - "),
-      bullets: [
-        ...experience.responsibilities.slice(0, 2),
-        ...experience.achievements.slice(0, 2),
-        experience.certificate_url ? `Proof: internship or experience certificate available at ${experience.certificate_url}.` : "",
-      ].filter(Boolean),
-    })),
-    education: userVault.education.map((education) => ({
-      institution: education.institution,
-      degree: [education.degree, education.field].filter(Boolean).join(" - "),
-      date: [education.start_year || "", education.end_year || ""].filter(Boolean).join(" - "),
-      score: education.score,
-    })),
-    certifications: userVault.certificates.map((certificate) => ({
-      title: certificate.title,
-      issuer: certificate.issuer,
-      date: certificate.issue_date,
-    })),
-    achievements: userVault.achievements.map((achievement) => ({
-      title: achievement.title,
-      description: achievement.description,
-      proofUrl: achievement.proof_url,
-    })),
-  };
-
-  if (!profile.linkedin_url) {
-    warnings.push({
-      type: "missing_proof",
-      message: "LinkedIn URL is missing from the resume header.",
-      severity: "low",
-      suggestedFix: "Add LinkedIn to improve recruiter trust.",
-    });
-  }
-
-  return { content, warnings };
+  const proofAudit = auditProof(userVault);
+  return generateResumeWithAgent(userVault, jobAnalysis, proofAudit, style);
 }
 
 export async function analyzeJobDescription(userVault: UserVault, jobDescription: string): Promise<JobAnalysis> {
@@ -322,7 +137,16 @@ Return JSON only:
       ],
       response_format: { type: "json_object" },
     });
-    return parseJsonObject(response.choices[0].message.content || undefined, fallback);
+    const parsed = parseJsonObject<{ content?: ResumeContent; warnings?: ResumeWarning[] }>(
+      response.choices[0].message.content || undefined,
+      fallback,
+    );
+    return sanitizeResumeResult(
+      { content: parsed.content ?? fallback.content, warnings: parsed.warnings ?? fallback.warnings },
+      userVault,
+      jobAnalysis,
+      auditProof(userVault),
+    );
   } catch {
     return fallback;
   }
@@ -392,7 +216,7 @@ export async function generatePortfolioSummary(userVault: UserVault) {
 export async function improveProjectBullet(project: UserVault["projects"][number], targetRole: string) {
   const fallback = {
     bullet: `Built ${project.short_description || project.title}${project.tech_stack.length ? ` using ${project.tech_stack.slice(0, 4).join(", ")}` : ""} for ${targetRole || project.target_users || "target users"}, with proof available through the attached project links.`,
-    missingProof: proofLinksForProject(project).length === 0 ? ["Add GitHub, live demo, screenshots, or case study link."] : [],
+    missingProof: !project.github_url && !project.live_url && !project.case_study_url ? ["Add GitHub, live demo, screenshots, or case study link."] : [],
   };
   const ai = getNimClient();
   if (!ai) return fallback;

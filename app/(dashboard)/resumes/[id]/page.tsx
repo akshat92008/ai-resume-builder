@@ -122,10 +122,11 @@ export default function ResumeDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Proof score</CardTitle>
+            <CardTitle>Resume Quality Score</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-4xl font-bold text-slate-950">{resume.proof_score}<span className="text-lg font-normal text-slate-400">/100</span></div>
+            <p className="mt-2 text-sm text-slate-500">Measures clarity, ATS readiness, and proof-backed claims.</p>
             <Badge className="mt-3">{resume.warnings.length} warnings</Badge>
           </CardContent>
         </Card>

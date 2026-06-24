@@ -16,6 +16,14 @@ export default function NewResumePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [overrideWeakData, setOverrideWeakData] = useState(false);
+  const [qualityGate, setQualityGate] = useState<{
+    message: string;
+    blockingIssues: string[];
+    missingFields: string[];
+    nextActions: string[];
+    proofScore: number;
+    missingProof: string[];
+  } | null>(null);
 
   async function generate(force = false) {
     setLoading(true);
@@ -23,14 +31,8 @@ export default function NewResumePage() {
     try {
       const vault = await getCurrentVault();
       if (!vault) throw new Error("Vault not found. Please log in.");
-      
-      const hasStrongProjects = vault.projects.some(p => p.title && p.short_description && p.tech_stack.length > 0);
-      if (!hasStrongProjects && !force) {
-        setOverrideWeakData(true);
-        setLoading(false);
-        return;
-      }
       setOverrideWeakData(false);
+      setQualityGate(null);
       
       const jobs = await getJobs();
       const latestJob = jobs?.[0];
@@ -50,14 +52,21 @@ export default function NewResumePage() {
       const response = await fetch("/api/ai/generate-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobAnalysis: analysis, style, userVault: vault }),
+        body: JSON.stringify({ jobAnalysis: analysis, style, userVault: vault, force }),
       });
       const data = (await response.json()) as {
         content?: ResumeContent;
         warnings?: ResumeWarning[];
         proofScore?: { total: number };
+        resumeCritic?: { resumeQualityScore: number };
+        qualityGate?: typeof qualityGate;
         error?: string;
       };
+      if (response.status === 409 && data.qualityGate) {
+        setQualityGate(data.qualityGate);
+        setOverrideWeakData(true);
+        return;
+      }
       if (!response.ok || !data.content) throw new Error(data.error || "Unable to generate resume.");
       const resume: Resume = {
         id: makeId("resume"),
@@ -66,7 +75,7 @@ export default function NewResumePage() {
         style,
         content_json: data.content,
         warnings: data.warnings ?? [],
-        proof_score: data.proofScore?.total ?? 0,
+        proof_score: data.resumeCritic?.resumeQualityScore ?? data.proofScore?.total ?? 0,
         created_at: new Date().toISOString(),
       };
       await saveResume(resume);
@@ -105,13 +114,18 @@ export default function NewResumePage() {
           
           {overrideWeakData && (
             <Alert variant="warning" className="border-amber-200 bg-amber-50">
-              <strong>Weak project data detected:</strong> Your Career Vault project details are too thin to generate a strong resume. Add a description, tech stack, and proof link for at least one project.
+              <strong>{qualityGate?.message ?? "Your resume will be weak if I generate it now."}</strong>
+              <div className="mt-2 space-y-1 text-sm">
+                {(qualityGate?.blockingIssues.length ? qualityGate.blockingIssues : ["Add project details, skills, and proof links for your strongest work."]).slice(0, 4).map((issue) => (
+                  <div key={issue}>- {issue}</div>
+                ))}
+              </div>
               <div className="mt-4 flex gap-3">
                 <Button size="sm" asChild className="bg-amber-600 hover:bg-amber-700">
-                  <Link href="/vault">Improve project in Career Vault</Link>
+                  <Link href="/vault">Improve before applying</Link>
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => generate(true)} className="border-amber-600 text-amber-700 hover:bg-amber-100">
-                  Generate anyway
+                  Generate draft anyway
                 </Button>
               </div>
             </Alert>

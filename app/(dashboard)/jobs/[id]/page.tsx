@@ -18,6 +18,14 @@ export default function JobDetailPage() {
   const [loadingResume, setLoadingResume] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
   const [overrideWeakData, setOverrideWeakData] = useState(false);
+  const [qualityGate, setQualityGate] = useState<{
+    message: string;
+    blockingIssues: string[];
+    missingFields: string[];
+    nextActions: string[];
+    proofScore: number;
+    missingProof: string[];
+  } | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -33,25 +41,35 @@ export default function JobDetailPage() {
 
   async function generateResume(force = false) {
     if (!job || !vault) return;
-    
-    const hasStrongProjects = vault.projects.some(p => p.title && p.short_description && p.tech_stack.length > 0);
-    if (!hasStrongProjects && !force) {
-      setOverrideWeakData(true);
-      return;
-    }
+
     setOverrideWeakData(false);
+    setQualityGate(null);
     
     setLoadingResume(true);
     const response = await fetch("/api/ai/generate-resume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobAnalysis: job.analysis_json, style: job.style, userVault: vault }),
+      body: JSON.stringify({ jobAnalysis: job.analysis_json, style: job.style, userVault: vault, force }),
     });
     const data = (await response.json()) as {
-      content: ResumeContent;
-      warnings: ResumeWarning[];
-      proofScore: { total: number };
+      content?: ResumeContent;
+      warnings?: ResumeWarning[];
+      proofScore?: { total: number };
+      resumeCritic?: { resumeQualityScore: number };
+      qualityGate?: typeof qualityGate;
+      error?: string;
     };
+    if (response.status === 409 && data.qualityGate) {
+      setQualityGate(data.qualityGate);
+      setOverrideWeakData(true);
+      setLoadingResume(false);
+      return;
+    }
+    if (!response.ok || !data.content) {
+      setCoverLetter(data.error ?? "Unable to generate resume.");
+      setLoadingResume(false);
+      return;
+    }
 
     const newResumeData = await saveResume({
       id: crypto.randomUUID(),
@@ -59,7 +77,7 @@ export default function JobDetailPage() {
       title: `${job.job_title} resume`,
       style: job.style,
       content_json: data.content,
-      proof_score: data.proofScore?.total ?? 0,
+      proof_score: data.resumeCritic?.resumeQualityScore ?? data.proofScore?.total ?? 0,
       warnings: data.warnings ?? [],
       created_at: new Date().toISOString(),
     });
@@ -109,13 +127,18 @@ export default function JobDetailPage() {
       
       {overrideWeakData && (
         <Alert variant="warning" className="border-amber-200 bg-amber-50">
-          <strong>Weak project data detected:</strong> Your Career Vault project details are too thin to generate a strong resume. Add a description, tech stack, and proof link for at least one project.
+          <strong>{qualityGate?.message ?? "Your resume will be weak if I generate it now."}</strong>
+          <div className="mt-2 space-y-1 text-sm">
+            {(qualityGate?.blockingIssues.length ? qualityGate.blockingIssues : ["Add project details, skills, and proof links for your strongest work."]).slice(0, 4).map((issue) => (
+              <div key={issue}>- {issue}</div>
+            ))}
+          </div>
           <div className="mt-4 flex gap-3">
             <Button size="sm" asChild className="bg-amber-600 hover:bg-amber-700">
-              <Link href="/vault">Improve project in Career Vault</Link>
+              <Link href="/vault">Improve before applying</Link>
             </Button>
             <Button size="sm" variant="outline" onClick={() => generateResume(true)} className="border-amber-600 text-amber-700 hover:bg-amber-100">
-              Generate anyway
+              Generate draft anyway
             </Button>
           </div>
         </Alert>
@@ -124,11 +147,12 @@ export default function JobDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Fit score</CardTitle>
+            <CardTitle>Job Fit Score</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-5xl font-bold text-slate-950">{analysis.fitScore}<span className="text-xl font-normal text-slate-400">/100</span></div>
-            <p className="mt-4 text-sm leading-6 text-slate-600">{analysis.resumeAngle}</p>
+            <p className="mt-4 text-sm leading-6 text-slate-600">Job Fit Score measures how well the job requirements map to your proof-backed skills and projects.</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{analysis.resumeAngle}</p>
           </CardContent>
         </Card>
 
@@ -169,7 +193,7 @@ export default function JobDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Warnings
+              Claims without proof
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
