@@ -1,6 +1,6 @@
 import { isSupabaseMode } from "./mode";
 import * as demo from "./demo-storage";
-import * as supabase from "./supabase-storage";
+import * as supabase from "./browser-supabase";
 
 export function getCurrentUser() {
   return isSupabaseMode() ? supabase.getCurrentUser() : demo.getCurrentUser();

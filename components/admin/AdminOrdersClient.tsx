@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { AdminTable } from "@/components/admin/AdminTable";
 import { Badge, Button } from "@/components/ui";
-import { approveAdminOrder, rejectAdminOrder } from "@/lib/data/admin-client";
+import { approveAdminOrder, rejectAdminOrder } from "@/lib/data/admin/admin-client";
 import type { Order } from "@/lib/types";
 
 export function AdminOrdersClient({ initialOrders }: { initialOrders: Order[] }) {

@@ -1,4 +1,4 @@
-export * from "./data/client-repository";
+export * from "./data/client/client-repository";
 
 export type AdminEvent = {
   id?: string;

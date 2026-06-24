@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { AdminTable } from "@/components/admin/AdminTable";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
-import { updateAdminLeadStatus } from "@/lib/data/admin-client";
+import { updateAdminLeadStatus } from "@/lib/data/admin/admin-client";
 import type { Lead } from "@/lib/types";
 
 const statuses: NonNullable<Lead["status"]>[] = ["new", "contacted", "interested", "closed", "lost"];

@@ -1,6 +1,6 @@
-import { isSupabaseMode } from "./mode";
-import * as demo from "./demo-storage";
-import type { Lead, Order, Profile, Testimonial } from "../types";
+import { isSupabaseMode } from "../client/mode";
+import * as demo from "../client/demo-storage";
+import type { Lead, Order, Profile, Testimonial } from "../../types";
 
 export async function approveAdminOrder(orderId: string): Promise<boolean> {
   if (!isSupabaseMode()) return demo.approveAdminOrder(orderId);

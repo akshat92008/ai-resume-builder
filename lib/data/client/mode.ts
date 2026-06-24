@@ -1,4 +1,4 @@
-import { isSupabaseEnvConfigured } from "../supabase/config";
+import { isSupabaseEnvConfigured } from "../../supabase/config";
 
 export function isDemoMode(): boolean {
   return !isSupabaseEnvConfigured();

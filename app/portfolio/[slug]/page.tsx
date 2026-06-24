@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { notFound, useParams } from "next/navigation";
 import { PublicPortfolio } from "@/components/portfolio/PublicPortfolio";
-import { isSupabaseMode } from "@/lib/data/mode";
+import { isSupabaseMode } from "@/lib/data/client/mode";
 import { getCurrentVault } from "@/lib/repositories";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Loader2 } from "lucide-react";

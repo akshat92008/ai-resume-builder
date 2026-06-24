@@ -12,7 +12,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { calculateProofScore } from "@/lib/proof-score";
-import { getCurrentVault } from "@/lib/repositories";
+import { getCurrentVault } from "@/lib/data/server/server-repository";
 import { Progress } from "@/components/ui";
 
 const navItems = [

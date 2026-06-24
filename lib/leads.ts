@@ -1,5 +1,5 @@
 import type { Lead } from "./types";
-import { isSupabaseMode } from "./data/mode";
+import { isSupabaseMode } from "./data/client/mode";
 import { getSupabaseBrowserClient } from "./supabase/client";
 
 export async function saveLead(lead: Lead) {

@@ -199,6 +199,9 @@ export type AgentCommandOutput = {
   cards: AgentCard[];
   suggestedActions: SuggestedAction[];
   extractedUpdates: VaultUpdate[];
+  createdJob?: Job;
+  createdResume?: Resume;
+  redirectTo?: string;
   needsConfirmation: boolean;
   blockingIssues: string[];
   nextBestAction: string;

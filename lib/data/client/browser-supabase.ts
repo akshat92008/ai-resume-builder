@@ -1,5 +1,5 @@
-import { getSupabaseBrowserClient } from "../supabase/client";
-import type { Job, Lead, Order, Profile, Resume, Testimonial, UserVault } from "../types";
+import { getSupabaseBrowserClient } from "../../supabase/client";
+import type { Job, Lead, Order, Profile, Resume, Testimonial, UserVault } from "../../types";
 
 type AuthUser = { id: string; email?: string | null; user_metadata?: { full_name?: string } };
 type CreateOrderInput = { email: string; plan: string; amount_inr: number; provider?: Order["provider"]; metadata?: Record<string, unknown> };

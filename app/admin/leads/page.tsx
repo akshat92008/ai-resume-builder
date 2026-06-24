@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { AdminLeadsClient } from "@/components/admin/AdminLeadsClient";
-import { getAdminLeadsServer } from "@/lib/data/admin-actions";
-import { isSupabaseMode } from "@/lib/data/mode";
-import * as demo from "@/lib/data/demo-storage";
+import { getAdminLeadsServer } from "@/lib/data/admin/admin-actions";
+import { isSupabaseMode } from "@/lib/data/client/mode";
+import * as demo from "@/lib/data/client/demo-storage";
 
 export default async function AdminLeadsPage() {
   const isServerDemo = !isSupabaseMode();

@@ -1,4 +1,4 @@
-import { isSupabaseMode } from "./data/mode";
+import { isSupabaseMode } from "./data/client/mode";
 import { getSupabaseBrowserClient } from "./supabase/client";
 
 export async function trackEvent(eventName: string, metadata: Record<string, unknown> = {}) {

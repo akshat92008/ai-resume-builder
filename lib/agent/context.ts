@@ -141,7 +141,7 @@ function proofTypeFromUrl(url: string) {
   return "other" as const;
 }
 
-export function extractVaultUpdatesFromText(vault: UserVault, message: string, goal = ""): VaultUpdate[] {
+export function extractVaultUpdatesFromText(vault: UserVault, message: string, goal = "", weakProject?: Project | null): VaultUpdate[] {
   const updates: VaultUpdate[] = [];
   const text = cleanText(message);
   if (!text) return updates;
@@ -186,22 +186,40 @@ export function extractVaultUpdatesFromText(vault: UserVault, message: string, g
     .filter((skill) => !["AI", "GitHub"].includes(skill));
   const features = extractFeatures(text);
 
-  extractProjectTitles(text, vault).forEach((title) => {
-    const description = extractProjectDescription(text, title);
+  const titles = extractProjectTitles(text, vault);
+  
+  if (titles.length === 0 && weakProject && (features.length > 0 || techStack.length > 0 || text.length > 20)) {
+    // Conversational update: apply to the weak project
     const data: Partial<Project> & { title: string } = {
-      title,
-      short_description: description,
-      problem_solved: description,
-      tech_stack: techStack,
-      features,
-      status: "completed",
-    };
+      title: weakProject.title,
+      short_description: text,
+      problem_solved: text,
+      tech_stack: techStack.length ? techStack : undefined,
+      features: features.length ? features : undefined,
+    } as any;
     const github = urls.find((url) => /github\.com/i.test(url));
     const live = urls.find((url) => !/github\.com|linkedin\.com/i.test(url));
     if (github) data.github_url = github;
     if (live) data.live_url = live;
     updates.push({ type: "project", data });
-  });
+  } else {
+    titles.forEach((title) => {
+      const description = extractProjectDescription(text, title);
+      const data: Partial<Project> & { title: string } = {
+        title,
+        short_description: description,
+        problem_solved: description,
+        tech_stack: techStack,
+        features,
+        status: "completed",
+      };
+      const github = urls.find((url) => /github\.com/i.test(url));
+      const live = urls.find((url) => !/github\.com|linkedin\.com/i.test(url));
+      if (github) data.github_url = github;
+      if (live) data.live_url = live;
+      updates.push({ type: "project", data });
+    });
+  }
 
   urls.forEach((url) => {
     updates.push({

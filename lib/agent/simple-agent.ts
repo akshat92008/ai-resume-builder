@@ -1,5 +1,6 @@
 import type { AgentCard, AgentCommandInput, AgentCommandOutput, SuggestedAction } from "@/lib/agents/types";
 import { runCareerProofAgent } from "@/lib/agents/orchestrator";
+import { inspectCareerVault } from "@/lib/agents/career-vault-agent";
 import { detectAgentIntent } from "./intent";
 import { extractedProfileSummary, extractVaultUpdatesFromText } from "./context";
 import { defaultSuggestedActions } from "./actions";
@@ -25,7 +26,7 @@ function responseForIntent(output: ReturnType<typeof runCareerProofAgent>, updat
   }
   if (output.intent === "build_resume") {
     if (output.blockingIssues.length) {
-      return "I can build a draft, but your resume will be weak if I generate it now. Improve the missing proof and project details first.";
+      return "I generated a thin draft, but your resume is very weak. Please add more projects and skills to your Career Memory before applying.";
     }
     return output.resume
       ? "I generated a proof-backed resume draft and ran a resume quality check."
@@ -128,7 +129,14 @@ function suggestedActions(output: ReturnType<typeof runCareerProofAgent>): Sugge
 
 export function runCareerProofAgentCommand(input: AgentCommandInput): AgentCommandOutput {
   const intent = detectAgentIntent(input.userMessage);
-  const extractedUpdates = extractVaultUpdatesFromText(input.vault, input.userMessage);
+  
+  // Find weak project first so we can attribute conversational updates to it
+  const vaultReport = inspectCareerVault(input.vault);
+  const weakProjectRef = vaultReport.weakProjects[0];
+  const weakProject = weakProjectRef ? input.vault.projects.find((p) => p.id === weakProjectRef.projectId) : null;
+  
+  const extractedUpdates = extractVaultUpdatesFromText(input.vault, input.userMessage, "", weakProject);
+  
   const result = runCareerProofAgent({
     vault: input.vault,
     userMessage: input.userMessage,

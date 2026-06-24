@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { BarChart3, CreditCard, FileText, GraduationCap, Users } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { getAdminMetricsServer } from "@/lib/data/admin-actions";
+import { getAdminMetricsServer } from "@/lib/data/admin/admin-actions";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { isSupabaseMode } from "@/lib/data/mode";
-import * as demo from "@/lib/data/demo-storage";
+import { isSupabaseMode } from "@/lib/data/client/mode";
+import * as demo from "@/lib/data/client/demo-storage";
 
 const adminLinks = [
   { href: "/admin/leads", label: "Leads", icon: Users },

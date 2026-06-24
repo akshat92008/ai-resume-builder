@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui";
-import { deleteAdminTestimonial, saveAdminTestimonial } from "@/lib/data/admin-client";
+import { deleteAdminTestimonial, saveAdminTestimonial } from "@/lib/data/admin/admin-client";
 import type { Testimonial } from "@/lib/types";
 
 const empty = {

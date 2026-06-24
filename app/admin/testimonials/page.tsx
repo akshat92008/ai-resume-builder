@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { AdminTestimonialsClient } from "@/components/admin/AdminTestimonialsClient";
-import { getAdminTestimonialsServer } from "@/lib/data/admin-actions";
-import { isSupabaseMode } from "@/lib/data/mode";
-import * as demo from "@/lib/data/demo-storage";
+import { getAdminTestimonialsServer } from "@/lib/data/admin/admin-actions";
+import { isSupabaseMode } from "@/lib/data/client/mode";
+import * as demo from "@/lib/data/client/demo-storage";
 
 export default async function AdminTestimonialsPage() {
   const isServerDemo = !isSupabaseMode();

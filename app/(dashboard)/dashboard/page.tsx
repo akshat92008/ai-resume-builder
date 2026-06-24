@@ -52,9 +52,24 @@ export default function DashboardPage() {
     setCommand("");
 
     if (output.intent === "analyze_job" && output.result.jobFit && output.result.jobFit.jobFitScore > 0) {
+      // Basic extraction of job title from description text
+      let jobTitle = "Analyzed Job";
+      let company = "Unknown";
+      
+      const firstLine = message.split("\\n")[0]?.trim();
+      if (firstLine && firstLine.length < 50 && firstLine.length > 3) {
+        if (firstLine.includes(" at ")) {
+          const parts = firstLine.split(" at ");
+          jobTitle = parts[0] || jobTitle;
+          company = parts[1] || company;
+        } else {
+          jobTitle = firstLine;
+        }
+      }
+
       const newJob = {
-        job_title: "Analyzed Job",
-        company_name: "Unknown",
+        job_title: jobTitle,
+        company_name: company,
         job_description: message,
         role_category: "software",
         experience_level: "fresher",
@@ -63,7 +78,10 @@ export default function DashboardPage() {
         style: "professional",
       } as Job;
       saveJob(newJob).then((saved) => {
-        if (saved) setJobs((prev) => [saved, ...prev]);
+        if (saved) {
+          setJobs((prev) => [saved, ...prev]);
+          setAgentOutput((prev) => prev ? { ...prev, createdJob: saved } : prev);
+        }
       });
     }
 
@@ -76,7 +94,10 @@ export default function DashboardPage() {
         warnings: [],
       } as unknown as Resume;
       saveResume(newResume).then((saved) => {
-        if (saved) setResumes((prev) => [saved, ...prev]);
+        if (saved) {
+          setResumes((prev) => [saved, ...prev]);
+          setAgentOutput((prev) => prev ? { ...prev, createdResume: saved } : prev);
+        }
       });
     }
   }
@@ -199,6 +220,35 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+          {activeOutput.suggestedActions && activeOutput.suggestedActions.length > 0 && (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {activeOutput.suggestedActions.map((action) => (
+                <Button key={action.label} asChild variant="outline" size="sm">
+                  {action.href ? (
+                    <Link href={action.href}>{action.label}</Link>
+                  ) : (
+                    <button type="button" onClick={() => runCommand(action.action)}>
+                      {action.label}
+                    </button>
+                  )}
+                </Button>
+              ))}
+            </div>
+          )}
+          {(activeOutput.createdJob || activeOutput.createdResume) && (
+            <div className="mt-5 flex flex-wrap gap-2 pt-4 border-t border-slate-100">
+              {activeOutput.createdJob && (
+                <Button asChild variant="default" size="sm">
+                  <Link href={`/jobs/${activeOutput.createdJob.id}`}>Open Job Analysis</Link>
+                </Button>
+              )}
+              {activeOutput.createdResume && (
+                <Button asChild variant="default" size="sm">
+                  <Link href={`/resumes/${activeOutput.createdResume.id}`}>Open Resume</Link>
+                </Button>
+              )}
+            </div>
+          )}
         </section>
       )}
 
