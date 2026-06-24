@@ -17,6 +17,7 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadingResume, setLoadingResume] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
+  const [overrideWeakData, setOverrideWeakData] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -30,8 +31,16 @@ export default function JobDetailPage() {
     loadData();
   }, [params.id]);
 
-  async function generateResume() {
+  async function generateResume(force = false) {
     if (!job || !vault) return;
+    
+    const hasStrongProjects = vault.projects.some(p => p.title && p.short_description && p.tech_stack.length > 0);
+    if (!hasStrongProjects && !force) {
+      setOverrideWeakData(true);
+      return;
+    }
+    setOverrideWeakData(false);
+    
     setLoadingResume(true);
     const response = await fetch("/api/ai/generate-resume", {
       method: "POST",
@@ -87,7 +96,7 @@ export default function JobDetailPage() {
           <p className="mt-2 text-slate-600">{job.company_name || "Company not added"} | {job.experience_level}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={generateResume} disabled={loadingResume}>
+          <Button onClick={() => generateResume(false)} disabled={loadingResume}>
             <FileText className="mr-2 h-4 w-4" />
             {loadingResume ? "Generating..." : "Generate Resume"}
           </Button>
@@ -97,6 +106,20 @@ export default function JobDetailPage() {
           </Button>
         </div>
       </div>
+      
+      {overrideWeakData && (
+        <Alert variant="warning" className="border-amber-200 bg-amber-50">
+          <strong>Weak project data detected:</strong> Your Career Vault project details are too thin to generate a strong resume. Add a description, tech stack, and proof link for at least one project.
+          <div className="mt-4 flex gap-3">
+            <Button size="sm" asChild className="bg-amber-600 hover:bg-amber-700">
+              <Link href="/vault">Improve project in Career Vault</Link>
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => generateResume(true)} className="border-amber-600 text-amber-700 hover:bg-amber-100">
+              Generate anyway
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card>

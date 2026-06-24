@@ -55,9 +55,9 @@ export default function OnboardingPage() {
         .map((title) => title.trim())
         .filter(Boolean)
         .map((title, index) => ({
-          ...(vault.projects[index] ?? {
-            id: makeId("project"),
-            short_description: "Project added during onboarding. Add details in the Career Vault.",
+            ...(vault.projects[index] ?? {
+              id: makeId("project"),
+              short_description: "",
             problem_solved: "",
             target_users: "",
             tech_stack: [],
@@ -90,7 +90,7 @@ export default function OnboardingPage() {
     
     await saveCurrentVault(nextVault);
     void trackEvent("onboarding_completed", { projects: nextVault.projects.length, skills: nextVault.skills.length });
-    router.push("/dashboard");
+    router.push("/dashboard?onboarding=success");
   }
 
   if (!vault) {
@@ -117,6 +117,10 @@ export default function OnboardingPage() {
                   <div className="space-y-2">
                     <Label>Name</Label>
                     <Input value={vault.profile.full_name} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, full_name: event.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={vault.profile.email} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, email: event.target.value } })} />
                   </div>
                   <div className="space-y-2">
                     <Label>Phone</Label>
@@ -163,6 +167,7 @@ export default function OnboardingPage() {
 
             {step === 1 && (
               <div className="grid gap-4 md:grid-cols-2">
+                <p className="md:col-span-2 text-sm text-slate-500 mb-2">These links help recruiters verify your skills. No link yet? Skip for now and add them later.</p>
                 <div className="space-y-2">
                   <Label>GitHub</Label>
                   <Input value={vault.profile.github_url} onChange={(event) => setVault({ ...vault, profile: { ...vault.profile, github_url: event.target.value } })} />
@@ -187,6 +192,7 @@ export default function OnboardingPage() {
 
             {step === 3 && (
               <div className="space-y-2">
+                <p className="text-sm text-slate-500 mb-2">Add 1–3 projects you want recruiters to trust. Include GitHub/live demo links later.</p>
                 <Label>Top projects</Label>
                 <Textarea rows={7} value={projectsText} onChange={(event) => setProjectsText(event.target.value)} placeholder="One project per line" />
               </div>

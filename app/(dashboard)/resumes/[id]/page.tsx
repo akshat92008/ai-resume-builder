@@ -153,10 +153,13 @@ export default function ResumeDetailPage() {
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save changes
           </Button>
-          <Button variant="outline" onClick={() => window.print()}>
-            <Download className="mr-2 h-4 w-4" />
-            Download / Print PDF
-          </Button>
+          <div className="space-y-1">
+            <Button variant="outline" onClick={() => window.print()} className="w-full justify-start">
+              <Download className="mr-2 h-4 w-4" />
+              Download / Print PDF
+            </Button>
+            <p className="text-xs text-slate-500 leading-tight">For clean PDF, select &quot;Save as PDF&quot; and turn off &quot;Headers and footers&quot;.</p>
+          </div>
           <Button variant="outline" onClick={copyText}>
             <Copy className="mr-2 h-4 w-4" />
             Copy resume text

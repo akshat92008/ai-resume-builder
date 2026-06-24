@@ -139,10 +139,10 @@ export function fallbackResume(userVault: UserVault, jobAnalysis?: JobAnalysis, 
 
   const content: ResumeContent = {
     header: {
-      name: profile.full_name,
-      email: profile.email,
-      phone: profile.phone,
-      city: profile.city,
+      name: profile.full_name || "",
+      email: profile.email || "",
+      phone: profile.phone || "",
+      city: profile.city || "",
       links: [
         profile.linkedin_url ? { label: "LinkedIn", url: profile.linkedin_url } : null,
         profile.github_url ? { label: "GitHub", url: profile.github_url } : null,
@@ -151,7 +151,7 @@ export function fallbackResume(userVault: UserVault, jobAnalysis?: JobAnalysis, 
     },
     summary:
       profile.summary ||
-      `${profile.target_roles[0] || "Early-career"} candidate with verified projects and proof links. Focused on presenting real work clearly and honestly.`,
+      `Results-oriented ${profile.target_roles[0] || "professional"} with a strong foundation in modern technologies and a portfolio of verifiable projects. Focused on building scalable solutions, solving complex problems, and contributing effectively to technical teams.`,
     skills: {
       technical: unique(userVault.skills.filter((skill) => skill.category !== "soft").map((skill) => skill.name)).slice(0, 14),
       tools: unique(userVault.projects.flatMap((project) => project.tech_stack)).slice(0, 12),
@@ -167,21 +167,30 @@ export function fallbackResume(userVault: UserVault, jobAnalysis?: JobAnalysis, 
           suggestedFix: "Attach a public repo, demo, screenshots, or short case study before making strong claims.",
         });
       }
-      const features = project.features.length ? project.features : [project.short_description];
+      
+      const isPlaceholder = project.short_description?.includes("added during onboarding");
+      const safeDescription = isPlaceholder ? "" : project.short_description;
+      const features = project.features.length ? project.features : (safeDescription ? [safeDescription] : []);
+      
+      const cleanTitle = project.title
+        .replace(/^([^a-zA-Z0-9]+)/, "") // remove leading symbols
+        .replace(/^[a-z]/, (m) => m.toUpperCase()) // capitalize first letter
+        .replace(/\s*-\s*an?\s+/i, " — "); // "Project - an app" -> "Project — app"
+
       return {
-        title: project.title,
-        description: project.short_description,
+        title: cleanTitle,
+        description: safeDescription,
         techStack: project.tech_stack,
         proofLinks: projectProof,
         bullets: [
-          `Built ${project.short_description || project.title}${project.tech_stack.length ? ` using ${project.tech_stack.slice(0, 4).join(", ")}` : ""}.`,
+          `Architected and developed ${safeDescription || cleanTitle}${project.tech_stack.length ? ` leveraging ${project.tech_stack.slice(0, 4).join(", ")}` : ""}.`,
           project.problem_solved
-            ? `Solved: ${project.problem_solved}`
-            : "Clarified the project problem statement and mapped features to user needs.",
+            ? `Solved key challenges: ${project.problem_solved}`
+            : "Mapped core user requirements to technical features to deliver a functional MVP.",
           features[0]
-            ? `Implemented ${features.slice(0, 3).join(", ")} with ownership as ${project.role || "contributor"}.`
-            : `Owned implementation as ${project.role || "contributor"} and documented the build for recruiter review.`,
-          project.impact ? `Impact/proof: ${project.impact}` : "Impact is not quantified yet; add usage, users, results, or learning evidence when available.",
+            ? `Engineered critical components including ${features.slice(0, 3).join(", ")} as ${project.role || "primary developer"}.`
+            : `Owned end-to-end implementation as ${project.role || "primary developer"}, ensuring clean and maintainable code.`,
+          project.impact ? `Impact: ${project.impact}` : "Demonstrated technical proficiency and problem-solving through verifiable project execution.",
         ],
       };
     }),
@@ -275,6 +284,14 @@ export async function generateTailoredResume(
   if (!ai) return fallback;
 
   const prompt = `Generate a tailored resume based only on the provided vault and job analysis.
+
+CRITICAL INSTRUCTIONS:
+- Never include placeholder text like "Project added during onboarding" or "Add details in Career Vault" in generated resumes.
+- Never include internal guidance text inside the final resume.
+- Use real user profile data exactly as provided. Do not use generic fallback emails.
+- Clean project titles to ensure they look professional (e.g., capitalize, fix spacing).
+- Generate a professional ATS-friendly summary (do not just say "I build things").
+- If data is weak, use honest but polished wording (e.g., "Engineered MVP", "Developed core functionality").
 
 Resume bullet style: action verb + what was built/done + technology/method + outcome/proof.
 Style: ${style}

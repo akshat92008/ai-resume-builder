@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Briefcase, FileText, Link2, Plus, ShieldAlert, ShieldCheck, Sparkles, Upload, Loader2 } from "lucide-react";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress } from "@/components/ui";
 import { ProofScoreCard } from "@/components/proof/ProofScoreCard";
 import { calculateProofScore } from "@/lib/proof-score";
 import { getPlanLimits } from "@/lib/plans";
@@ -12,8 +12,13 @@ import type { UserVault } from "@/lib/types";
 
 export default function DashboardPage() {
   const [vault, setVault] = useState<UserVault | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("onboarding=success")) {
+      setTimeout(() => setShowSuccess(true), 0);
+      window.history.replaceState({}, "", "/dashboard");
+    }
     async function load() {
       const data = await getCurrentVault();
       setVault(data);
@@ -72,6 +77,11 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
+      {showSuccess && (
+        <Alert variant="success" className="bg-emerald-50 text-emerald-900 border-emerald-200">
+          <strong>Success!</strong> Your Career Vault is ready. Generate your first proof-backed resume below.
+        </Alert>
+      )}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Dashboard</p>

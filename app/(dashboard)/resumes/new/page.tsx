@@ -15,13 +15,23 @@ export default function NewResumePage() {
   const [style, setStyle] = useState("ATS Formal");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [overrideWeakData, setOverrideWeakData] = useState(false);
 
-  async function generate() {
+  async function generate(force = false) {
     setLoading(true);
     setError("");
     try {
       const vault = await getCurrentVault();
       if (!vault) throw new Error("Vault not found. Please log in.");
+      
+      const hasStrongProjects = vault.projects.some(p => p.title && p.short_description && p.tech_stack.length > 0);
+      if (!hasStrongProjects && !force) {
+        setOverrideWeakData(true);
+        setLoading(false);
+        return;
+      }
+      setOverrideWeakData(false);
+      
       const jobs = await getJobs();
       const latestJob = jobs?.[0];
       const analysis: JobAnalysis =
@@ -92,7 +102,22 @@ export default function NewResumePage() {
             </Select>
           </div>
           {error && <Alert variant="error">{error}</Alert>}
-          <Button onClick={generate} disabled={loading} className="w-full">
+          
+          {overrideWeakData && (
+            <Alert variant="warning" className="border-amber-200 bg-amber-50">
+              <strong>Weak project data detected:</strong> Your Career Vault project details are too thin to generate a strong resume. Add a description, tech stack, and proof link for at least one project.
+              <div className="mt-4 flex gap-3">
+                <Button size="sm" asChild className="bg-amber-600 hover:bg-amber-700">
+                  <Link href="/vault">Improve project in Career Vault</Link>
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => generate(true)} className="border-amber-600 text-amber-700 hover:bg-amber-100">
+                  Generate anyway
+                </Button>
+              </div>
+            </Alert>
+          )}
+
+          <Button onClick={() => generate(false)} disabled={loading} className="w-full">
             {loading ? "Generating..." : "Generate resume"}
           </Button>
           <Button variant="outline" asChild className="w-full">

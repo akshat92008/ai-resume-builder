@@ -29,9 +29,10 @@ const navItems = [
 
 export async function DashboardSidebar() {
   let score = { total: 0 };
+  let vault: any = null;
   
   try {
-    const vault = await getCurrentVault();
+    vault = await getCurrentVault();
     if (vault) {
       score = calculateProofScore(vault);
     }
@@ -46,25 +47,27 @@ export async function DashboardSidebar() {
         <span className="font-display text-lg font-bold">CareerProof</span>
       </Link>
       <nav className="flex-1 space-y-1 px-4 py-5">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-slate-900 hover:text-white"
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+        {navItems
+          .filter((item) => item.label !== "Admin" || vault?.profile.role === "admin")
+          .map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-slate-900 hover:text-white"
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
       </nav>
       <div className="border-t border-slate-800 p-4">
         <div className="rounded-lg bg-slate-900 p-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
             <ShieldCheck className="h-4 w-4" />
-            Proof Score
+            Vault Proof Score
           </div>
           <div className="mt-2 text-2xl font-bold text-white">
             {score.total}<span className="text-sm font-normal text-slate-400">/100</span>
