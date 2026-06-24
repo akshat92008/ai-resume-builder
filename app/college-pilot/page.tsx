@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Building2, CheckCircle2 } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { saveLead } from "@/lib/leads";
+import { saveLead } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 
 const initial = {

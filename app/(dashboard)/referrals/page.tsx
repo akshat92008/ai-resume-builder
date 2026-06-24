@@ -1,27 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, Gift, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Copy, Gift, Share2, Loader2 } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Progress } from "@/components/ui";
-import { getDemoEvents, getDemoVault, saveDemoVault } from "@/lib/storage";
+import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
+import type { UserVault } from "@/lib/types";
 
 export default function ReferralsPage() {
-  const [vault, setVault] = useState(getDemoVault());
+  const [vault, setVault] = useState<UserVault | null>(null);
   const [message, setMessage] = useState("");
-  const code = vault.profile.referral_code || `${vault.profile.full_name.split(" ")[0] || "USER"}100`.toUpperCase();
+  const [copiedCount, setCopiedCount] = useState(0);
+  
+  useEffect(() => {
+    async function load() {
+      const v = await getCurrentVault();
+      setVault(v);
+      setCopiedCount(0); // This can be fetched from DB if needed
+    }
+    load();
+  }, []);
+
+  if (!vault) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const code = vault.profile.referral_code || `${vault.profile.full_name?.split(" ")[0] || "USER"}100`.toUpperCase();
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const link = `${baseUrl}/signup?ref=${code}`;
-  const copiedCount = getDemoEvents().filter((event) => event.event_name === "referral_copied").length;
 
   async function copy() {
-    if (!vault.profile.referral_code) {
-      const next = { ...vault, profile: { ...vault.profile, referral_code: code } };
-      saveDemoVault(next);
+    if (!vault) return;
+    const currentVault = vault;
+    if (!currentVault.profile.referral_code) {
+      const next: UserVault = { ...currentVault, profile: { ...currentVault.profile, referral_code: code } };
+      await saveCurrentVault(next);
       setVault(next);
     }
     await navigator.clipboard.writeText(link);
     await trackEvent("referral_copied", { code });
+    setCopiedCount(c => c + 1);
     setMessage("Referral link copied.");
   }
 
@@ -61,7 +83,7 @@ export default function ReferralsPage() {
             <div className="font-semibold">Invite 3 friends</div>
             <p className="mt-1 text-sm text-slate-500">Unlock extra resume generations.</p>
             <Progress value={(copiedCount / 3) * 100} className="mt-4" />
-            <p className="mt-2 text-xs text-slate-500">{Math.min(copiedCount, 3)}/3 invites tracked locally</p>
+            <p className="mt-2 text-xs text-slate-500">{Math.min(copiedCount, 3)}/3 invites</p>
           </CardContent>
         </Card>
         <Card>
@@ -73,7 +95,7 @@ export default function ReferralsPage() {
             <div className="font-semibold">Invite 10 friends</div>
             <p className="mt-1 text-sm text-slate-500">Unlock temporary Pro access after admin review.</p>
             <Progress value={(copiedCount / 10) * 100} className="mt-4" />
-            <p className="mt-2 text-xs text-slate-500">{Math.min(copiedCount, 10)}/10 invites tracked locally</p>
+            <p className="mt-2 text-xs text-slate-500">{Math.min(copiedCount, 10)}/10 invites</p>
           </CardContent>
         </Card>
       </div>

@@ -1,24 +1,46 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Briefcase, FileText, Link2, Plus, ShieldAlert, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { Briefcase, FileText, Link2, Plus, ShieldAlert, ShieldCheck, Sparkles, Upload, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress } from "@/components/ui";
 import { ProofScoreCard } from "@/components/proof/ProofScoreCard";
-import { mockVault } from "@/lib/mock-data";
 import { calculateProofScore } from "@/lib/proof-score";
 import { getPlanLimits } from "@/lib/plans";
+import { getCurrentVault } from "@/lib/repositories";
+import type { UserVault } from "@/lib/types";
 
 export default function DashboardPage() {
-  const score = calculateProofScore(mockVault);
-  const plan = mockVault.profile.plan ?? "free";
+  const [vault, setVault] = useState<UserVault | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      const data = await getCurrentVault();
+      setVault(data);
+    }
+    load();
+  }, []);
+
+  if (!vault) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const score = calculateProofScore(vault);
+  const plan = vault.profile.plan ?? "free";
   const limits = getPlanLimits(plan);
   const vaultCompletion = Math.min(
     100,
     Math.round(
-      (Number(Boolean(mockVault.profile.full_name)) +
-        Number(Boolean(mockVault.profile.linkedin_url)) +
-        Number(mockVault.skills.length > 0) +
-        Number(mockVault.projects.length > 0) +
-        Number(mockVault.proof_links.length > 0) +
-        Number(mockVault.education.length > 0)) *
+      (Number(Boolean(vault.profile.full_name)) +
+        Number(Boolean(vault.profile.linkedin_url)) +
+        Number(vault.skills.length > 0) +
+        Number(vault.projects.length > 0) +
+        Number(vault.proof_links.length > 0) +
+        Number(vault.education.length > 0)) *
         (100 / 6),
     ),
   );
@@ -26,10 +48,10 @@ export default function DashboardPage() {
   const metricCards = [
     { label: "Current plan", value: plan === "pro" ? "Student Pro" : plan, detail: `${limits.resumes === 9999 ? "Unlimited" : limits.resumes} resumes` },
     { label: "Vault completion", value: `${vaultCompletion}%`, detail: "Profile, skills, projects, proof" },
-    { label: "Projects", value: mockVault.projects.length, detail: "Featured proof-backed work" },
-    { label: "Proof links", value: mockVault.proof_links.length, detail: "Direct evidence links" },
-    { label: "Resumes generated", value: 0, detail: "Local demo count" },
-    { label: "Portfolio", value: mockVault.profile.portfolio_public ? "Public" : "Private", detail: `/portfolio/${mockVault.profile.public_slug}` },
+    { label: "Projects", value: vault.projects.length, detail: "Featured proof-backed work" },
+    { label: "Proof links", value: vault.proof_links.length, detail: "Direct evidence links" },
+    { label: "Resumes generated", value: 0, detail: "See total usage in settings" },
+    { label: "Portfolio", value: vault.profile.portfolio_public ? "Public" : "Private", detail: `/portfolio/${vault.profile.public_slug}` },
   ];
 
   const actions = [
@@ -44,7 +66,7 @@ export default function DashboardPage() {
   const suggestions = [
     "Your React skill has no proof.",
     "Add a live demo for your strongest project.",
-    mockVault.profile.portfolio_public ? "Share your public portfolio link with recruiters." : "Your portfolio is private.",
+    vault.profile.portfolio_public ? "Share your public portfolio link with recruiters." : "Your portfolio is private.",
     "Generate a job-specific resume before applying.",
   ];
 
@@ -54,7 +76,7 @@ export default function DashboardPage() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Dashboard</p>
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-slate-950">
-            Welcome back, {mockVault.profile.full_name.split(" ")[0]}
+            Welcome back, {vault.profile.full_name?.split(" ")[0] || "there"}
           </h1>
           <p className="mt-2 text-slate-600">Here is the current status of your proof-backed career profile.</p>
         </div>

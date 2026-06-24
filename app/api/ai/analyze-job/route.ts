@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeJobDescription } from "@/lib/ai/nim";
-import { mockVault } from "@/lib/mock-data";
+
 import type { UserVault } from "@/lib/types";
 import { jobSchema } from "@/lib/validations";
 
@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
       userVault: raw.userVault,
     };
     const input = jobSchema.parse(normalized);
-    const vault = (input.userVault as UserVault | undefined) ?? mockVault;
+    const vault = input.userVault as UserVault | undefined;
+    if (!vault) throw new Error("Vault required");
     const analysis = await analyzeJobDescription(vault, input.job_description);
 
     return NextResponse.json({

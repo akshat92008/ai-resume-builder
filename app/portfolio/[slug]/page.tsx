@@ -1,17 +1,15 @@
 import { notFound } from "next/navigation";
 import { PublicPortfolio } from "@/components/portfolio/PublicPortfolio";
-import { mockVault } from "@/lib/mock-data";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function PortfolioPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   
-  if (slug === "sample" || slug === mockVault.profile.public_slug) {
-    return <PublicPortfolio vault={mockVault} sample={true} />;
-  }
-
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return notFound();
+  
+  if (!supabase) {
+    return notFound();
+  }
 
   const { data: profile } = await supabase
     .from("profiles")

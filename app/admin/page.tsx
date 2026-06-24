@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BarChart3, CreditCard, FileText, GraduationCap, Users } from "lucide-react";
+import { BarChart3, CreditCard, FileText, GraduationCap, Users, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { getDemoEvents, getDemoLeads, getDemoOrders, getDemoResumes } from "@/lib/storage";
+import { getAdminMetrics } from "@/lib/repositories";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 const adminLinks = [
@@ -15,21 +16,31 @@ const adminLinks = [
 ];
 
 export default function AdminPage() {
-  const leads = getDemoLeads();
-  const orders = getDemoOrders();
-  const events = getDemoEvents();
-  const resumes = getDemoResumes();
-  const metrics = [
-    { label: "Total users", value: 1 },
-    { label: "Proof-score leads", value: leads.filter((lead) => lead.type === "proof_score").length },
-    { label: "Total orders", value: orders.length },
-    { label: "Pending manual payments", value: orders.filter((order) => ["pending", "submitted"].includes(order.status)).length },
-    { label: "Paid users", value: orders.filter((order) => order.status === "approved").length },
-    { label: "Portfolio count", value: 1 },
-    { label: "Resume count", value: resumes.length },
-    { label: "College leads", value: leads.filter((lead) => lead.type === "college_pilot").length },
-    { label: "Events", value: events.length },
-  ];
+  const [metricsData, setMetricsData] = useState<{
+    users: number;
+    orders: number;
+    leads: number;
+    resumes: number;
+    events: number;
+  } | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      const data = await getAdminMetrics();
+      setMetricsData(data);
+    }
+    load();
+  }, []);
+
+  const metrics = metricsData
+    ? [
+        { label: "Total users", value: metricsData.users },
+        { label: "Total leads", value: metricsData.leads },
+        { label: "Total orders", value: metricsData.orders },
+        { label: "Total resumes", value: metricsData.resumes },
+        { label: "Total events", value: metricsData.events },
+      ]
+    : [];
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
@@ -43,18 +54,24 @@ export default function AdminPage() {
           <Badge variant={isSupabaseConfigured ? "default" : "secondary"}>{isSupabaseConfigured ? "Supabase mode" : "Demo mode"}</Badge>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {metrics.map((metric) => (
-            <Card key={metric.label}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-slate-500">{metric.label}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{metric.value}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {metricsData ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {metrics.map((metric) => (
+              <Card key={metric.label}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-slate-500">{metric.label}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{metric.value}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-32 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          </div>
+        )}
 
         <Card>
           <CardHeader>

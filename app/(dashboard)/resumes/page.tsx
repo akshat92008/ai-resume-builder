@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FileText, Plus, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import type { Resume } from "@/lib/types";
-import { supabase } from "@/lib/supabase/client";
+import { getResumes } from "@/lib/repositories";
 
 export default function ResumesPage() {
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -13,9 +13,7 @@ export default function ResumesPage() {
 
   useEffect(() => {
     async function loadResumes() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('resumes').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      const data = await getResumes();
       if (data) setResumes(data);
       setLoading(false);
     }

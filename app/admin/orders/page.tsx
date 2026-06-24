@@ -1,69 +1,81 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { AdminTable } from "@/components/admin/AdminTable";
 import { Badge, Button } from "@/components/ui";
-import { getDemoOrders, getDemoVault, saveDemoVault, saveDemoOrders } from "@/lib/storage";
+import { approveAdminOrder, getAdminOrders, rejectAdminOrder } from "@/lib/repositories";
 import type { Order } from "@/lib/types";
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(() => getDemoOrders());
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const data = await getAdminOrders();
+      setOrders(data);
+      setLoading(false);
+    }
+    load();
+  }, []);
 
   async function approve(order: Order) {
-    const nextOrder: Order = { ...order, status: "approved", approved_at: new Date().toISOString(), approved_by: "demo-admin" };
-    const nextOrders = orders.map((item) => (item.id === order.id ? nextOrder : item));
-    setOrders(nextOrders);
-    saveDemoOrders(nextOrders);
-    const vault = getDemoVault();
-    if (["pro", "lifetime"].includes(order.plan)) {
-      saveDemoVault({ ...vault, profile: { ...vault.profile, plan: order.plan === "lifetime" ? "lifetime" : "pro", plan_status: "active" } });
+    const success = await approveAdminOrder(order.id);
+    if (success) {
+      setOrders(orders.map((item) => (item.id === order.id ? { ...item, status: "approved", approved_at: new Date().toISOString() } : item)));
+    } else {
+      alert("Failed to approve order");
     }
-    await fetch("/api/admin/orders/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: order.id, approved_by: "demo-admin" }),
-    });
   }
 
-  function reject(order: Order) {
-    const nextOrders = orders.map((item) => (item.id === order.id ? { ...item, status: "rejected" as const } : item));
-    setOrders(nextOrders);
-    saveDemoOrders(nextOrders);
+  async function reject(order: Order) {
+    const success = await rejectAdminOrder(order.id);
+    if (success) {
+      setOrders(orders.map((item) => (item.id === order.id ? { ...item, status: "rejected" } : item)));
+    } else {
+      alert("Failed to reject order");
+    }
   }
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
       <main className="mx-auto max-w-6xl space-y-6">
         <AdminHeader title="Orders" />
-        <AdminTable
-          columns={["Order", "Customer", "Amount", "Provider", "Status", "Payment proof", "Actions"]}
-          rows={orders.map((order) => [
-            <div key="order">
-              <div className="font-semibold">{order.plan}</div>
-              <div className="text-xs text-slate-500">{order.id}</div>
-            </div>,
-            order.email,
-            `₹${order.amount_inr}`,
-            order.provider,
-            <Badge key="status">{order.status}</Badge>,
-            <div key="proof">
-              <div>{order.payment_reference || "-"}</div>
-              {order.payment_proof_url && <a href={order.payment_proof_url} className="text-blue-700 hover:underline">Screenshot</a>}
-            </div>,
-            <div key="actions" className="flex gap-2">
-              <Button size="sm" onClick={() => approve(order)} disabled={order.status === "approved"}>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Approve
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => reject(order)} disabled={order.status === "approved"}>
-                <XCircle className="mr-2 h-4 w-4" />
-                Reject
-              </Button>
-            </div>,
-          ])}
-        />
+        {loading ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          </div>
+        ) : (
+          <AdminTable
+            columns={["Order", "Customer", "Amount", "Provider", "Status", "Payment proof", "Actions"]}
+            rows={orders.map((order) => [
+              <div key="order">
+                <div className="font-semibold">{order.plan}</div>
+                <div className="text-xs text-slate-500">{order.id}</div>
+              </div>,
+              order.email,
+              `₹${order.amount_inr}`,
+              order.provider,
+              <Badge key="status">{order.status}</Badge>,
+              <div key="proof">
+                <div>{order.payment_reference || "-"}</div>
+                {order.payment_proof_url && <a href={order.payment_proof_url} target="_blank" className="text-blue-700 hover:underline">Screenshot</a>}
+              </div>,
+              <div key="actions" className="flex gap-2">
+                <Button size="sm" onClick={() => approve(order)} disabled={order.status === "approved"}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Approve
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => reject(order)} disabled={order.status === "approved"}>
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Reject
+                </Button>
+              </div>,
+            ])}
+          />
+        )}
       </main>
     </div>
   );

@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { Plus, Save, Trash2, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Input, Label, Select, Tabs, Textarea } from "@/components/ui";
 import { CsvInput, Field } from "@/components/vault/VaultForms";
-import { makeId } from "@/lib/storage";
+import { makeId } from "@/lib/utils";
 import { trackEvent } from "@/lib/events";
 import type { Achievement, Certificate, Education, Experience, Project, ProofLink, Skill, UserVault } from "@/lib/types";
-import { supabase } from "@/lib/supabase/client";
+import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
 
 const tabs = [
   { id: "profile", label: "Profile" },
@@ -77,41 +77,8 @@ export default function VaultPage() {
 
   useEffect(() => {
     async function loadVault() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const [
-        { data: profile },
-        { data: education },
-        { data: skills },
-        { data: projects },
-        { data: experiences },
-        { data: certificates },
-        { data: achievements },
-        { data: proof_links },
-      ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('education').select('*').eq('user_id', user.id),
-        supabase.from('skills').select('*').eq('user_id', user.id),
-        supabase.from('projects').select('*').eq('user_id', user.id),
-        supabase.from('experiences').select('*').eq('user_id', user.id),
-        supabase.from('certificates').select('*').eq('user_id', user.id),
-        supabase.from('achievements').select('*').eq('user_id', user.id),
-        supabase.from('proof_links').select('*').eq('user_id', user.id),
-      ]);
-
-      setVault({
-        profile: profile || {
-          full_name: "", email: "", phone: "", city: "", headline: "", summary: "", public_slug: "", linkedin_url: "", github_url: "", portfolio_url: "", target_roles: [], portfolio_public: false
-        },
-        education: education || [],
-        skills: skills || [],
-        projects: projects || [],
-        experiences: experiences || [],
-        certificates: certificates || [],
-        achievements: achievements || [],
-        proof_links: proof_links || [],
-      });
+      const data = await getCurrentVault();
+      setVault(data);
     }
     loadVault();
   }, []);
@@ -119,21 +86,7 @@ export default function VaultPage() {
   async function save() {
     if (!vault) return;
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setSaving(false);
-      return;
-    }
-
-    await supabase.from('profiles').upsert({ ...vault.profile, id: user.id });
-
-    const lists = ['education', 'skills', 'projects', 'experiences', 'certificates', 'achievements', 'proof_links'] as const;
-    for (const list of lists) {
-      await supabase.from(list).delete().eq('user_id', user.id);
-      if (vault[list].length > 0) {
-        await supabase.from(list).insert(vault[list].map(item => ({ ...item, user_id: user.id })));
-      }
-    }
+    await saveCurrentVault(vault);
 
     setSaved(true);
     setSaving(false);

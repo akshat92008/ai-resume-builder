@@ -8,7 +8,7 @@ import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Loading
 import { ResumeEditor } from "@/components/resume/ResumeEditor";
 import { ResumePreview } from "@/components/resume/ResumePreview";
 import { trackEvent } from "@/lib/events";
-import { supabase } from "@/lib/supabase/client";
+import { getResume, getCurrentVault, saveResume, deleteResume } from "@/lib/repositories";
 import type { Resume, ResumeContent } from "@/lib/types";
 
 function resumeToText(content: ResumeContent) {
@@ -42,49 +42,20 @@ export default function ResumeDetailPage() {
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: resumeData } = await supabase.from('resumes').select('*').eq('id', params.id).single();
+      const resumeData = await getResume(params.id);
       if (resumeData) {
         setResume(resumeData);
         setContent(resumeData.content_json);
         if (resumeData.job_id) {
-          const { data: jobData } = await supabase.from('jobs').select('job_description').eq('id', resumeData.job_id).single();
+          // Ideally fetch job using getJob but we can leave it or fetch it via getJob
+          const { getJob } = await import("@/lib/repositories");
+          const jobData = await getJob(resumeData.job_id);
           if (jobData) setJobDescription(jobData.job_description);
         }
       }
 
-      const [
-        { data: profile },
-        { data: education },
-        { data: skills },
-        { data: projects },
-        { data: experiences },
-        { data: certificates },
-        { data: achievements },
-        { data: proof_links },
-      ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('education').select('*').eq('user_id', user.id),
-        supabase.from('skills').select('*').eq('user_id', user.id),
-        supabase.from('projects').select('*').eq('user_id', user.id),
-        supabase.from('experiences').select('*').eq('user_id', user.id),
-        supabase.from('certificates').select('*').eq('user_id', user.id),
-        supabase.from('achievements').select('*').eq('user_id', user.id),
-        supabase.from('proof_links').select('*').eq('user_id', user.id),
-      ]);
-
-      setVault({
-        profile: profile || { full_name: "", email: "", phone: "", city: "", headline: "", summary: "", public_slug: "", linkedin_url: "", github_url: "", portfolio_url: "", target_roles: [], portfolio_public: false },
-        education: education || [],
-        skills: skills || [],
-        projects: projects || [],
-        experiences: experiences || [],
-        certificates: certificates || [],
-        achievements: achievements || [],
-        proof_links: proof_links || [],
-      });
+      const vaultData = await getCurrentVault();
+      setVault(vaultData);
 
       setLoading(false);
     }
@@ -95,7 +66,7 @@ export default function ResumeDetailPage() {
     if (!resume || !content) return;
     setSaving(true);
     const updated = { ...resume, content_json: content };
-    await supabase.from('resumes').update({ content_json: content }).eq('id', resume.id);
+    await saveResume(updated);
     setResume(updated);
     setMessage("Saved resume changes.");
     setSaving(false);
@@ -131,9 +102,9 @@ export default function ResumeDetailPage() {
     setLinkedinAbout(data.content ?? "Unable to generate LinkedIn About.");
   }
 
-  async function deleteResume() {
+  async function handleDeleteResume() {
     if (!resume) return;
-    await supabase.from('resumes').delete().eq('id', resume.id);
+    await deleteResume(resume.id);
     router.push("/resumes");
   }
 
@@ -204,7 +175,7 @@ export default function ResumeDetailPage() {
               Link to portfolio
             </Link>
           </Button>
-          <Button variant="outline" onClick={deleteResume} className="text-red-600">Delete resume</Button>
+          <Button variant="outline" onClick={handleDeleteResume} className="text-red-600">Delete resume</Button>
         </div>
         {message && <Alert variant="success">{message}</Alert>}
       </aside>

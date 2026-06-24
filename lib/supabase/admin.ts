@@ -1,13 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
+import { getPublicSupabaseConfig } from "./config";
 
 export const isSupabaseAdminConfigured = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY,
+  getPublicSupabaseConfig() && process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
 export function createSupabaseAdminClient() {
   if (!isSupabaseAdminConfigured) return null;
+  const config = getPublicSupabaseConfig();
+  if (!config) return null;
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    config.url,
     process.env.SUPABASE_SERVICE_ROLE_KEY as string,
     {
       auth: {

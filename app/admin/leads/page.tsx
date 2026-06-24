@@ -1,19 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Copy, Download } from "lucide-react";
+import { Copy, Download, Loader2 } from "lucide-react";
 import { AdminTable } from "@/components/admin/AdminTable";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
-import { getDemoLeads, storageKeys, writeLocal } from "@/lib/storage";
+import { getAdminLeads, updateAdminLeadStatus } from "@/lib/repositories";
 import type { Lead } from "@/lib/types";
 
 const statuses: NonNullable<Lead["status"]>[] = ["new", "contacted", "interested", "closed", "lost"];
 
 export default function AdminLeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>(() => getDemoLeads());
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  const loadLeads = useCallback(async () => {
+    setLeads(await getAdminLeads());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadLeads();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadLeads]);
 
   const filtered = useMemo(
     () =>
@@ -21,10 +34,12 @@ export default function AdminLeadsPage() {
     [leads, type, status],
   );
 
-  function updateStatus(lead: Lead, nextStatus: NonNullable<Lead["status"]>) {
-    const next = leads.map((item) => (item.id === lead.id ? { ...item, status: nextStatus } : item));
-    setLeads(next);
-    writeLocal(storageKeys.leads, next);
+  async function updateStatus(lead: Lead, nextStatus: NonNullable<Lead["status"]>) {
+    if (!lead.id) return;
+    const updated = await updateAdminLeadStatus(lead.id, nextStatus);
+    if (updated) {
+      setLeads(leads.map((item) => (item.id === lead.id ? updated : item)));
+    }
   }
 
   async function copyWhatsApp(lead: Lead) {
@@ -44,6 +59,14 @@ export default function AdminLeadsPage() {
     link.download = "careerproof-leads.csv";
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
   }
 
   return (

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui";
-import { getDemoTestimonials, makeId, saveDemoTestimonials } from "@/lib/storage";
+import { deleteAdminTestimonial, getAdminTestimonials, saveAdminTestimonial } from "@/lib/repositories";
 import type { Testimonial } from "@/lib/types";
 
 const empty = {
@@ -17,30 +17,48 @@ const empty = {
 };
 
 export default function AdminTestimonialsPage() {
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => getDemoTestimonials());
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [form, setForm] = useState(empty);
+  const [loading, setLoading] = useState(true);
+
+  const loadTestimonials = useCallback(async () => {
+    setTestimonials(await getAdminTestimonials());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadTestimonials();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadTestimonials]);
 
   function update<K extends keyof typeof empty>(key: K, value: (typeof empty)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function add() {
-    const next = [{ ...form, id: makeId("testimonial"), demo: false }, ...testimonials];
-    setTestimonials(next);
-    saveDemoTestimonials(next);
+  async function add() {
+    const saved = await saveAdminTestimonial({ ...form, demo: false });
+    setTestimonials([saved, ...testimonials.filter((item) => item.id !== saved.id)]);
     setForm(empty);
   }
 
-  function toggle(item: Testimonial) {
-    const next = testimonials.map((testimonial) => (testimonial.id === item.id ? { ...testimonial, public: !testimonial.public } : testimonial));
-    setTestimonials(next);
-    saveDemoTestimonials(next);
+  async function toggle(item: Testimonial) {
+    const saved = await saveAdminTestimonial({ ...item, public: !item.public });
+    setTestimonials(testimonials.map((testimonial) => (testimonial.id === item.id ? saved : testimonial)));
   }
 
-  function remove(item: Testimonial) {
-    const next = testimonials.filter((testimonial) => testimonial.id !== item.id);
-    setTestimonials(next);
-    saveDemoTestimonials(next);
+  async function remove(item: Testimonial) {
+    await deleteAdminTestimonial(item.id);
+    setTestimonials(testimonials.filter((t) => t.id !== item.id));
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
   }
 
   return (

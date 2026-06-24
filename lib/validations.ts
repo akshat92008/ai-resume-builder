@@ -149,7 +149,26 @@ export const orderProofSchema = z.object({
 
 export const adminApproveOrderSchema = z.object({
   order_id: z.string().trim().min(1),
-  approved_by: z.string().trim().optional().default("demo-admin"),
+});
+
+export const adminRejectOrderSchema = z.object({
+  order_id: z.string().trim().min(1),
+  reason: optionalText,
+});
+
+export const adminLeadUpdateSchema = z.object({
+  lead_id: z.string().trim().min(1),
+  status: z.enum(["new", "contacted", "interested", "closed", "lost"]),
+});
+
+export const adminUserPlanUpdateSchema = z.object({
+  user_id: z.string().trim().min(1),
+  plan: z.enum(["free", "pro", "lifetime", "college"]),
+});
+
+export const eventTrackSchema = z.object({
+  event_name: z.string().trim().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 export const projectBulletSchema = z.object({

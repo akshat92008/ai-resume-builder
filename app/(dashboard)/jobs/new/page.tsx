@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Briefcase } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select, Textarea } from "@/components/ui";
-import { getDemoVault, makeId, upsertDemoJob } from "@/lib/storage";
+import { makeId } from "@/lib/utils";
+import { getCurrentVault, saveJob } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 import type { Job, JobAnalysis } from "@/lib/types";
 
@@ -30,10 +31,11 @@ export default function NewJobPage() {
     setLoading(true);
     setError("");
     try {
+      const vault = await getCurrentVault();
       const response = await fetch("/api/ai/analyze-job", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, userVault: getDemoVault() }),
+        body: JSON.stringify({ ...form, userVault: vault }),
       });
       const data = (await response.json()) as JobAnalysis & { error?: string };
       if (!response.ok || data.error) throw new Error(data.error || "Unable to analyze job.");
@@ -44,7 +46,7 @@ export default function NewJobPage() {
         fit_score: data.fitScore,
         created_at: new Date().toISOString(),
       };
-      upsertDemoJob(job);
+      await saveJob(job);
       await trackEvent("job_analyzed", { fit_score: job.fit_score, job_title: job.job_title });
       router.push(`/jobs/${job.id}`);
     } catch (caught) {

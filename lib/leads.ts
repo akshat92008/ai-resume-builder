@@ -1,12 +1,9 @@
 import type { Lead } from "./types";
 import { supabase, isSupabaseConfigured } from "./supabase/client";
-import { saveDemoLead } from "./storage";
 
 export async function saveLead(lead: Lead) {
-  const localLead = saveDemoLead({ ...lead, status: lead.status ?? "new" });
-
   if (!isSupabaseConfigured) {
-    return { ok: true, mode: "local" as const, lead: localLead };
+    return { ok: true, mode: "local" as const, lead };
   }
 
   const { error } = await supabase.from("leads").insert({
@@ -25,5 +22,5 @@ export async function saveLead(lead: Lead) {
     status: lead.status ?? "new",
   });
 
-  return { ok: !error, mode: "supabase" as const, lead: localLead, error: error?.message };
+  return { ok: !error, mode: "supabase" as const, lead, error: error?.message };
 }

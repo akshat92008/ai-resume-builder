@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateTailoredResume } from "@/lib/ai/nim";
 import { calculateProofScore } from "@/lib/proof-score";
-import { mockVault } from "@/lib/mock-data";
+
 import type { JobAnalysis, Resume, UserVault } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Job analysis context is required." }, { status: 400 });
     }
 
-    const vault = (body.userVault as UserVault | undefined) ?? mockVault;
+    const vault = body.userVault as UserVault | undefined;
+    if (!vault) throw new Error("Vault required");
     const jobAnalysis = body.jobAnalysis as JobAnalysis;
     const style = typeof body.style === "string" ? body.style : "ATS Formal";
     const { content, warnings } = await generateTailoredResume(vault, jobAnalysis, style);

@@ -1,9 +1,7 @@
-"use client";
-
 import Link from "next/link";
 import { AdminTable } from "@/components/admin/AdminTable";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { getDemoEvents } from "@/lib/storage";
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const funnel = [
   "landing_view",
@@ -20,13 +18,26 @@ const funnel = [
   "payment_approved",
 ];
 
-export default function AdminMetricsPage() {
-  const events = getDemoEvents();
+export default async function AdminMetricsPage() {
+  const supabase = await createServerSupabaseClient();
+  let events: any[] = [
+    { id: "demo-event-1", event_name: "landing_view", metadata: { mode: "demo" }, created_at: new Date().toISOString() },
+    { id: "demo-event-2", event_name: "proof_score_submitted", metadata: { score: 42, grade: "Average" }, created_at: new Date().toISOString() },
+    { id: "demo-event-3", event_name: "order_created", metadata: { plan: "pro", amount_inr: 199 }, created_at: new Date().toISOString() },
+  ];
+  let demoMode = true;
+  
+  if (supabase) {
+    demoMode = false;
+    const { data } = await supabase.from('events').select('*').order('created_at', { ascending: false }).limit(1000);
+    if (data) events = data;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
       <main className="mx-auto max-w-6xl space-y-6">
         <AdminHeader title="Metrics" />
+        {demoMode && <Alert variant="warning">Demo mode: this admin panel is using local sample data.</Alert>}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {funnel.map((eventName) => (
             <Card key={eventName}>

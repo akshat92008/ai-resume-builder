@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
-import { getDemoJobs, getDemoVault, makeId, upsertDemoResume } from "@/lib/storage";
+import { makeId } from "@/lib/utils";
+import { getCurrentVault, getJobs, saveResume } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 import type { JobAnalysis, Resume, ResumeContent, ResumeWarning } from "@/lib/types";
 
@@ -19,8 +20,10 @@ export default function NewResumePage() {
     setLoading(true);
     setError("");
     try {
-      const vault = getDemoVault();
-      const latestJob = getDemoJobs()[0];
+      const vault = await getCurrentVault();
+      if (!vault) throw new Error("Vault not found. Please log in.");
+      const jobs = await getJobs();
+      const latestJob = jobs?.[0];
       const analysis: JobAnalysis =
         latestJob?.analysis_json ??
         {
@@ -56,7 +59,7 @@ export default function NewResumePage() {
         proof_score: data.proofScore?.total ?? 0,
         created_at: new Date().toISOString(),
       };
-      upsertDemoResume(resume);
+      await saveResume(resume);
       await trackEvent("resume_generated", { resume_id: resume.id, source: "resumes-new", proof_score: resume.proof_score });
       router.push(`/resumes/${resume.id}`);
     } catch (caught) {

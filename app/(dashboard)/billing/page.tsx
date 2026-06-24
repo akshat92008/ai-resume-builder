@@ -1,50 +1,71 @@
 "use client";
 
-import { useState } from "react";
-import { CreditCard, IndianRupee, Upload } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { CreditCard, IndianRupee, Upload, Loader2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select } from "@/components/ui";
 import { getManualPaymentInstructions } from "@/lib/payments/manual";
 import { manualServicePacks, pricingPlans } from "@/lib/plans";
-import { getDemoOrders, getDemoVault, upsertDemoOrder } from "@/lib/storage";
-import type { Order } from "@/lib/types";
+import { createOrder as createRepositoryOrder, getCurrentVault, getOrders, submitPaymentProof } from "@/lib/repositories";
+import type { Order, UserVault } from "@/lib/types";
 
 export default function BillingPage() {
-  const [orders, setOrders] = useState<Order[]>(() => getDemoOrders());
-  const [email, setEmail] = useState(getDemoVault().profile.email);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [vault, setVault] = useState<UserVault | null>(null);
+  const [email, setEmail] = useState("");
   const [plan, setPlan] = useState("pro");
   const [reference, setReference] = useState("");
   const [proofUrl, setProofUrl] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+
   const instructions = getManualPaymentInstructions();
-  const vault = getDemoVault();
   const paidOptions = [...pricingPlans.filter((item) => item.id !== "free" && item.id !== "college"), ...manualServicePacks.map((pack) => ({ id: pack.id, name: pack.name, price: pack.price }))];
   const selected = paidOptions.find((item) => item.id === plan) ?? paidOptions[0];
 
+  const loadBilling = useCallback(async () => {
+    const nextVault = await getCurrentVault();
+    if (nextVault) {
+      setVault(nextVault);
+      setEmail(nextVault.profile.email || "");
+    }
+    setOrders(await getOrders());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadBilling();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBilling]);
+
   async function createOrder() {
     if (!selected) return;
-    const response = await fetch("/api/orders/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, plan: selected.id, amount_inr: selected.price, metadata: { source: "billing" } }),
-    });
-    const data = (await response.json()) as { order?: Order };
-    if (data.order) {
-      upsertDemoOrder(data.order);
-      setOrders(getDemoOrders());
+    try {
+      await createRepositoryOrder({ email, plan: selected.id, amount_inr: selected.price, metadata: { source: "billing" } });
+      setOrders(await getOrders());
       setMessage("Order created. Complete payment and submit reference.");
+    } catch {
+      setMessage("Failed to create order.");
     }
   }
 
   async function submitProof(order: Order) {
-    const updated: Order = { ...order, payment_reference: reference, payment_proof_url: proofUrl, status: "submitted" };
-    upsertDemoOrder(updated);
-    setOrders(getDemoOrders());
-    await fetch("/api/orders/submit-proof", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_id: order.id, payment_reference: reference, payment_proof_url: proofUrl }),
-    });
-    setMessage("Payment proof submitted. Admin can approve it from /admin/orders.");
+    try {
+      await submitPaymentProof({ order_id: order.id, payment_reference: reference, payment_proof_url: proofUrl });
+      setOrders(await getOrders());
+      setMessage("Payment proof submitted. Admin can approve it from /admin/orders.");
+    } catch {
+      setMessage("Failed to submit proof.");
+    }
+  }
+
+  if (loading || !vault) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
   }
 
   return (

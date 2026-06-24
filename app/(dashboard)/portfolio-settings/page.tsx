@@ -1,22 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Eye, Save } from "lucide-react";
+import { Copy, Eye, Save, Loader2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
-import { getDemoVault, saveDemoVault } from "@/lib/storage";
+import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
 import { canRemoveFooter } from "@/lib/plans";
 import { trackEvent } from "@/lib/events";
+import type { UserVault } from "@/lib/types";
 
 export default function PortfolioSettingsPage() {
-  const [vault, setVault] = useState(getDemoVault());
+  const [vault, setVault] = useState<UserVault | null>(null);
   const [message, setMessage] = useState("");
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  useEffect(() => {
+    async function load() {
+      const data = await getCurrentVault();
+      setVault(data);
+    }
+    load();
+  }, []);
+
+  if (!vault) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
   const portfolioLink = `${baseUrl}/portfolio/${vault.profile.public_slug || "sample"}`;
   const footerOptional = canRemoveFooter(vault.profile.plan ?? "free");
 
-  function save() {
-    saveDemoVault(vault);
+  async function save() {
+    if (!vault) return;
+    await saveCurrentVault(vault);
     setMessage("Portfolio settings saved.");
     void trackEvent("portfolio_published", { public: vault.profile.portfolio_public, slug: vault.profile.public_slug });
     window.setTimeout(() => setMessage(""), 1600);

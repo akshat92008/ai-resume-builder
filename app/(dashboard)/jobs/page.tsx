@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Briefcase, Plus, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState } from "@/components/ui";
 import type { Job } from "@/lib/types";
-import { supabase } from "@/lib/supabase/client";
+import { getJobs } from "@/lib/repositories";
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -13,9 +13,7 @@ export default function JobsPage() {
 
   useEffect(() => {
     async function loadJobs() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('jobs').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      const data = await getJobs();
       if (data) setJobs(data);
       setLoading(false);
     }

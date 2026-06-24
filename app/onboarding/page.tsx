@@ -1,22 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Progress, Textarea } from "@/components/ui";
-import { getDemoVault, makeId, saveDemoVault } from "@/lib/storage";
+import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
+import { makeId } from "@/lib/utils";
 import { trackEvent } from "@/lib/events";
+import type { UserVault } from "@/lib/types";
 
 const steps = ["Basic profile", "Links", "Top skills", "Top projects", "Proof links"];
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [vault, setVault] = useState(getDemoVault());
-  const [skillsText, setSkillsText] = useState(vault.skills.map((skill) => skill.name).join(", "));
-  const [projectsText, setProjectsText] = useState(vault.projects.slice(0, 3).map((project) => project.title).join("\n"));
-  const [proofText, setProofText] = useState(vault.proof_links.map((proof) => proof.url).join("\n"));
+  const [vault, setVault] = useState<UserVault | null>(null);
+  const [skillsText, setSkillsText] = useState("");
+  const [projectsText, setProjectsText] = useState("");
+  const [proofText, setProofText] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function finish() {
+  useEffect(() => {
+    async function load() {
+      const data = await getCurrentVault();
+      if (!data) {
+        router.push("/login");
+        return;
+      }
+      setVault(data);
+      setSkillsText(data.skills.map((skill) => skill.name).join(", "));
+      setProjectsText(data.projects.slice(0, 3).map((project) => project.title).join("\n"));
+      setProofText(data.proof_links.map((proof) => proof.url).join("\n"));
+    }
+    load();
+  }, [router]);
+
+  async function finish() {
+    if (!vault) return;
+    setSaving(true);
     const nextVault = {
       ...vault,
       skills: skillsText
@@ -67,9 +87,14 @@ export default function OnboardingPage() {
           notes: vault.proof_links[index]?.notes ?? "Added during onboarding",
         })),
     };
-    saveDemoVault(nextVault);
+    
+    await saveCurrentVault(nextVault);
     void trackEvent("onboarding_completed", { projects: nextVault.projects.length, skills: nextVault.skills.length });
     router.push("/dashboard");
+  }
+
+  if (!vault) {
+    return <div className="flex min-h-screen items-center justify-center bg-slate-50">Loading...</div>;
   }
 
   return (
@@ -175,13 +200,15 @@ export default function OnboardingPage() {
             )}
 
             <div className="flex justify-between gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}>
+              <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0 || saving}>
                 Back
               </Button>
               {step === steps.length - 1 ? (
-                <Button type="button" onClick={finish}>Finish onboarding</Button>
+                <Button type="button" onClick={finish} disabled={saving}>
+                  {saving ? "Saving..." : "Finish onboarding"}
+                </Button>
               ) : (
-                <Button type="button" onClick={() => setStep((current) => current + 1)}>Continue</Button>
+                <Button type="button" onClick={() => setStep((current) => current + 1)} disabled={saving}>Continue</Button>
               )}
             </div>
           </CardContent>

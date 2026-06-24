@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, FileText, GraduationCap, Link2, ShieldCheck } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { demoTestimonials } from "@/lib/storage";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const workflows = [
   {
@@ -27,7 +27,23 @@ const workflows = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createServerSupabaseClient();
+  let testimonials: any[] = [];
+  
+  if (supabase) {
+    const { data } = await supabase
+      .from('testimonials')
+      .select('*')
+      .eq('public', true)
+      .order('created_at', { ascending: false })
+      .limit(4);
+    
+    if (data && data.length > 0) {
+      testimonials = data;
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <MarketingNav />
@@ -129,18 +145,14 @@ export default function LandingPage() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Testimonials</p>
-              <h2 className="mt-2 text-3xl font-bold text-slate-950">Demo copy until real student outcomes replace it.</h2>
+              <h2 className="mt-2 text-3xl font-bold text-slate-950">Success stories from early users.</h2>
             </div>
-            <Button variant="outline" asChild>
-              <Link href="/admin/testimonials">Manage</Link>
-            </Button>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-2">
-            {demoTestimonials.map((testimonial) => (
+            {testimonials.map((testimonial) => (
               <Card key={testimonial.id}>
                 <CardContent className="p-6">
-                  <Badge variant="secondary">Demo testimonial</Badge>
-                  <p className="mt-4 leading-7 text-slate-700">&quot;{testimonial.quote}&quot;</p>
+                  <p className="leading-7 text-slate-700">&quot;{testimonial.quote}&quot;</p>
                   <div className="mt-4 text-sm font-semibold text-slate-950">{testimonial.name}</div>
                   <div className="text-sm text-slate-500">{testimonial.role}, {testimonial.college}</div>
                 </CardContent>
@@ -151,7 +163,13 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t bg-slate-950 px-4 py-10 text-center text-sm text-slate-300">
-        CareerProof AI by Amaura Labs. Built for Indian freshers, students, and early-career candidates.
+        <div>CareerProof AI by Amaura Labs. Built for Indian freshers, students, and early-career candidates.</div>
+        <div className="mt-4 flex flex-wrap justify-center gap-4">
+          <Link href="/privacy" className="hover:text-white">Privacy</Link>
+          <Link href="/terms" className="hover:text-white">Terms</Link>
+          <Link href="/refund-policy" className="hover:text-white">Refund policy</Link>
+          <Link href="/contact" className="hover:text-white">Contact</Link>
+        </div>
       </footer>
     </div>
   );

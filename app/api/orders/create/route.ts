@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPaymentOrder } from "@/lib/payments";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { orderCreateSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
@@ -8,10 +9,15 @@ export async function POST(req: NextRequest) {
     const input = orderCreateSchema.parse(await req.json());
     const order = await createPaymentOrder(input);
     const supabase = createSupabaseAdminClient();
+    const userClient = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = userClient ? await userClient.auth.getUser() : { data: { user: null } };
 
     if (supabase) {
       await supabase.from("orders").insert({
         id: order.id,
+        user_id: user?.id ?? null,
         email: order.email,
         plan: order.plan,
         amount_inr: order.amount_inr,

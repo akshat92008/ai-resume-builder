@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
-import { storageKeys, writeLocal } from "@/lib/storage";
+import { supabase } from "@/lib/supabase/client";
 import { trackEvent } from "@/lib/events";
 
 export default function SignupPage() {
@@ -20,28 +19,28 @@ export default function SignupPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get("ref");
-    if (ref) writeLocal(storageKeys.referralCode, ref);
+    if (ref && typeof window !== "undefined") {
+      localStorage.setItem("careerproof_referral", ref);
+    }
   }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setMessage("");
-    await trackEvent("signup", { email, demo: !isSupabaseConfigured });
+    await trackEvent("signup", { email });
 
-    if (!isSupabaseConfigured) {
-      router.push("/onboarding");
-      return;
-    }
+    const ref = typeof window !== "undefined" ? localStorage.getItem("careerproof_referral") : null;
 
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: { full_name: fullName, referral: ref || undefined },
         emailRedirectTo: `${window.location.origin}/onboarding`,
       },
     });
+    
     if (error) {
       setMessage(error.message);
       setLoading(false);
@@ -59,11 +58,6 @@ export default function SignupPage() {
             <CardTitle>Create your proof-backed profile</CardTitle>
           </CardHeader>
           <CardContent>
-            {!isSupabaseConfigured && (
-              <Alert className="mb-5" variant="warning">
-                Supabase env vars are missing. Signup will run in local demo mode.
-              </Alert>
-            )}
             <form onSubmit={submit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Full name</Label>

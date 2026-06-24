@@ -1,20 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getPublicSupabaseConfig } from "./config";
 
-export const isServerSupabaseConfigured = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL && 
-  process.env.NEXT_PUBLIC_SUPABASE_URL.startsWith('http') &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const config = getPublicSupabaseConfig();
+export const isServerSupabaseConfigured = Boolean(config);
 
 export async function createServerSupabaseClient() {
-  if (!isServerSupabaseConfigured) return null;
+  if (!isServerSupabaseConfigured) throw new Error("Supabase is not configured. Missing environment variables.");
   
   const cookieStore = await cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    config?.url as string,
+    config?.anonKey as string,
     {
       cookies: {
         getAll() {

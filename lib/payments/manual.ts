@@ -1,5 +1,5 @@
 import type { Order } from "../types";
-import { makeId } from "../storage";
+import { makeId } from "../utils";
 
 export function createManualOrder(input: {
   email: string;

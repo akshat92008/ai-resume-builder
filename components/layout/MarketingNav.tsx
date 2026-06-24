@@ -14,6 +14,7 @@ export function MarketingNav() {
           <Link href="/pricing" className="hover:text-slate-950">Pricing</Link>
           <Link href="/college-pilot" className="hover:text-slate-950">College Pilot</Link>
           <Link href="/portfolio/sample" className="hover:text-slate-950">Sample</Link>
+          <Link href="/contact" className="hover:text-slate-950">Contact</Link>
         </nav>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" asChild>

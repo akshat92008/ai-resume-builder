@@ -7,7 +7,7 @@ import { AlertTriangle, FileText, Mail, Sparkles } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState, EmptyState } from "@/components/ui";
 import { trackEvent } from "@/lib/events";
 import type { Job, Resume, ResumeContent, ResumeWarning, UserVault } from "@/lib/types";
-import { supabase } from "@/lib/supabase/client";
+import { getJob, getCurrentVault, saveResume, getCurrentUser } from "@/lib/repositories";
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
@@ -20,42 +20,11 @@ export default function JobDetailPage() {
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: jobData } = await supabase.from('jobs').select('*').eq('id', params.id).single();
+      const jobData = await getJob(params.id);
       if (jobData) setJob(jobData);
 
-      const [
-        { data: profile },
-        { data: education },
-        { data: skills },
-        { data: projects },
-        { data: experiences },
-        { data: certificates },
-        { data: achievements },
-        { data: proof_links },
-      ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('education').select('*').eq('user_id', user.id),
-        supabase.from('skills').select('*').eq('user_id', user.id),
-        supabase.from('projects').select('*').eq('user_id', user.id),
-        supabase.from('experiences').select('*').eq('user_id', user.id),
-        supabase.from('certificates').select('*').eq('user_id', user.id),
-        supabase.from('achievements').select('*').eq('user_id', user.id),
-        supabase.from('proof_links').select('*').eq('user_id', user.id),
-      ]);
-
-      setVault({
-        profile: profile || { full_name: "", email: "", phone: "", city: "", headline: "", summary: "", public_slug: "", linkedin_url: "", github_url: "", portfolio_url: "", target_roles: [], portfolio_public: false },
-        education: education || [],
-        skills: skills || [],
-        projects: projects || [],
-        experiences: experiences || [],
-        certificates: certificates || [],
-        achievements: achievements || [],
-        proof_links: proof_links || [],
-      });
+      const vaultData = await getCurrentVault();
+      setVault(vaultData);
       setLoading(false);
     }
     loadData();
@@ -64,9 +33,6 @@ export default function JobDetailPage() {
   async function generateResume() {
     if (!job || !vault) return;
     setLoadingResume(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
     const response = await fetch("/api/ai/generate-resume", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -78,19 +44,20 @@ export default function JobDetailPage() {
       proofScore: { total: number };
     };
 
-    const { data: newResume } = await supabase.from('resumes').insert({
-      user_id: user.id,
+    const newResumeData = await saveResume({
+      id: crypto.randomUUID(),
       job_id: job.id,
       title: `${job.job_title} resume`,
       style: job.style,
       content_json: data.content,
       proof_score: data.proofScore?.total ?? 0,
       warnings: data.warnings ?? [],
-    }).select().single();
+      created_at: new Date().toISOString(),
+    });
 
-    if (newResume) {
-      await trackEvent("resume_generated", { job_id: job.id, resume_id: newResume.id, proof_score: newResume.proof_score });
-      router.push(`/resumes/${newResume.id}`);
+    if (newResumeData) {
+      await trackEvent("resume_generated", { job_id: job.id, resume_id: newResumeData.id, proof_score: newResumeData.proof_score });
+      router.push(`/resumes/${newResumeData.id}`);
     }
     setLoadingResume(false);
   }

@@ -12,7 +12,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { calculateProofScore } from "@/lib/proof-score";
-import { mockVault } from "@/lib/mock-data";
+import { getCurrentVault } from "@/lib/repositories";
 import { Progress } from "@/components/ui";
 
 const navItems = [
@@ -27,8 +27,17 @@ const navItems = [
   { href: "/admin", label: "Admin", icon: BarChart3 },
 ];
 
-export function DashboardSidebar() {
-  const score = calculateProofScore(mockVault);
+export async function DashboardSidebar() {
+  let score = { total: 0 };
+  
+  try {
+    const vault = await getCurrentVault();
+    if (vault) {
+      score = calculateProofScore(vault);
+    }
+  } catch (error) {
+    // Ignore error if not logged in or fetching fails
+  }
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col bg-slate-950 text-slate-300 md:flex">

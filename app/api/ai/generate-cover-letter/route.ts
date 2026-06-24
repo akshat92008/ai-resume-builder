@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateCoverLetter } from "@/lib/ai/nim";
-import { mockVault } from "@/lib/mock-data";
+
 import type { ResumeContent, UserVault } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
     if (jobDescription.length < 30) {
       return NextResponse.json({ error: "Job description is required." }, { status: 400 });
     }
-    const vault = (body.userVault as UserVault | undefined) ?? mockVault;
+    const vault = body.userVault as UserVault | undefined;
+    if (!vault) throw new Error("Vault required");
     const resume = body.resume as ResumeContent | undefined;
     const result = await generateCoverLetter(vault, jobDescription, resume);
     return NextResponse.json(result);

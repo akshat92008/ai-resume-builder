@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import { Check, CreditCard } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { manualServicePacks, pricingPlans } from "@/lib/plans";
-import { saveLead } from "@/lib/leads";
+import { createOrder as createRepositoryOrder, saveLead } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
-import { upsertDemoOrder } from "@/lib/storage";
-import type { Order } from "@/lib/types";
 
 export function PricingCards() {
   const router = useRouter();
@@ -38,17 +36,18 @@ export function PricingCards() {
       metadata: { plan, amount },
     });
 
-    const response = await fetch("/api/orders/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, plan, amount_inr: amount, metadata: { source: "pricing" } }),
-    });
-    const data = (await response.json()) as { order?: Order };
-    if (data.order) {
-      upsertDemoOrder(data.order);
+    try {
+      const order = await createRepositoryOrder({ email, plan, amount_inr: amount, metadata: { source: "pricing" } });
+      if (order.checkout_url) {
+        window.location.assign(order.checkout_url);
+        return;
+      }
       router.push("/billing");
+    } catch {
+      window.alert("Unable to create this order. Please try again.");
+    } finally {
+      setBusyPlan(null);
     }
-    setBusyPlan(null);
   }
 
   return (

@@ -6,7 +6,7 @@ import { ArrowRight, ClipboardCheck, Wrench } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { ProofScoreCard } from "@/components/proof/ProofScoreCard";
-import { saveLead } from "@/lib/leads";
+import { saveLead } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 import type { ProofScoreResult, ProofScoreSubmission } from "@/lib/types";
 
