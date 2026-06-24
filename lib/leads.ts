@@ -1,10 +1,14 @@
 import type { Lead } from "./types";
-import { supabase, isSupabaseConfigured } from "./supabase/client";
+import { isSupabaseMode } from "./data/mode";
+import { getSupabaseBrowserClient } from "./supabase/client";
 
 export async function saveLead(lead: Lead) {
-  if (!isSupabaseConfigured) {
+  if (!isSupabaseMode()) {
     return { ok: true, mode: "local" as const, lead };
   }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return { ok: false, mode: "supabase" as const, lead, error: "No client" };
 
   const { error } = await supabase.from("leads").insert({
     type: lead.type,

@@ -146,6 +146,7 @@ create table if not exists public.jobs (
   job_description text,
   role_category text,
   experience_level text,
+  style text,
   analysis_json jsonb,
   fit_score int,
   created_at timestamptz default now(),

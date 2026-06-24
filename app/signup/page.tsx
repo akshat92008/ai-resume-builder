@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { supabase } from "@/lib/supabase/client";
+import { isSupabaseMode } from "@/lib/data/mode";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { trackEvent } from "@/lib/events";
 
 export default function SignupPage() {
@@ -29,6 +30,18 @@ export default function SignupPage() {
     setLoading(true);
     setMessage("");
     await trackEvent("signup", { email });
+
+    if (!isSupabaseMode()) {
+      router.push("/onboarding");
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setMessage("Supabase is not initialized.");
+      setLoading(false);
+      return;
+    }
 
     const ref = typeof window !== "undefined" ? localStorage.getItem("careerproof_referral") : null;
 

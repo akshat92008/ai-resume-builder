@@ -238,13 +238,10 @@ API:
 ## Known Limitations
 
 - Stripe, Razorpay, and Lemon Squeezy are provider stubs until checkout products/orders are wired.
-- Local demo mode uses `localStorage`; production persistence requires Supabase.
-- Public portfolio currently renders sample data unless you connect profile/vault reads from Supabase.
-- Admin pages show local demo data before Supabase data adapters are added.
+- Local demo mode uses `localStorage`; production persistence uses Supabase.
 
 ## Next Features
 
-- Real Supabase data adapters for every dashboard page
 - Gateway checkout/webhooks
 - Portfolio templates
 - Batch college dashboard exports

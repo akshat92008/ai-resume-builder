@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
+import { isSupabaseMode } from "@/lib/data/mode";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,8 +19,14 @@ export default function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseMode()) {
       router.push("/dashboard");
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setMessage("Supabase is not initialized.");
+      setLoading(false);
       return;
     }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -40,7 +47,7 @@ export default function LoginPage() {
             <CardTitle>Login to CareerProof AI</CardTitle>
           </CardHeader>
           <CardContent>
-            {!isSupabaseConfigured && (
+            {!isSupabaseMode() && (
               <Alert className="mb-5" variant="warning">
                 Supabase env vars are missing. Demo mode will take you to the dashboard without real authentication.
               </Alert>
