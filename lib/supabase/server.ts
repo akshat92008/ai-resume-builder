@@ -6,7 +6,7 @@ const config = getPublicSupabaseConfig();
 export const isServerSupabaseConfigured = Boolean(config);
 
 export async function createServerSupabaseClient() {
-  if (!isServerSupabaseConfigured) throw new Error("Supabase is not configured. Missing environment variables.");
+  if (!isServerSupabaseConfigured) return null;
   
   const cookieStore = await cookies();
 
