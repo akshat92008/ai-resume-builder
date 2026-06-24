@@ -64,6 +64,8 @@ ${JSON.stringify(userVault)}
 
 Return JSON only:
 {
+  "targetTitle": "",
+  "targetCompany": "",
   "requiredSkills": [],
   "preferredSkills": [],
   "missingSkills": [],

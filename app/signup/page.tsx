@@ -8,6 +8,7 @@ import { MarketingNav } from "@/components/layout/MarketingNav";
 import { isSupabaseMode } from "@/lib/data/client/mode";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { trackEvent } from "@/lib/events";
+import { getCurrentVault, saveCurrentVault } from "@/lib/data/client/client-repository";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -32,7 +33,6 @@ export default function SignupPage() {
     await trackEvent("signup", { email });
 
     if (!isSupabaseMode()) {
-      const { getCurrentVault, saveCurrentVault } = await import("@/lib/repositories");
       const vault = await getCurrentVault();
       if (vault) {
         vault.profile.full_name = fullName;

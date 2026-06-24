@@ -14,6 +14,10 @@ export async function POST(req: NextRequest) {
       data: { user },
     } = userClient ? await userClient.auth.getUser() : { data: { user: null } };
 
+    if (!user) {
+      return NextResponse.json({ error: "You must be logged in to create an order." }, { status: 401 });
+    }
+
     if (supabase) {
       await supabase.from("orders").insert({
         id: order.id,

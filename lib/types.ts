@@ -115,6 +115,8 @@ export type UserVault = {
 };
 
 export type JobAnalysis = {
+  targetTitle?: string;
+  targetCompany?: string;
   requiredSkills: string[];
   preferredSkills: string[];
   missingSkills: string[];

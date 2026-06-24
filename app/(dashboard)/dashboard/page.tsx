@@ -53,17 +53,19 @@ export default function DashboardPage() {
 
     if (output.intent === "analyze_job" && output.result.jobFit && output.result.jobFit.jobFitScore > 0) {
       // Basic extraction of job title from description text
-      let jobTitle = "Analyzed Job";
-      let company = "Unknown";
+      let jobTitle = output.result.jobFit.targetTitle || "Analyzed Job";
+      let company = output.result.jobFit.targetCompany || "Unknown";
       
-      const firstLine = message.split("\\n")[0]?.trim();
-      if (firstLine && firstLine.length < 50 && firstLine.length > 3) {
-        if (firstLine.includes(" at ")) {
-          const parts = firstLine.split(" at ");
-          jobTitle = parts[0] || jobTitle;
-          company = parts[1] || company;
-        } else {
-          jobTitle = firstLine;
+      if (jobTitle === "Analyzed Job") {
+        const firstLine = message.split("\n")[0]?.trim();
+        if (firstLine && firstLine.length < 50 && firstLine.length > 3) {
+          if (firstLine.includes(" at ")) {
+            const parts = firstLine.split(" at ");
+            jobTitle = parts[0] || jobTitle;
+            company = parts[1] || company;
+          } else {
+            jobTitle = firstLine;
+          }
         }
       }
 
@@ -73,10 +75,10 @@ export default function DashboardPage() {
         job_description: message,
         role_category: "software",
         experience_level: "fresher",
-        analysis_json: output.result.jobFit as any,
+        analysis_json: output.result.jobFit,
         fit_score: output.result.jobFit.jobFitScore,
         style: "professional",
-      } as Job;
+      } as unknown as Job;
       saveJob(newJob).then((saved) => {
         if (saved) {
           setJobs((prev) => [saved, ...prev]);
@@ -86,19 +88,21 @@ export default function DashboardPage() {
     }
 
     if (output.intent === "build_resume" && output.result.resume) {
-      const newResume = {
-        title: "Proof-backed Resume",
-        content_json: output.result.resume.content,
-        style: "professional",
-        proof_score: output.result.proofAudit?.proofScore || 0,
-        warnings: [],
-      } as unknown as Resume;
-      saveResume(newResume).then((saved) => {
-        if (saved) {
-          setResumes((prev) => [saved, ...prev]);
-          setAgentOutput((prev) => prev ? { ...prev, createdResume: saved } : prev);
-        }
-      });
+      if (output.result.vaultReport.canGenerateResume) {
+        const newResume = {
+          title: "Proof-backed Resume",
+          content_json: output.result.resume.content,
+          style: "professional",
+          proof_score: output.result.proofAudit?.proofScore || 0,
+          warnings: [],
+        } as unknown as Resume;
+        saveResume(newResume).then((saved) => {
+          if (saved) {
+            setResumes((prev) => [saved, ...prev]);
+            setAgentOutput((prev) => prev ? { ...prev, createdResume: saved } : prev);
+          }
+        });
+      }
     }
   }
 

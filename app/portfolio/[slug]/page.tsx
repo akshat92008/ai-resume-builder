@@ -1,104 +1,35 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { notFound, useParams } from "next/navigation";
+import { notFound } from "next/navigation";
 import { PublicPortfolio } from "@/components/portfolio/PublicPortfolio";
-import { isSupabaseMode } from "@/lib/data/client/mode";
-import { getCurrentVault } from "@/lib/repositories";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Loader2 } from "lucide-react";
-import type { UserVault } from "@/lib/types";
+import { getPublicVault } from "@/lib/data/server/public-portfolio-repository";
+import type { Metadata } from "next";
 
-export default function PortfolioPage() {
-  const params = useParams();
-  const slug = params.slug as string;
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  if (slug === "sample") {
+    return { title: "Jane Developer | CareerProof", description: "Sample proof-backed portfolio" };
+  }
   
-  const [vault, setVault] = useState<UserVault | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const vault = await getPublicVault(slug);
+  if (!vault || !vault.profile) return { title: "Portfolio Not Found" };
+  
+  return {
+    title: `${vault.profile.full_name} | CareerProof Portfolio`,
+    description: vault.profile.headline || vault.profile.summary || `Professional portfolio of ${vault.profile.full_name}`,
+  };
+}
 
-  useEffect(() => {
-    async function load() {
-      if (slug === "sample") {
-        setVault(getSampleVault());
-        setLoading(false);
-        return;
-      }
-
-      if (isSupabaseMode()) {
-        const supabase = getSupabaseBrowserClient();
-        if (!supabase) {
-          setError(true);
-          setLoading(false);
-          return;
-        }
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("public_slug", slug)
-          .eq("portfolio_public", true)
-          .single();
-
-        if (!profile) {
-          setError(true);
-          setLoading(false);
-          return;
-        }
-
-        const [
-          { data: education },
-          { data: skills },
-          { data: projects },
-          { data: experiences },
-          { data: certificates },
-          { data: achievements },
-          { data: proof_links },
-        ] = await Promise.all([
-          supabase.from("education").select("*").eq("user_id", profile.id),
-          supabase.from("skills").select("*").eq("user_id", profile.id),
-          supabase.from("projects").select("*").eq("user_id", profile.id),
-          supabase.from("experiences").select("*").eq("user_id", profile.id),
-          supabase.from("certificates").select("*").eq("user_id", profile.id),
-          supabase.from("achievements").select("*").eq("user_id", profile.id),
-          supabase.from("proof_links").select("*").eq("user_id", profile.id),
-        ]);
-
-        setVault({
-          profile: profile as any,
-          education: education || [],
-          skills: skills || [],
-          projects: projects || [],
-          experiences: experiences || [],
-          certificates: certificates || [],
-          achievements: achievements || [],
-          proof_links: proof_links || [],
-        } as any);
-        setLoading(false);
-      } else {
-        // Demo mode
-        const localVault = await getCurrentVault();
-        if (localVault && localVault.profile.public_slug === slug && localVault.profile.portfolio_public) {
-          setVault(localVault);
-        } else {
-          setError(true);
-        }
-        setLoading(false);
-      }
-    }
-
-    load();
-  }, [slug]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-      </div>
-    );
+export default async function PortfolioPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  
+  let vault: any = null;
+  
+  if (slug === "sample") {
+    vault = getSampleVault();
+  } else {
+    vault = await getPublicVault(slug);
   }
 
-  if (error || !vault) {
+  if (!vault) {
     return notFound();
   }
 

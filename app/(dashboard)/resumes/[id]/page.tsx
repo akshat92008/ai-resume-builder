@@ -8,7 +8,7 @@ import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Loading
 import { ResumeEditor } from "@/components/resume/ResumeEditor";
 import { ResumePreview } from "@/components/resume/ResumePreview";
 import { trackEvent } from "@/lib/events";
-import { getResume, getCurrentVault, saveResume, deleteResume } from "@/lib/repositories";
+import { getResume, getCurrentVault, saveResume, deleteResume, getJob } from "@/lib/repositories";
 import type { Resume, ResumeContent } from "@/lib/types";
 
 function resumeToText(content: ResumeContent) {
@@ -47,8 +47,6 @@ export default function ResumeDetailPage() {
         setResume(resumeData);
         setContent(resumeData.content_json);
         if (resumeData.job_id) {
-          // Ideally fetch job using getJob but we can leave it or fetch it via getJob
-          const { getJob } = await import("@/lib/repositories");
           const jobData = await getJob(resumeData.job_id);
           if (jobData) setJobDescription(jobData.job_description);
         }
