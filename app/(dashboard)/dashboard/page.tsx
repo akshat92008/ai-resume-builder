@@ -47,25 +47,27 @@ export default function DashboardPage() {
 
   async function runCommand(message: string) {
     if (!vault) return;
-    const output = runCareerProofAgentCommand({ userMessage: message, vault, mode: "dashboard" });
+    const force = message.trim().toLowerCase() === "generate draft anyway";
+    const output = runCareerProofAgentCommand({ userMessage: message, vault, mode: "dashboard", force });
     setAgentOutput(output);
     setCommand("");
 
     if (output.intent === "analyze_job" && output.result.jobFit && output.result.jobFit.jobFitScore > 0) {
-      // Basic extraction of job title from description text
-      let jobTitle = output.result.jobFit.targetTitle || "Analyzed Job";
+      let jobTitle = output.result.jobFit.targetTitle;
       let company = output.result.jobFit.targetCompany || "Unknown";
       
-      if (jobTitle === "Analyzed Job") {
+      if (!jobTitle) {
         const firstLine = message.split("\n")[0]?.trim();
         if (firstLine && firstLine.length < 50 && firstLine.length > 3) {
           if (firstLine.includes(" at ")) {
             const parts = firstLine.split(" at ");
-            jobTitle = parts[0] || jobTitle;
+            jobTitle = parts[0] || "Unknown Job";
             company = parts[1] || company;
           } else {
             jobTitle = firstLine;
           }
+        } else {
+          jobTitle = "Unknown Job";
         }
       }
 
@@ -88,7 +90,7 @@ export default function DashboardPage() {
     }
 
     if (output.intent === "build_resume" && output.result.resume) {
-      if (output.result.vaultReport.canGenerateResume) {
+      if (output.result.vaultReport.canGenerateResume || force) {
         const newResume = {
           title: "Proof-backed Resume",
           content_json: output.result.resume.content,

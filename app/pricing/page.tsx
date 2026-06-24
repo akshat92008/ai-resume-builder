@@ -1,7 +1,9 @@
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { PricingCards } from "@/components/pricing/PricingCards";
+import { getCurrentUser } from "@/lib/repositories";
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const user = await getCurrentUser();
   return (
     <div className="min-h-screen bg-slate-50">
       <MarketingNav />
@@ -14,7 +16,7 @@ export default function PricingPage() {
           </p>
         </div>
         <div className="mt-10">
-          <PricingCards />
+          <PricingCards userEmail={user?.email || undefined} />
         </div>
       </main>
     </div>

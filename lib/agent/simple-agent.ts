@@ -118,6 +118,9 @@ function cardsForOutput(output: ReturnType<typeof runCareerProofAgent>, input: A
 
 function suggestedActions(output: ReturnType<typeof runCareerProofAgent>): SuggestedAction[] {
   const actions = defaultSuggestedActions();
+  if (output.intent === "build_resume" && !output.vaultReport.canGenerateResume) {
+    actions.unshift({ label: "Generate Draft Anyway", action: "Generate Draft Anyway" });
+  }
   if (output.vaultReport.canGenerateResume) {
     actions.unshift({ label: "Ready to generate", action: "generate_resume", href: "/resumes/new" });
   }
@@ -140,11 +143,12 @@ export function runCareerProofAgentCommand(input: AgentCommandInput): AgentComma
   const result = runCareerProofAgent({
     vault: input.vault,
     userMessage: input.userMessage,
-    intent,
+    intent: input.force ? "build_resume" : intent,
     jobDescription: intent === "analyze_job" ? input.userMessage : undefined,
     currentJob: input.currentJob,
     currentResume: input.currentResume,
     mode: input.mode,
+    forceResumeGeneration: input.force,
   });
   const summary = extractedProfileSummary(extractedUpdates);
   const extractionCards = cardsForOutput(result, input, extractedUpdates.length);

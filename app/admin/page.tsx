@@ -4,7 +4,7 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/compo
 import { getAdminMetricsServer } from "@/lib/data/admin/admin-actions";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { isSupabaseMode } from "@/lib/data/client/mode";
-import * as demo from "@/lib/data/client/demo-storage";
+
 
 const adminLinks = [
   { href: "/admin/leads", label: "Leads", icon: Users },
@@ -16,7 +16,7 @@ const adminLinks = [
 
 export default async function AdminPage() {
   const isServerDemo = !isSupabaseMode();
-  const metricsData = isServerDemo ? await demo.getAdminMetrics() : await getAdminMetricsServer();
+  const metricsData = isServerDemo ? { users: 0, orders: 0, leads: 0, resumes: 0, events: 0 } : await getAdminMetricsServer();
 
   const metrics = metricsData
     ? [

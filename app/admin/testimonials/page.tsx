@@ -3,11 +3,11 @@ import { Button } from "@/components/ui";
 import { AdminTestimonialsClient } from "@/components/admin/AdminTestimonialsClient";
 import { getAdminTestimonialsServer } from "@/lib/data/admin/admin-actions";
 import { isSupabaseMode } from "@/lib/data/client/mode";
-import * as demo from "@/lib/data/client/demo-storage";
+
 
 export default async function AdminTestimonialsPage() {
   const isServerDemo = !isSupabaseMode();
-  const testimonials = isServerDemo ? await demo.getAdminTestimonials() : await getAdminTestimonialsServer();
+  const testimonials = isServerDemo ? [] : await getAdminTestimonialsServer();
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">

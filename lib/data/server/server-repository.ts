@@ -1,79 +1,79 @@
 import { isSupabaseMode } from "../client/mode";
-import * as demo from "../client/demo-storage";
+
 import * as supabase from "./server-supabase";
 
 export function getCurrentUser() {
-  return isSupabaseMode() ? supabase.getCurrentUser() : demo.getCurrentUser();
+  return isSupabaseMode() ? supabase.getCurrentUser() : Promise.resolve(null);
 }
 
 export function getCurrentProfile() {
-  return isSupabaseMode() ? supabase.getCurrentProfile() : demo.getCurrentProfile();
+  return isSupabaseMode() ? supabase.getCurrentProfile() : Promise.resolve(null);
 }
 
 export function getCurrentVault() {
-  return isSupabaseMode() ? supabase.getCurrentVault() : demo.getCurrentVault();
+  return isSupabaseMode() ? supabase.getCurrentVault() : Promise.resolve(null);
 }
 
 export function saveCurrentVault(vault: any) {
-  return isSupabaseMode() ? supabase.saveCurrentVault(vault) : demo.saveCurrentVault(vault);
+  return isSupabaseMode() ? supabase.saveCurrentVault(vault) : Promise.resolve(undefined);
 }
 
 export function getJobs() {
-  return isSupabaseMode() ? supabase.getJobs() : demo.getJobs();
+  return isSupabaseMode() ? supabase.getJobs() : Promise.resolve([]);
 }
 
 export function getJob(id: string) {
-  return isSupabaseMode() ? supabase.getJob(id) : demo.getJob(id);
+  return isSupabaseMode() ? supabase.getJob(id) : Promise.resolve(null);
 }
 
 export function saveJob(job: any) {
-  return isSupabaseMode() ? supabase.saveJob(job) : demo.saveJob(job);
+  return isSupabaseMode() ? supabase.saveJob(job) : Promise.resolve(job);
 }
 
 export function deleteJob(id: string) {
-  return isSupabaseMode() ? supabase.deleteJob(id) : demo.deleteJob(id);
+  return isSupabaseMode() ? supabase.deleteJob(id) : Promise.resolve(undefined);
 }
 
 export function getResumes() {
-  return isSupabaseMode() ? supabase.getResumes() : demo.getResumes();
+  return isSupabaseMode() ? supabase.getResumes() : Promise.resolve([]);
 }
 
 export function getResume(id: string) {
-  return isSupabaseMode() ? supabase.getResume(id) : demo.getResume(id);
+  return isSupabaseMode() ? supabase.getResume(id) : Promise.resolve(null);
 }
 
 export function saveResume(resume: any) {
-  return isSupabaseMode() ? supabase.saveResume(resume) : demo.saveResume(resume);
+  return isSupabaseMode() ? supabase.saveResume(resume) : Promise.resolve(resume);
 }
 
 export function deleteResume(id: string) {
-  return isSupabaseMode() ? supabase.deleteResume(id) : demo.deleteResume(id);
+  return isSupabaseMode() ? supabase.deleteResume(id) : Promise.resolve(undefined);
 }
 
 export function createOrder(input: any) {
-  return isSupabaseMode() ? supabase.createOrder(input) : demo.createOrder(input);
+  return isSupabaseMode() ? supabase.createOrder(input) : Promise.reject(new Error("Supabase is disabled."));
 }
 
 export function getOrders() {
-  return isSupabaseMode() ? supabase.getOrders() : demo.getOrders();
+  return isSupabaseMode() ? supabase.getOrders() : Promise.resolve([]);
 }
 
 export function getOrder(id: string) {
-  return isSupabaseMode() ? supabase.getOrder(id) : demo.getOrder(id);
+  return isSupabaseMode() ? supabase.getOrder(id) : Promise.resolve(null);
 }
 
 export function submitPaymentProof(input: any) {
-  return isSupabaseMode() ? supabase.submitPaymentProof(input) : demo.submitPaymentProof(input);
+  return isSupabaseMode() ? supabase.submitPaymentProof(input) : Promise.resolve(null);
 }
 
 export function saveLead(lead: any) {
-  return isSupabaseMode() ? supabase.saveLead(lead) : demo.saveLead(lead);
+  return isSupabaseMode() ? supabase.saveLead(lead) : Promise.resolve(lead);
 }
 
 
 
 export function savePortfolioSettings(public_slug: string, portfolio_public: boolean) {
-  return isSupabaseMode() ? supabase.savePortfolioSettings(public_slug, portfolio_public) : demo.savePortfolioSettings(public_slug, portfolio_public);
+  return isSupabaseMode() ? supabase.savePortfolioSettings(public_slug, portfolio_public) : Promise.resolve(undefined);
 }
 
 // Admin APIs have been moved to admin-repository.ts

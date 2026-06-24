@@ -191,6 +191,7 @@ export type AgentCommandInput = {
   currentJob?: Job | null;
   currentResume?: Resume | null;
   mode?: AgentMode;
+  force?: boolean;
 };
 
 export type AgentCommandOutput = {

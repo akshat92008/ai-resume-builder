@@ -8,9 +8,8 @@ import { manualServicePacks, pricingPlans } from "@/lib/plans";
 import { createOrder as createRepositoryOrder, saveLead } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 
-export function PricingCards() {
+export function PricingCards({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
 
   async function createOrder(plan: string, amount: number) {
@@ -22,22 +21,23 @@ export function PricingCards() {
       router.push("/proof-score");
       return;
     }
-    if (!email) {
-      window.alert("Enter your email before creating an order.");
+    if (!userEmail) {
+      router.push(`/login?next=/pricing`);
       return;
     }
+    const emailToUse = userEmail;
     setBusyPlan(plan);
     await trackEvent("upgrade_clicked", { plan, amount });
     await saveLead({
       type: "pricing_interest",
-      name: email.split("@")[0],
-      email,
+      name: emailToUse.split("@")[0],
+      email: emailToUse,
       source: "pricing",
       metadata: { plan, amount },
     });
 
     try {
-      const order = await createRepositoryOrder({ email, plan, amount_inr: amount, metadata: { source: "pricing" } });
+      const order = await createRepositoryOrder({ email: emailToUse, plan, amount_inr: amount, metadata: { source: "pricing" } });
       if (order.checkout_url) {
         window.location.assign(order.checkout_url);
         return;
@@ -52,10 +52,6 @@ export function PricingCards() {
 
   return (
     <div className="space-y-10">
-      <div className="mx-auto max-w-md space-y-2">
-        <Label>Email for order receipt</Label>
-        <Input value={email} placeholder="you@example.com" type="email" onChange={(event) => setEmail(event.target.value)} />
-      </div>
 
       <div className="grid gap-5 lg:grid-cols-4">
         {pricingPlans.map((plan) => (

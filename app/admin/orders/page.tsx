@@ -3,13 +3,13 @@ import { Button } from "@/components/ui";
 import { AdminOrdersClient } from "@/components/admin/AdminOrdersClient";
 import { getAdminOrdersServer } from "@/lib/data/admin/admin-actions";
 import { isSupabaseMode } from "@/lib/data/client/mode";
-import * as demo from "@/lib/data/client/demo-storage";
+
 
 export default async function AdminOrdersPage() {
   const isServerDemo = !isSupabaseMode();
   // In demo mode, getAdminOrders returns a static list or empty on server. 
   // It's acceptable for the server render of a demo admin page to be empty or default.
-  const orders = isServerDemo ? await demo.getAdminOrders() : await getAdminOrdersServer();
+  const orders = isServerDemo ? [] : await getAdminOrdersServer();
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">

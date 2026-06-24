@@ -9,10 +9,16 @@ export async function getPublicVault(slug: string): Promise<Partial<UserVault> |
     .from("profiles")
     .select("id, full_name, headline, summary, linkedin_url, github_url, portfolio_url, target_roles, city, portfolio_public, public_slug")
     .eq("public_slug", slug)
-    .eq("portfolio_public", true)
     .single();
 
   if (!profile) return null;
+
+  const { data: authData } = await supabase.auth.getUser();
+  const isOwner = authData?.user?.id === profile.id;
+
+  if (!profile.portfolio_public && !isOwner) {
+    return null;
+  }
 
   const [
     { data: education },

@@ -43,22 +43,28 @@ export async function updateAdminUserPlan(userId: string, plan: Profile["plan"] 
   return response.ok;
 }
 
-// Testimonials data fetching is moved to server component, but mutations stay here
 export async function saveAdminTestimonial(testimonial: Omit<Testimonial, "id"> & { id?: string }): Promise<Testimonial> {
   if (!isSupabaseMode()) return demo.saveAdminTestimonial(testimonial);
-  // Need to handle Supabase server action or API route. Wait, saveAdminTestimonial is used by client component. 
-  // We can import server action here? Next.js might complain if this is imported from a Client Component.
-  // Actually, we can just pass the server action as a prop! Or create an API route. 
-  // Let's create an API route or just put 'use server' inside the action and call it.
-  // If we just use fetch, we need an API route. There isn't one for saving testimonials right now.
-  // But wait, the existing code: return saveAdminTestimonialServer(testimonial);
-  // Let's do a dynamic import to avoid module level 'use server' contamination
-  const { saveAdminTestimonialServer } = await import("./admin-actions");
-  return saveAdminTestimonialServer(testimonial);
+  const response = await fetch("/api/admin/testimonials/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(testimonial),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to save testimonial");
+  }
+  const data = await response.json();
+  return data.testimonial;
 }
 
 export async function deleteAdminTestimonial(id: string): Promise<void> {
   if (!isSupabaseMode()) return demo.deleteAdminTestimonial(id);
-  const { deleteAdminTestimonialServer } = await import("./admin-actions");
-  return deleteAdminTestimonialServer(id);
+  const response = await fetch("/api/admin/testimonials/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to delete testimonial");
+  }
 }
