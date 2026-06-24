@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BarChart3, CreditCard, FileText, GraduationCap, Users, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { getAdminMetrics } from "@/lib/repositories";
+import { getAdminMetrics } from "@/lib/data/admin-repository";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 const adminLinks = [

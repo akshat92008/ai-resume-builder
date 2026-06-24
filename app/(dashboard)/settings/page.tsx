@@ -4,12 +4,12 @@ import { CheckCircle2, Settings } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
-const checklist = [
+const checklist: [string, boolean | string][] = [
   ["Supabase connected", isSupabaseConfigured],
   ["NVIDIA NIM connected", Boolean(process.env.NEXT_PUBLIC_NIM_STATUS === "configured")],
   ["Payment mode set", Boolean(process.env.NEXT_PUBLIC_PAYMENT_MODE)],
   ["UPI/payment configured", Boolean(process.env.NEXT_PUBLIC_UPI_ID || process.env.NEXT_PUBLIC_PAYMENT_WHATSAPP)],
-  ["Admin user configured", false],
+  ["Admin user configured", "Manual check required"],
   ["Pricing configured", true],
   ["Portfolio sample works", true],
   ["Proof score works", true],
@@ -17,8 +17,8 @@ const checklist = [
   ["PDF print works", true],
   ["Landing CTAs work", true],
   ["Lead capture works", true],
-  ["Orders work", true],
-  ["Admin approval works", true],
+  ["Orders", "Manual check required"],
+  ["Admin approval", "Manual check required"],
 ];
 
 export default function SettingsPage() {
@@ -51,10 +51,12 @@ export default function SettingsPage() {
           {checklist.map(([label, ok]) => (
             <div key={String(label)} className="flex items-center justify-between rounded-lg border bg-white p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <CheckCircle2 className={ok ? "h-4 w-4 text-emerald-600" : "h-4 w-4 text-slate-300"} />
+                <CheckCircle2 className={ok === true ? "h-4 w-4 text-emerald-600" : "h-4 w-4 text-slate-300"} />
                 {label}
               </div>
-              <Badge variant={ok ? "default" : "secondary"}>{ok ? "Ready" : "Setup"}</Badge>
+              <Badge variant={ok === true ? "default" : "secondary"}>
+                {typeof ok === "string" ? ok : ok ? "Ready" : "Setup"}
+              </Badge>
             </div>
           ))}
         </CardContent>

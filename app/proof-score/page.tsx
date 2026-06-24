@@ -8,6 +8,7 @@ import { MarketingNav } from "@/components/layout/MarketingNav";
 import { ProofScoreCard } from "@/components/proof/ProofScoreCard";
 import { saveLead } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import type { ProofScoreResult, ProofScoreSubmission } from "@/lib/types";
 
 const emptySubmission: ProofScoreSubmission = {
@@ -52,17 +53,19 @@ export default function ProofScorePage() {
         throw new Error(data.error || "Unable to calculate proof score.");
       }
       setResult(data.result);
-      await saveLead({
-        type: "proof_score",
-        name: form.name,
-        email: form.email,
-        whatsapp: form.whatsapp,
-        course: form.course,
-        college: form.college,
-        role: form.target_role,
-        source: "proof-score-page",
-        metadata: { score: data.result.total, grade: data.result.grade },
-      });
+      if (!isSupabaseConfigured) {
+        await saveLead({
+          type: "proof_score",
+          name: form.name,
+          email: form.email,
+          whatsapp: form.whatsapp,
+          course: form.course,
+          college: form.college,
+          role: form.target_role,
+          source: "proof-score-page",
+          metadata: { score: data.result.total, grade: data.result.grade },
+        });
+      }
       await trackEvent("proof_score_submitted", { score: data.result.total, grade: data.result.grade });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to calculate proof score.");

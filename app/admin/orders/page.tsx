@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { AdminTable } from "@/components/admin/AdminTable";
 import { Badge, Button } from "@/components/ui";
-import { approveAdminOrder, getAdminOrders, rejectAdminOrder } from "@/lib/repositories";
+import { approveAdminOrder, getAdminOrders, rejectAdminOrder } from "@/lib/data/admin-repository";
 import type { Order } from "@/lib/types";
 
 export default function AdminOrdersPage() {

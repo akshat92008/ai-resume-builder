@@ -70,59 +70,10 @@ export function saveLead(lead: any) {
   return isSupabaseMode() ? supabase.saveLead(lead) : demo.saveLead(lead);
 }
 
-export function getLeads() {
-  return isSupabaseMode() ? supabase.getLeads() : demo.getLeads();
-}
+
 
 export function savePortfolioSettings(public_slug: string, portfolio_public: boolean) {
   return isSupabaseMode() ? supabase.savePortfolioSettings(public_slug, portfolio_public) : demo.savePortfolioSettings(public_slug, portfolio_public);
 }
 
-// Admin APIs
-export function getAdminOrders() {
-  return isSupabaseMode() ? supabase.getAdminOrders() : demo.getAdminOrders();
-}
-
-export function approveAdminOrder(orderId: string) {
-  return isSupabaseMode() ? supabase.approveAdminOrder(orderId) : demo.approveAdminOrder(orderId);
-}
-
-export function rejectAdminOrder(orderId: string, reason?: string) {
-  return isSupabaseMode() ? supabase.rejectAdminOrder(orderId, reason) : demo.rejectAdminOrder(orderId, reason);
-}
-
-export function getAdminLeads() {
-  return isSupabaseMode() ? supabase.getAdminLeads() : demo.getAdminLeads();
-}
-
-export function updateAdminLeadStatus(leadId: string, status: any) {
-  return isSupabaseMode() ? supabase.updateAdminLeadStatus(leadId, status) : demo.updateAdminLeadStatus(leadId, status);
-}
-
-export function getAdminUsers() {
-  return isSupabaseMode() ? supabase.getAdminUsers() : demo.getAdminUsers();
-}
-
-export function updateAdminUserPlan(userId: string, plan?: any) {
-  return isSupabaseMode() ? supabase.updateAdminUserPlan(userId, plan) : demo.updateAdminUserPlan(userId, plan);
-}
-
-export function getAdminMetrics() {
-  return isSupabaseMode() ? supabase.getAdminMetrics() : demo.getAdminMetrics();
-}
-
-export function getAdminEvents() {
-  return isSupabaseMode() ? supabase.getAdminEvents() : demo.getAdminEvents();
-}
-
-export function getAdminTestimonials() {
-  return isSupabaseMode() ? supabase.getAdminTestimonials() : demo.getAdminTestimonials();
-}
-
-export function saveAdminTestimonial(testimonial: any) {
-  return isSupabaseMode() ? supabase.saveAdminTestimonial(testimonial) : demo.saveAdminTestimonial(testimonial);
-}
-
-export function deleteAdminTestimonial(id: string) {
-  return isSupabaseMode() ? supabase.deleteAdminTestimonial(id) : demo.deleteAdminTestimonial(id);
-}
+// Admin APIs have been moved to admin-repository.ts

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui";
-import { deleteAdminTestimonial, getAdminTestimonials, saveAdminTestimonial } from "@/lib/repositories";
+import { deleteAdminTestimonial, getAdminTestimonials, saveAdminTestimonial } from "@/lib/data/admin-repository";
 import type { Testimonial } from "@/lib/types";
 
 const empty = {

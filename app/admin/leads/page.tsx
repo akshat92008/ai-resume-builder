@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Copy, Download, Loader2 } from "lucide-react";
 import { AdminTable } from "@/components/admin/AdminTable";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
-import { getAdminLeads, updateAdminLeadStatus } from "@/lib/repositories";
+import { getAdminLeads, updateAdminLeadStatus } from "@/lib/data/admin-repository";
 import type { Lead } from "@/lib/types";
 
 const statuses: NonNullable<Lead["status"]>[] = ["new", "contacted", "interested", "closed", "lost"];
