@@ -14,9 +14,18 @@ export async function POST(req: NextRequest) {
     if (supabase) {
       const { data: order } = await supabase
         .from("orders")
-        .select("id,email,plan,user_id")
+        .select("id,email,plan,user_id,status")
         .eq("id", input.order_id)
         .single();
+
+      if (!order) {
+        return NextResponse.json({ error: "Order not found." }, { status: 404 });
+      }
+
+      const allowedStatuses = ["pending", "created", "submitted"];
+      if (!allowedStatuses.includes(order.status)) {
+        return NextResponse.json({ error: `Cannot approve order with status: ${order.status}` }, { status: 400 });
+      }
 
       await supabase
         .from("orders")

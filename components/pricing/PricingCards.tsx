@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, CreditCard } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { manualServicePacks, pricingPlans } from "@/lib/plans";
@@ -10,7 +10,15 @@ import { trackEvent } from "@/lib/events";
 
 export function PricingCards({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialPlan = searchParams.get("plan");
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
+
+  useEffect(() => {
+    // If a plan was selected before login, highlight it or prepare for it
+    // The current UI highlights Pro by default, but we can visually scroll or auto-select if needed.
+    // For now, we just pass the plan query param if not logged in.
+  }, [initialPlan]);
 
   async function createOrder(plan: string, amount: number) {
     if (plan === "college") {
@@ -42,7 +50,7 @@ export function PricingCards({ userEmail }: { userEmail?: string }) {
         window.location.assign(order.checkout_url);
         return;
       }
-      router.push("/billing");
+      router.push(`/billing?order=${order.id}`);
     } catch {
       window.alert("Unable to create this order. Please try again.");
     } finally {
@@ -54,32 +62,35 @@ export function PricingCards({ userEmail }: { userEmail?: string }) {
     <div className="space-y-10">
 
       <div className="grid gap-5 lg:grid-cols-4">
-        {pricingPlans.map((plan) => (
-          <Card key={plan.id} className={plan.id === "pro" ? "border-blue-300 shadow-md" : ""}>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-lg">{plan.name}</CardTitle>
-                {plan.id === "pro" && <Badge>Early access</Badge>}
-              </div>
-              <div className="pt-3 text-3xl font-bold text-slate-950">{plan.label}</div>
-              <p className="text-sm text-slate-500">{plan.description}</p>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <ul className="space-y-3 text-sm">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex gap-2">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <Button className="w-full" variant={plan.id === "free" ? "outline" : "default"} onClick={() => createOrder(plan.id, plan.price)} disabled={busyPlan === plan.id}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                {busyPlan === plan.id ? "Creating..." : plan.cta}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        {pricingPlans.map((plan) => {
+          const isSelected = initialPlan === plan.id || plan.id === "pro";
+          return (
+            <Card key={plan.id} className={isSelected ? "border-blue-400 shadow-lg ring-2 ring-blue-100" : ""}>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-lg">{plan.name}</CardTitle>
+                  {plan.id === "pro" && <Badge>Early access</Badge>}
+                </div>
+                <div className="pt-3 text-3xl font-bold text-slate-950">{plan.label}</div>
+                <p className="text-sm text-slate-500">{plan.description}</p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <ul className="space-y-3 text-sm">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button className="w-full" variant={plan.id === "free" ? "outline" : "default"} onClick={() => createOrder(plan.id, plan.price)} disabled={busyPlan === plan.id}>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  {busyPlan === plan.id ? "Creating..." : (initialPlan === plan.id && userEmail) ? `Create order for ₹${plan.price} ${plan.name}` : plan.cta}
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <section>

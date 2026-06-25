@@ -67,12 +67,10 @@ export function runResumeQualityGate(vault: UserVault): ResumeQualityReport {
   // 7. Check for placeholder/demo content
   const stringifiedVault = JSON.stringify(vault).toLowerCase();
   if (
-    stringifiedVault.includes("i build things") ||
     stringifiedVault.includes("project added during onboarding") ||
     stringifiedVault.includes("add details in career vault") ||
-    stringifiedVault.includes("todo") ||
-    stringifiedVault.includes("placeholder") ||
-    stringifiedVault.includes("lorem")
+    stringifiedVault.includes("demo@example.com") ||
+    stringifiedVault.includes("lorem ipsum")
   ) {
     blockingIssues.push("Career Memory contains placeholder or demo content. Please replace it with your real details.");
   }

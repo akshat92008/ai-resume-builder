@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
     await deleteAdminTestimonialServer(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (error.name === 'ZodError') {
+      return NextResponse.json({ success: false, error: "Validation failed." }, { status: 400 });
+    }
+    return NextResponse.json({ success: false, error: "Unable to delete testimonial." }, { status: 400 });
   }
 }

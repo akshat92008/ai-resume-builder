@@ -414,7 +414,7 @@ create or replace view public.public_achievements as
   where user_id in (select id from public.public_profiles);
 
 create or replace view public.public_proof_links as
-  select id, user_id, title, url, type, notes, created_at
+  select id, user_id, title, url, type, created_at
   from public.proof_links
   where user_id in (select id from public.public_profiles);
 
@@ -443,7 +443,7 @@ create policy "admin leads manage" on public.leads for all using (public.is_admi
 create policy "owner leads read" on public.leads for select using (auth.uid() = user_id);
 
 create policy "orders owner read" on public.orders for select using (auth.uid() = user_id or email = auth.jwt()->>'email' or public.is_admin());
-create policy "orders owner insert" on public.orders for insert with check (auth.uid() = user_id or user_id is null);
+create policy "orders owner insert" on public.orders for insert with check (auth.uid() = user_id);
 create policy "orders admin manage" on public.orders for all using (public.is_admin()) with check (public.is_admin());
 
 create policy "testimonials public read" on public.testimonials for select using (public = true);

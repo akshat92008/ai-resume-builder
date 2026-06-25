@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { AdminTestimonialsClient } from "@/components/admin/AdminTestimonialsClient";
 import { getAdminTestimonialsServer } from "@/lib/data/admin/admin-actions";
-import { isSupabaseMode } from "@/lib/data/client/mode";
+import { isSupabaseMode } from "@/lib/data/server/mode";
 
 
 export default async function AdminTestimonialsPage() {

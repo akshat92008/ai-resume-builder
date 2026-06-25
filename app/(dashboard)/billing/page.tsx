@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CreditCard, IndianRupee, Upload, Loader2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select } from "@/components/ui";
 import { getManualPaymentInstructions } from "@/lib/payments/manual";
@@ -22,15 +23,26 @@ export default function BillingPage() {
   const paidOptions = [...pricingPlans.filter((item) => item.id !== "free" && item.id !== "college"), ...manualServicePacks.map((pack) => ({ id: pack.id, name: pack.name, price: pack.price }))];
   const selected = paidOptions.find((item) => item.id === plan) ?? paidOptions[0];
 
+  const searchParams = useSearchParams();
+  const orderParam = searchParams.get("order");
+
   const loadBilling = useCallback(async () => {
     const nextVault = await getCurrentVault();
     if (nextVault) {
       setVault(nextVault);
       setEmail(nextVault.profile.email || "");
     }
-    setOrders(await getOrders());
+    const fetchedOrders = await getOrders();
+    if (orderParam) {
+      const selectedOrderIndex = fetchedOrders.findIndex((o) => o.id === orderParam);
+      if (selectedOrderIndex > -1) {
+        const [selected] = fetchedOrders.splice(selectedOrderIndex, 1);
+        fetchedOrders.unshift(selected);
+      }
+    }
+    setOrders(fetchedOrders);
     setLoading(false);
-  }, []);
+  }, [orderParam]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

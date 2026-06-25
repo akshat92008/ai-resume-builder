@@ -14,6 +14,9 @@ export async function POST(req: NextRequest) {
     const data = await saveAdminTestimonialServer(testimonial);
     return NextResponse.json({ success: true, testimonial: data });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    if (error.name === 'ZodError') {
+      return NextResponse.json({ success: false, error: "Validation failed." }, { status: 400 });
+    }
+    return NextResponse.json({ success: false, error: "Unable to save testimonial." }, { status: 400 });
   }
 }

@@ -12,7 +12,15 @@ export async function POST(req: NextRequest) {
     const supabase = createSupabaseAdminClient();
     if (!supabase) return NextResponse.json({ error: "Supabase admin is not configured." }, { status: 500 });
 
-    const { data: order } = await supabase.from("orders").select("metadata,plan").eq("id", input.order_id).maybeSingle();
+    const { data: order } = await supabase.from("orders").select("metadata,plan,status").eq("id", input.order_id).maybeSingle();
+    
+    if (!order) {
+      return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    if (order.status === "approved" || order.status === "rejected") {
+      return NextResponse.json({ error: `Cannot reject order with status: ${order.status}` }, { status: 400 });
+    }
     await supabase
       .from("orders")
       .update({

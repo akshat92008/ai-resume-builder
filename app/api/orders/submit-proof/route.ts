@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
     }
 
-    if (order.status !== "pending") {
+    const allowedStatuses = ["pending", "created", "submitted"];
+    if (!allowedStatuses.includes(order.status)) {
       return NextResponse.json({ error: `Cannot submit proof for order with status: ${order.status}` }, { status: 400 });
     }
 

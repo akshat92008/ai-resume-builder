@@ -311,7 +311,7 @@ export default function DashboardPage() {
             <CardTitle>Quick actions</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <ActionButton href="/vault" icon={Upload} label="Improve Career Memory" />
+            <ActionButton href="/vault" icon={Bot} label="Improve Career Memory" />
             <ActionButton href="/jobs/new" icon={Briefcase} label="Analyze a job" />
             <ActionButton href="/resumes/new" icon={FileText} label="Generate resume" />
             <ActionButton href="/portfolio-settings" icon={Link2} label="Publish portfolio" />

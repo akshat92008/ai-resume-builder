@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { AdminOrdersClient } from "@/components/admin/AdminOrdersClient";
 import { getAdminOrdersServer } from "@/lib/data/admin/admin-actions";
-import { isSupabaseMode } from "@/lib/data/client/mode";
+import { isSupabaseMode } from "@/lib/data/server/mode";
 
 
 export default async function AdminOrdersPage() {

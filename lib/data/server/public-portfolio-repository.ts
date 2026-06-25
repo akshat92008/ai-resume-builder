@@ -44,7 +44,7 @@ export async function getPublicVault(slug: string): Promise<Partial<UserVault> |
     supabase.from("public_experiences").select("id, company, role, start_date, end_date, description, responsibilities, achievements").eq("user_id", profile.id),
     supabase.from("public_certificates").select("id, title, issuer, issue_date, credential_url").eq("user_id", profile.id),
     supabase.from("public_achievements").select("id, title, description, proof_url, category").eq("user_id", profile.id),
-    supabase.from("public_proof_links").select("id, title, url, type, notes").eq("user_id", profile.id),
+    supabase.from("public_proof_links").select("id, title, url, type").eq("user_id", profile.id),
   ]);
 
   return {

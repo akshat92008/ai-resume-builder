@@ -133,9 +133,9 @@ export default function VaultPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Your Career Memory (Raw Data)</p>
-          <h1 className="mt-1 font-display text-3xl font-bold text-slate-950">This is the underlying database for CareerProof Agent.</h1>
-          <p className="mt-2 text-slate-600">Edit any incorrect facts manually here. The agent will read this raw data to generate your resumes and analyze your job fit.</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Career Memory</p>
+          <h1 className="mt-1 font-display text-3xl font-bold text-slate-950">Your proof-backed career data.</h1>
+          <p className="mt-2 text-slate-600">This is your core career profile. CareerProof Agent uses this data to generate tailored resumes and analyze your job fit. Keep it accurate and updated.</p>
         </div>
         <div className="flex items-center gap-3">
           {saved && <Badge variant="secondary">Saved</Badge>}

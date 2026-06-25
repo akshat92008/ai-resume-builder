@@ -64,7 +64,18 @@ export default function OnboardingPage() {
       skills: nextVault.skills.length,
       extracted_updates: updates.length,
     });
-    router.push("/dashboard?onboarding=success");
+    
+    const params = new URLSearchParams(window.location.search);
+    const nextPath = params.get("next");
+    const plan = params.get("plan");
+
+    if (nextPath) {
+      const search = new URLSearchParams();
+      if (plan) search.set("plan", plan);
+      router.push(`${nextPath}${search.toString() ? `?${search.toString()}` : ""}`);
+    } else {
+      router.push("/dashboard?onboarding=success");
+    }
   }
 
   if (!vault) {

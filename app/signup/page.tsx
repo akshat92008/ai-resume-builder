@@ -32,6 +32,17 @@ export default function SignupPage() {
     setMessage("");
     await trackEvent("signup", { email });
 
+    const params = new URLSearchParams(window.location.search);
+    const nextPath = params.get("next");
+    const plan = params.get("plan");
+    let targetUrl = "/onboarding";
+    if (nextPath || plan) {
+      const search = new URLSearchParams();
+      if (nextPath) search.set("next", nextPath);
+      if (plan) search.set("plan", plan);
+      targetUrl = `/onboarding?${search.toString()}`;
+    }
+
     if (!isSupabaseMode()) {
       const vault = await getCurrentVault();
       if (vault) {
@@ -39,7 +50,7 @@ export default function SignupPage() {
         vault.profile.email = email;
         await saveCurrentVault(vault);
       }
-      router.push("/onboarding");
+      router.push(targetUrl);
       return;
     }
 
@@ -57,7 +68,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: fullName, referral: ref || undefined },
-        emailRedirectTo: `${window.location.origin}/onboarding`,
+        emailRedirectTo: `${window.location.origin}${targetUrl}`,
       },
     });
     
@@ -66,7 +77,7 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
-    router.push("/onboarding");
+    router.push(targetUrl);
   }
 
   return (

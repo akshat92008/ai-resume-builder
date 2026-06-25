@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { AdminLeadsClient } from "@/components/admin/AdminLeadsClient";
 import { getAdminLeadsServer } from "@/lib/data/admin/admin-actions";
-import { isSupabaseMode } from "@/lib/data/client/mode";
+import { isSupabaseMode } from "@/lib/data/server/mode";
 
 
 export default async function AdminLeadsPage() {

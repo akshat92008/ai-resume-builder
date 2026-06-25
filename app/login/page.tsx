@@ -19,8 +19,19 @@ export default function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    const params = new URLSearchParams(window.location.search);
+    const nextPath = params.get("next");
+    const plan = params.get("plan");
+
+    let targetUrl = "/dashboard";
+    if (nextPath) {
+      const search = new URLSearchParams();
+      if (plan) search.set("plan", plan);
+      targetUrl = `${nextPath}${search.toString() ? `?${search.toString()}` : ""}`;
+    }
+
     if (!isSupabaseMode()) {
-      router.push("/dashboard");
+      router.push(targetUrl);
       return;
     }
     const supabase = getSupabaseBrowserClient();
@@ -35,7 +46,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push("/dashboard");
+    router.push(targetUrl);
   }
 
   return (

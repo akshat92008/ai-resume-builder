@@ -3,7 +3,7 @@ import { BarChart3, CreditCard, FileText, GraduationCap, Users } from "lucide-re
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { getAdminMetricsServer } from "@/lib/data/admin/admin-actions";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { isSupabaseMode } from "@/lib/data/client/mode";
+import { isSupabaseMode } from "@/lib/data/server/mode";
 
 
 const adminLinks = [
