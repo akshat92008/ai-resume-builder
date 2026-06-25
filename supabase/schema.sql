@@ -360,7 +360,13 @@ end $$;
 
 create policy "profiles owner read write" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
 create policy "profiles admin manage" on public.profiles for all using (public.is_admin()) with check (public.is_admin());
-create policy "profiles public portfolio read" on public.profiles for select using (portfolio_public = true);
+
+create or replace view public.public_profiles as
+  select id, full_name, headline, summary, linkedin_url, github_url, portfolio_url, target_roles, city, portfolio_public, public_slug
+  from public.profiles
+  where portfolio_public = true;
+
+grant select on public.public_profiles to anon, authenticated;
 
 create policy "education owner manage" on public.education for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "education public read" on public.education for select using (public.is_public_profile(user_id));

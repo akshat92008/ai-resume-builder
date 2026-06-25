@@ -7,6 +7,7 @@ import { generateResumeWithAgent } from "./resume-agent";
 import { critiqueResumeWithAgent } from "./resume-critic-agent";
 import { reviewPortfolioWithAgent } from "./portfolio-agent";
 import { chooseNextAction } from "./next-action-agent";
+import { runResumeQualityGate } from "../resume/resume-quality-gate";
 
 function inferIntent(message = "", fallback: AgentIntent = "check_proof"): AgentIntent {
   const text = message.toLowerCase();
@@ -33,14 +34,15 @@ export function runCareerProofAgent(input: CareerProofAgentInput): CareerProofAg
   const shouldAnalyzeJob = intent === "analyze_job" || Boolean(input.currentJob) || Boolean(jobDescription);
   const jobFit = shouldAnalyzeJob ? analyzeJobFit(input.vault, jobDescription, proofAudit) : undefined;
 
-  const blockingIssues = [...vaultReport.blockingIssues];
-  const warnings: string[] = [];
+  const qualityReport = runResumeQualityGate(input.vault);
+  const blockingIssues = [...vaultReport.blockingIssues, ...qualityReport.blockingIssues];
+  const warnings: string[] = [...qualityReport.warnings];
 
   if (!input.vault.profile.email) warnings.push("Email is missing. I can draft the resume, but add email before applying.");
   if (proofAudit.proofScore < 50) warnings.push("Needs more proof: important claims are not connected to GitHub, demos, certificates, or case studies.");
 
   const shouldGenerateResume = intent === "build_resume";
-  const canGenerate = vaultReport.canGenerateResume;
+  const canGenerate = qualityReport.canGenerate && vaultReport.canGenerateResume;
   const actuallyGenerate = shouldGenerateResume && (canGenerate || input.forceResumeGeneration);
   const resume = actuallyGenerate
     ? generateResumeWithAgent(input.vault, jobFit ?? input.currentJob?.analysis_json ?? null, proofAudit, input.resumeStyle)
@@ -55,6 +57,10 @@ export function runCareerProofAgent(input: CareerProofAgentInput): CareerProofAg
     portfolio,
     plan: input.vault.profile.plan,
   });
+
+  if (qualityReport.questionsToAsk.length > 0 && shouldGenerateResume && !canGenerate) {
+    warnings.push(qualityReport.questionsToAsk[0]);
+  }
 
   if (shouldGenerateResume && !canGenerate && actuallyGenerate) {
     warnings.push("I generated a thin draft, but your resume is very weak. Please add more projects and skills to your Career Memory before applying.");

@@ -4,6 +4,7 @@ import { calculateProofScore } from "@/lib/proof-score";
 import { inspectCareerVault } from "@/lib/agents/career-vault-agent";
 import { auditProof } from "@/lib/agents/proof-auditor-agent";
 import { critiqueResumeWithAgent } from "@/lib/agents/resume-critic-agent";
+import { runResumeQualityGate } from "@/lib/resume/resume-quality-gate";
 
 import type { JobAnalysis, Resume, UserVault } from "@/lib/types";
 
@@ -20,15 +21,17 @@ export async function POST(req: NextRequest) {
     const style = typeof body.style === "string" ? body.style : "ATS Formal";
     const force = Boolean(body.force);
     const vaultReport = inspectCareerVault(vault);
+    const qualityReport = runResumeQualityGate(vault);
+    const canGenerate = vaultReport.canGenerateResume && qualityReport.canGenerate;
 
-    if (!vaultReport.canGenerateResume && !force) {
+    if (!canGenerate && !force) {
       const proofAudit = auditProof(vault, null, jobAnalysis);
       return NextResponse.json(
         {
           error: "Resume quality gate failed.",
           qualityGate: {
-            message: "Your resume will be weak if I generate it now.",
-            blockingIssues: vaultReport.blockingIssues,
+            message: qualityReport.questionsToAsk[0] || "Your resume will be weak if I generate it now.",
+            blockingIssues: [...vaultReport.blockingIssues, ...qualityReport.blockingIssues],
             missingFields: vaultReport.missingFields,
             nextActions: vaultReport.nextActions,
             proofScore: proofAudit.proofScore,

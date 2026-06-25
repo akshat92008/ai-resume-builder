@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { DashboardSidebar } from "./DashboardSidebar";
 
+import { isDemoMode } from "@/lib/data/client/mode";
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const demoMode = isDemoMode();
   return (
     <div className="flex min-h-screen bg-slate-50">
       <DashboardSidebar />
       <main className="flex min-w-0 flex-1 flex-col">
+        {demoMode && (
+          <div className="bg-amber-100 px-4 py-2 text-center text-sm font-medium text-amber-900">
+            Running in Demo Mode. Data is stored locally and will not persist across sessions.
+          </div>
+        )}
         <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 sm:px-6 lg:px-8">
           <Link href="/dashboard" className="font-display font-bold text-slate-950 md:hidden">
             CareerProof
