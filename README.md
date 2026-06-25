@@ -225,13 +225,25 @@ API:
 - schema applied
 - hardening migration applied
 - approval transaction migration applied
+- latest profile protection migration applied
 - admin user created
+- verify normal user cannot self-upgrade role or plan
+- verify duplicate names can sign up with unique public slugs
 - pricing → signup → billing tested
 - payment proof tested
 - admin approval tested
+- verify admin approval still activates plan
 - user plan activation tested
 - portfolio privacy tested
 - real resume quality tested
+
+## Security Notes
+
+- Normal users cannot modify role/plan fields directly.
+- Plan activation happens only through admin approval/payment flow.
+- Admin access is controlled server-side.
+- Public slugs are unique and safe for duplicate names.
+- Existing Supabase projects must run the latest profile protection migration.
 
 ## Known Limitations
 

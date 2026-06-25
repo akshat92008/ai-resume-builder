@@ -39,6 +39,14 @@ function profileForUpsert(vault: UserVault, user: AuthUser) {
   if (!profile.public_slug) profile.public_slug = null;
   if (!profile.referral_code) profile.referral_code = null;
   if (!profile.referred_by) profile.referred_by = null;
+  
+  delete profile.role;
+  delete profile.plan;
+  delete profile.plan_status;
+  delete profile.pro_until;
+  delete profile.referral_code;
+  delete profile.referred_by;
+
   return profile;
 }
 

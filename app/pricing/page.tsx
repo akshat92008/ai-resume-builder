@@ -1,4 +1,5 @@
 import { MarketingNav } from "@/components/layout/MarketingNav";
+import { Suspense } from "react";
 import { PricingCards } from "@/components/pricing/PricingCards";
 import { getCurrentUser } from "@/lib/data/server/server-repository";
 
@@ -16,7 +17,9 @@ export default async function PricingPage() {
           </p>
         </div>
         <div className="mt-10">
-          <PricingCards userEmail={user?.email || undefined} />
+          <Suspense fallback={<div>Loading pricing...</div>}>
+            <PricingCards userEmail={user?.email || undefined} />
+          </Suspense>
         </div>
       </main>
     </div>

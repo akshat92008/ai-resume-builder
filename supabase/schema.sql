@@ -227,7 +227,7 @@ create table if not exists public.leads (
 
 create table if not exists public.orders (
   id text primary key,
-  user_id uuid references auth.users(id) on delete set null,
+  user_id uuid references auth.users(id) not null,
   email text,
   plan text,
   amount_inr int,
@@ -324,7 +324,7 @@ create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 begin
   insert into public.profiles (id, email, full_name, public_slug, referral_code)
@@ -332,7 +332,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    lower(regexp_replace(coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), '[^a-zA-Z0-9]+', '-', 'g')),
+    trim(trailing '-' from lower(regexp_replace(coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), '[^a-zA-Z0-9]+', '-', 'g'))) || '-' || substr(replace(new.id::text, '-', ''), 1, 6),
     upper(substr(replace(new.id::text, '-', ''), 1, 8))
   )
   on conflict (id) do nothing;
@@ -466,6 +466,31 @@ create index if not exists idx_jobs_user_id on public.jobs(user_id);
 create index if not exists idx_resumes_user_id on public.resumes(user_id);
 create index if not exists idx_events_event_name_user_id on public.events(event_name, user_id);
 
+create or replace function public.protect_profile_privileged_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() = old.id and old.role != 'admin' then
+    new.role = old.role;
+    new.plan = old.plan;
+    new.plan_status = old.plan_status;
+    new.pro_until = old.pro_until;
+    new.referral_code = old.referral_code;
+    new.referred_by = old.referred_by;
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.protect_profile_privileged_fields() from public;
+revoke execute on function public.protect_profile_privileged_fields() from anon;
+revoke execute on function public.protect_profile_privileged_fields() from authenticated;
+grant execute on function public.protect_profile_privileged_fields() to service_role;
+
+create trigger protect_profile_privileged_fields_trigger before update on public.profiles for each row execute procedure public.protect_profile_privileged_fields();
 create trigger profiles_updated_at before update on public.profiles for each row execute procedure public.set_updated_at();
 create trigger education_updated_at before update on public.education for each row execute procedure public.set_updated_at();
 create trigger skills_updated_at before update on public.skills for each row execute procedure public.set_updated_at();
