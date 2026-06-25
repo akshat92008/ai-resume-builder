@@ -96,7 +96,8 @@ function BillingContent() {
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Billing</p>
         <h1 className="font-display text-3xl font-bold text-slate-950">Plan, orders, and manual payments</h1>
-        <p className="mt-2 text-slate-600">Manual payment mode works immediately. Gateways can be enabled later with env variables.</p>
+        <p className="mt-2 text-slate-600">Payments are manually verified. Your order or plan will be activated after payment proof is approved.</p>
+        <p className="mt-1 text-sm text-slate-500">If your payment is not approved within 24 hours, contact support with your order ID.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">

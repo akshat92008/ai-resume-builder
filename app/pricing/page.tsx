@@ -13,8 +13,11 @@ export default async function PricingPage() {
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Pricing</p>
           <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-slate-950">Start free, upgrade when you need more proof-backed applications.</h1>
           <p className="mt-4 text-lg leading-8 text-slate-600">
-            Create a free account before payment so we can activate your plan after verification. Manual payments work from day one.
+            Create a free account before payment so we can activate your plan after verification.
           </p>
+          <div className="mt-4 inline-block rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <strong>Note:</strong> Payments are manually verified. Your order or plan will be activated after payment proof is approved.
+          </div>
         </div>
         <div className="mt-10">
           <Suspense fallback={<div>Loading pricing...</div>}>

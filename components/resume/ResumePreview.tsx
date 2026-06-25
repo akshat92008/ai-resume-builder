@@ -2,6 +2,7 @@ import type { ResumeContent } from "@/lib/types";
 
 export function ResumePreview({ content }: { content: ResumeContent }) {
   return (
+    <div>
     <article className="resume-print-page min-h-[1056px] bg-white p-8 text-sm leading-snug text-slate-900 shadow-sm ring-1 ring-slate-200 sm:p-12">
       <header className="mb-6 text-center">
         {content.header.name && <h1 className="text-2xl font-bold uppercase tracking-wide">{content.header.name}</h1>}
@@ -114,5 +115,9 @@ export function ResumePreview({ content }: { content: ResumeContent }) {
         </section>
       )}
     </article>
+    <div className="mt-6 rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 ring-1 ring-yellow-200">
+      <strong>Safety Notice:</strong> Generated resumes should be reviewed before sending to recruiters. Do not add fake projects, fake internships, or fake metrics.
+    </div>
+    </div>
   );
 }

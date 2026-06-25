@@ -537,15 +537,17 @@ begin
     raise exception 'Order must belong to a user.';
   end if;
 
-  update public.profiles
-  set 
-    plan = v_order.plan,
-    plan_status = 'active',
-    updated_at = now()
-  where id = v_order.user_id;
+  if v_order.plan = any(array['pro', 'lifetime', 'college']) then
+    update public.profiles
+    set 
+      plan = v_order.plan,
+      plan_status = 'active',
+      updated_at = now()
+    where id = v_order.user_id;
 
-  if not found then
-    raise exception 'Profile for user % not found.', v_order.user_id;
+    if not found then
+      raise exception 'Profile for user % not found.', v_order.user_id;
+    end if;
   end if;
 
   update public.orders
