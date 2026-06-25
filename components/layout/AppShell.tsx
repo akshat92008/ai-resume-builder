@@ -1,9 +1,9 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { DashboardSidebar } from "./DashboardSidebar";
-
 import { isDemoMode } from "@/lib/data/client/mode";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children }: { children: ReactNode }) {
   const demoMode = isDemoMode();
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -11,23 +11,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex min-w-0 flex-1 flex-col">
         {demoMode && (
           <div className="bg-amber-100 px-4 py-2 text-center text-sm font-medium text-amber-900">
-            Running in Demo Mode. Data is stored locally and will not persist across sessions.
+            Demo mode: saved CareerPath resumes are stored in this browser.
           </div>
         )}
         <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 sm:px-6 lg:px-8">
-          <Link href="/dashboard" className="font-display font-bold text-slate-950 md:hidden">
-            CareerProof
+          <Link href="/" className="font-display font-bold text-slate-950 md:hidden">
+            CareerPath AI
           </Link>
-          <div className="ml-auto flex items-center gap-3">
-            <Link href="/proof-score" className="hidden text-sm font-medium text-slate-600 hover:text-blue-700 sm:block">
-              Free Proof Score
-            </Link>
-            <Link href="/portfolio/sample" className="text-sm font-medium text-blue-700 hover:underline">
-              Sample Portfolio
-            </Link>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border bg-white text-xs font-semibold text-slate-700">
-              AS
-            </div>
+          <div className="ml-auto flex items-center gap-4 text-sm font-medium">
+            <Link href="/builder" className="text-blue-700 hover:underline">Builder</Link>
+            <Link href="/" className="text-slate-600 hover:text-slate-950">Home</Link>
           </div>
         </header>
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">{children}</div>

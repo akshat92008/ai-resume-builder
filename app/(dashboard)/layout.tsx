@@ -1,15 +1,6 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { ReactNode } from "react";
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createServerSupabaseClient();
-  if (supabase) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) redirect("/login");
-  }
-
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   return <AppShell>{children}</AppShell>;
 }
