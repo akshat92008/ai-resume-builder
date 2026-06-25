@@ -1,14 +1,44 @@
 import { NextResponse } from "next/server";
 import { auditResumeAgent, improveResumeAgent } from "@/lib/careerpath/orchestrator";
-import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
+import { getServerResume, saveServerResume, getSupabaseUser } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
+import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { z } from "zod";
+
+const ImproveRequestSchema = z.object({
+  resumeId: z.string().optional(),
+  resume: z.object({
+    id: z.string().optional(),
+  }).passthrough().optional(),
+});
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as {
-      resumeId?: string;
-      resume?: CareerPathResume;
-    };
+    const text = await request.text().catch(() => "{}");
+    if (text.length > 100000) {
+      return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
+    }
+    const json = JSON.parse(text);
+    const parseResult = ImproveRequestSchema.safeParse(json);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: { code: "INVALID_INPUT", message: "Invalid payload.", recoverable: true } },
+        { status: 400 },
+      );
+    }
+    const body = parseResult.data as { resumeId?: string; resume?: CareerPathResume };
+
+    const user = await getSupabaseUser();
+    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const rateLimit = await checkRateLimit(user?.id || null, ipHash, "resume_improve", 5);
+    
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
+        { status: 429 },
+      );
+    }
+
     const resume = body.resume ?? (body.resumeId ? await getServerResume(body.resumeId) : null);
     if (!resume) {
       return NextResponse.json(

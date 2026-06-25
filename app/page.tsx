@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, CheckCircle2, Download, MessageSquareText, Sparkles, Wand2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Printer, MessageSquareText, Sparkles, Wand2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 
@@ -9,7 +9,7 @@ const steps = [
   ["Resume", "The agent extracts education, skills, projects, links, and proof."],
   ["Score", "It audits ATS strength, role fit, clarity, proof, and truthfulness."],
   ["Improve", "Weak bullets and sections are rewritten without fake claims."],
-  ["Download", "Preview a clean one-column resume and print it as a PDF."],
+  ["Print or Save", "Preview a clean one-column resume and print it as a PDF."],
 ];
 
 const features = [
@@ -169,7 +169,7 @@ export default function LandingPage() {
 }
 
 function ChatBubble({ role, children }: { role: "user" | "assistant"; children: ReactNode }) {
-  const Icon = role === "assistant" ? Wand2 : Download;
+  const Icon = role === "assistant" ? Wand2 : Printer;
   return (
     <div className={`flex gap-3 rounded-md p-4 ${role === "assistant" ? "bg-blue-50 text-blue-950" : "bg-slate-50 text-slate-700"}`}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />

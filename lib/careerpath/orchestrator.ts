@@ -30,10 +30,18 @@ async function callWithValidation<T>(
   formatName: string,
   zodSchema: Parameters<typeof zodResponseFormat>[0],
   fallbackFn?: () => T,
+  metadata?: {
+    sessionId?: string;
+    resumeId?: string;
+    userId?: string;
+    inputJson?: unknown;
+  }
 ): Promise<T> {
   const startMs = Date.now();
   const model = getModel();
   let lastError: string | undefined;
+  
+  const inputJson = metadata?.inputJson ?? messages;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -65,11 +73,16 @@ async function callWithValidation<T>(
           status: "completed",
           latencyMs,
           model,
+          sessionId: metadata?.sessionId,
+          resumeId: metadata?.resumeId,
+          userId: metadata?.userId,
+          inputJson,
+          outputJson: parsed,
         }).catch(() => {}); // fire-and-forget
         return result.data as T;
       }
 
-      lastError = `Validation failed on attempt ${attempt + 1}`;
+      lastError = `Validation failed on attempt ${attempt + 1}: ${JSON.stringify(result.error)}`;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
@@ -82,6 +95,10 @@ async function callWithValidation<T>(
     error: lastError,
     latencyMs: Date.now() - startMs,
     model,
+    sessionId: metadata?.sessionId,
+    resumeId: metadata?.resumeId,
+    userId: metadata?.userId,
+    inputJson,
   }).catch(() => {});
 
   if (fallbackFn) return fallbackFn();

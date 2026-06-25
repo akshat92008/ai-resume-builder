@@ -28,11 +28,12 @@ If Supabase is not configured, the app runs entirely in-memory for development a
 2. Run `supabase/schema.sql` in the SQL Editor.
 3. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to Vercel.
 4. Add `OPENAI_API_KEY` to Vercel.
+*Note: Production requires login + Supabase + OpenAI key.*
 
 ## Tech Stack
 
-- Next.js 14 (App Router)
-- React Server Components
+- Next.js 16 (App Router)
+- React 19
 - Supabase (Auth, Database)
 - OpenAI (gpt-4o-mini)
 - Tailwind CSS

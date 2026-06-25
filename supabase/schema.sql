@@ -647,3 +647,16 @@ create trigger builder_sessions_updated_at
   before update on public.builder_sessions
   for each row execute procedure public.set_updated_at();
 
+create table if not exists public.usage_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id),
+  ip_hash text,
+  event_type text,
+  created_at timestamptz default now()
+);
+
+alter table public.usage_events enable row level security;
+create policy "usage events admin manage" on public.usage_events for all using (public.is_admin()) with check (public.is_admin());
+create index if not exists idx_usage_events_user_id on public.usage_events(user_id);
+create index if not exists idx_usage_events_ip_hash on public.usage_events(ip_hash);
+

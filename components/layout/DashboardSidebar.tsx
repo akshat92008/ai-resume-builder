@@ -30,7 +30,7 @@ export function DashboardSidebar() {
             <FileText className="h-4 w-4" />
             Launch flow
           </div>
-          <p className="mt-2 text-sm leading-6 text-slate-300">Build, improve, tailor, score, and download resumes.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">Build, improve, tailor, score, and print or save resumes as PDF.</p>
         </div>
       </div>
     </aside>

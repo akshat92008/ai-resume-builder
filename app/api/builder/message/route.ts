@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createResumeRecord } from "@/lib/careerpath/agents";
-import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
+import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/lib/careerpath/db";
 import type { BuilderSession, CareerPathResume } from "@/lib/careerpath/types";
 import { createId } from "@/lib/careerpath/agents";
+import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { z } from "zod";
 import {
   inferIntentAgent,
   extractProfileDataAgent,
@@ -13,24 +15,32 @@ import {
   tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
 
+const MessageRequestSchema = z.object({
+  sessionId: z.string().uuid(),
+  message: z.string().max(20000),
+});
+
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as {
-      sessionId?: string;
-      message?: string;
-    };
-
-    if (!body.sessionId || !body.message?.trim()) {
+    const json = await request.json().catch(() => ({}));
+    const parseResult = MessageRequestSchema.safeParse(json);
+    
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "sessionId and message are required.", recoverable: true } },
+        { error: { code: "INVALID_INPUT", message: "Invalid payload or size exceeded.", recoverable: true } },
         { status: 400 },
       );
     }
+    const body = parseResult.data;
 
-    if (body.message.length > 20000) {
+    const user = await getSupabaseUser();
+    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const rateLimit = await checkRateLimit(user?.id || null, ipHash, "builder_message", 15);
+    
+    if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: { code: "PAYLOAD_TOO_LARGE", message: "Input is too long. Please keep it under 20,000 characters.", recoverable: true } },
-        { status: 413 },
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
+        { status: 429 },
       );
     }
 
@@ -141,11 +151,11 @@ async function runSessionTurn(session: BuilderSession, userMessage: string): Pro
 async function generateFinalResume(session: BuilderSession, jobDescription = "") {
   const draft = await writeResumeAgent(session.profile, session.mode, jobDescription);
   const draftAudit = await auditResumeAgent(draft, session.targetRole, jobDescription);
-  const improved = await improveResumeAgent(draft, draftAudit, session.targetRole);
+  
   const resume = createResumeRecord({
     mode: session.mode,
     targetRole: session.targetRole,
-    content: improved,
+    content: draft,
     profile: session.profile,
     jobDescription,
     title: `${session.targetRole || "CareerPath"} Resume`,
@@ -158,6 +168,9 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "")
     const finalAudit = await auditResumeAgent(resume.content, session.targetRole, jobDescription);
     resume.audit = finalAudit;
     resume.score = finalAudit.score;
+  } else {
+    resume.audit = draftAudit;
+    resume.score = draftAudit.score;
   }
 
   return resume;

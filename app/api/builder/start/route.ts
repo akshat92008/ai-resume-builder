@@ -2,13 +2,25 @@ import { NextResponse } from "next/server";
 import { createBuilderSession } from "@/lib/careerpath/agents";
 import { saveSession } from "@/lib/careerpath/db";
 import type { BuilderMode } from "@/lib/careerpath/types";
+import { z } from "zod";
+
+const StartRequestSchema = z.object({
+  mode: z.enum(["build", "improve", "tailor"]).optional(),
+  targetRole: z.string().max(200).optional(),
+});
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as {
-      mode?: BuilderMode;
-      targetRole?: string;
-    };
+    const json = await request.json().catch(() => ({}));
+    const parseResult = StartRequestSchema.safeParse(json);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: { code: "INVALID_INPUT", message: "Invalid request payload.", recoverable: true } },
+        { status: 400 },
+      );
+    }
+    const body = parseResult.data;
+    
     const mode = body.mode ?? "build";
     const session = createBuilderSession(mode, body.targetRole ?? "");
     await saveSession(session);

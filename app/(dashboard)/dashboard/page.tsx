@@ -141,7 +141,7 @@ function DashboardHeader() {
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Dashboard</p>
         <h1 className="text-3xl font-bold tracking-tight text-slate-950">Saved resume versions</h1>
-        <p className="mt-2 max-w-2xl text-slate-600">Open, duplicate, download, or delete a saved CareerPath AI resume.</p>
+        <p className="mt-2 max-w-2xl text-slate-600">Open, duplicate, print or save, or delete a saved CareerPath AI resume.</p>
       </div>
       <Button asChild>
         <Link href="/builder">
