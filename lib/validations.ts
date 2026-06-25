@@ -184,7 +184,7 @@ export const testimonialSchema = z.object({
   college: optionalText,
   rating: z.coerce.number().min(1).max(5).default(5),
   public: z.boolean().default(false),
-  avatar_url: url,
+  avatar_url: url.optional().default(""),
   result: optionalText,
 });
 

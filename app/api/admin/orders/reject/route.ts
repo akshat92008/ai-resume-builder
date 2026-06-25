@@ -18,19 +18,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
-    if (order.status === "approved" || order.status === "rejected") {
+    const allowedStatuses = ["created", "pending", "submitted"];
+    if (!allowedStatuses.includes(order.status)) {
       return NextResponse.json({ error: `Cannot reject order with status: ${order.status}` }, { status: 400 });
     }
-    const { error: orderUpdateError } = await supabase
+
+    const { data: updatedOrder, error: orderUpdateError } = await supabase
       .from("orders")
       .update({
         status: "rejected",
         metadata: { ...((order?.metadata as Record<string, unknown> | null) ?? {}), rejection_reason: input.reason },
       })
-      .eq("id", input.order_id);
+      .eq("id", input.order_id)
+      .select()
+      .single();
 
-    if (orderUpdateError) {
-      return NextResponse.json({ error: `Failed to reject order: ${orderUpdateError.message}` }, { status: 500 });
+    if (orderUpdateError || !updatedOrder) {
+      return NextResponse.json({ error: `Failed to reject order: ${orderUpdateError?.message || "Unknown error"}` }, { status: 500 });
     }
 
     await supabase.from("events").insert({
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
       metadata: { order_id: input.order_id, plan: order?.plan, admin_id: admin.userId },
     });
 
-    return NextResponse.json({ ok: true, status: "rejected" });
+    return NextResponse.json({ ok: true, status: "rejected", order: updatedOrder });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to reject order." }, { status: 400 });
   }

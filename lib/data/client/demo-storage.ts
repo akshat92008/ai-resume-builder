@@ -170,7 +170,7 @@ export async function submitPaymentProof(input: PaymentProofInput): Promise<Orde
       ...orders[index],
       payment_reference: input.payment_reference,
       payment_proof_url: input.payment_proof_url,
-      status: "pending", // Still pending until admin approves
+      status: "submitted", // Align with production behavior
     };
     setLocal("demo_orders", orders);
     return delay(200, orders[index]);

@@ -47,7 +47,8 @@ Open `http://localhost:3000`.
 
 **Important**:
 - `supabase/schema.sql` is canonical for a fresh setup.
-- Existing Supabase projects must run migrations in order, especially `market_ready_hardening` and `approval_transaction`. Older migrations are superseded by the final market-ready hardening migration.
+- Existing Supabase projects must run migrations in order, especially `market_ready_hardening`, `approval_transaction`, and `harden_approve_rpc`. Older migrations are superseded by the final market-ready hardening migration.
+- The `approve_order_and_update_plan` RPC is service-role-only and cannot be called directly by users. The API route is the only normal way to approve orders.
 - Supabase env vars are required for production persistence.
 - `NVIDIA_API_KEY` is optional for enhanced AI.
 - Without an AI key, deterministic fallback works but quality is lower.
