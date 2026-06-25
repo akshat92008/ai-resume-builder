@@ -49,7 +49,7 @@ export function duplicateCareerPathResume(resume: CareerPathResume) {
   const now = new Date().toISOString();
   const copy: CareerPathResume = {
     ...resume,
-    id: `resume_${crypto.randomUUID()}`,
+    id: crypto.randomUUID(),
     title: `${resume.title} v${resume.version + 1}`,
     version: resume.version + 1,
     createdAt: now,

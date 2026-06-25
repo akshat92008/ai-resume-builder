@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { DashboardSidebar } from "./DashboardSidebar";
-import { isDemoMode } from "@/lib/data/client/mode";
+const isDemoMode = () => !Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const demoMode = isDemoMode();

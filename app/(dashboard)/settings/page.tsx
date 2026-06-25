@@ -27,7 +27,7 @@ export default function SettingsPage() {
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Settings</p>
         <h1 className="font-display text-3xl font-bold text-slate-950">Account and launch checklist</h1>
-        <p className="mt-2 text-slate-600">Use this before deploying and sharing CareerProof AI publicly.</p>
+        <p className="mt-2 text-slate-600">Use this before deploying and sharing CareerPath AI publicly.</p>
       </div>
 
       <Card>

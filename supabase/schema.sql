@@ -1,4 +1,4 @@
--- CareerProof AI by Amaura Labs
+-- CareerPath AI by Amaura Labs
 -- Run this in Supabase SQL editor after creating a project.
 
 create extension if not exists "pgcrypto";
@@ -570,7 +570,7 @@ grant execute on function public.approve_order_and_update_plan(text, uuid) to se
 insert into public.testimonials (name, role, college, quote, rating, public)
 values
   ('Demo student', 'BCA final year student', 'Example College', 'Demo testimonial: replace this with a real student quote after launch.', 5, true),
-  ('Demo placement lead', 'Training and placement coordinator', 'Example Institute', 'Demo testimonial: CareerProof-style reports can help placement teams spot proof gaps quickly.', 5, true)
+  ('Demo placement lead', 'Training and placement coordinator', 'Example Institute', 'Demo testimonial: CareerPath-style reports can help placement teams spot proof gaps quickly.', 5, true)
 on conflict do nothing;
 
 -- CareerPath AI launch scope: agentic resume builder tables and resume metadata.

@@ -2,53 +2,73 @@ import { NextResponse } from "next/server";
 import { createResumeRecord } from "@/lib/careerpath/agents";
 import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
 import type { BuilderSession, CareerPathResume } from "@/lib/careerpath/types";
-import { createCareerPathId } from "@/lib/careerpath/agents";
-import { 
-  inferIntentAgent, 
-  extractProfileDataAgent, 
-  detectGapsAgent, 
-  writeResumeAgent, 
-  auditResumeAgent, 
-  improveResumeAgent, 
-  tailorResumeAgent 
+import { createId } from "@/lib/careerpath/agents";
+import {
+  inferIntentAgent,
+  extractProfileDataAgent,
+  detectGapsAgent,
+  writeResumeAgent,
+  auditResumeAgent,
+  improveResumeAgent,
+  tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as {
-    sessionId?: string;
-    message?: string;
-  };
+  try {
+    const body = (await request.json().catch(() => ({}))) as {
+      sessionId?: string;
+      message?: string;
+    };
 
-  if (!body.sessionId || !body.message?.trim()) {
-    return NextResponse.json({ error: "sessionId and message are required." }, { status: 400 });
+    if (!body.sessionId || !body.message?.trim()) {
+      return NextResponse.json(
+        { error: { code: "INVALID_INPUT", message: "sessionId and message are required.", recoverable: true } },
+        { status: 400 },
+      );
+    }
+
+    const session = await getSession(body.sessionId);
+    if (!session) {
+      return NextResponse.json(
+        { error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } },
+        { status: 404 },
+      );
+    }
+
+    const userMessage = body.message.trim();
+    session.messages.push({
+      id: createId(),
+      role: "user",
+      content: userMessage,
+      createdAt: new Date().toISOString(),
+    });
+
+    const response = await runSessionTurn(session, userMessage);
+    await saveSession(response.session);
+
+    if (response.resume) await saveServerResume(response.resume);
+
+    return NextResponse.json({
+      sessionId: response.session.id,
+      assistantMessage: response.assistantMessage,
+      state: response.session.currentStep,
+      resumeId: response.resume?.id ?? response.session.resumeId,
+      resume: response.resume,
+      session: response.session,
+    });
+  } catch (err) {
+    console.error("[builder/message] Error:", err);
+    return NextResponse.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Something went wrong generating your resume. Your data is saved. Try again.",
+          recoverable: true,
+        },
+      },
+      { status: 500 },
+    );
   }
-
-  const session = await getSession(body.sessionId);
-  if (!session) {
-    return NextResponse.json({ error: "Builder session not found." }, { status: 404 });
-  }
-
-  const userMessage = body.message.trim();
-  session.messages.push({
-    id: createCareerPathId("msg"),
-    role: "user",
-    content: userMessage,
-    createdAt: new Date().toISOString(),
-  });
-
-  const response = await runSessionTurn(session, userMessage);
-  await saveSession(response.session);
-
-  if (response.resume) await saveServerResume(response.resume);
-
-  return NextResponse.json({
-    sessionId: response.session.id,
-    assistantMessage: response.assistantMessage,
-    state: response.session.currentStep,
-    resumeId: response.resume?.id ?? response.session.resumeId,
-    resume: response.resume,
-    session: response.session,
-  });
 }
 
 async function runSessionTurn(session: BuilderSession, userMessage: string): Promise<{
@@ -148,7 +168,7 @@ function foundSummary(session: BuilderSession) {
 
 function systemMessage(content: string) {
   return {
-    id: createCareerPathId("msg"),
+    id: createId(),
     role: "assistant" as const,
     content,
     createdAt: new Date().toISOString(),

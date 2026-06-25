@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function SamplePage() {
-  redirect("/portfolio/sample");
+export default function SampleRedirect() {
+  redirect("/builder");
 }

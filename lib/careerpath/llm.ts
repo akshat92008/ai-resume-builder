@@ -1,9 +1,31 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let _openaiClient: OpenAI | null = null;
+
+/**
+ * Lazy-initialized OpenAI client. Only instantiated at runtime when called,
+ * never during build-time module evaluation.
+ */
+export function getOpenAIClient(): OpenAI {
+  if (_openaiClient) return _openaiClient;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY is required for CareerPath AI generation. " +
+      "Set it in your .env.local file."
+    );
+  }
+
+  _openaiClient = new OpenAI({ apiKey });
+  return _openaiClient;
+}
+
+/** Model to use for all CareerPath AI agent calls. */
+export function getModel(): string {
+  return process.env.OPENAI_MODEL || "gpt-4o-mini";
+}
 
 export const ProfileSchema = z.object({
   personal: z.object({

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Download, Loader2, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Copy, Loader2, Printer, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
@@ -29,6 +29,7 @@ export default function ResumeDetailPage() {
 
   useEffect(() => {
     async function loadResume() {
+      // Try localStorage first (fast)
       const local = getCareerPathResume(params.id);
       if (local) {
         setResume(local);
@@ -36,12 +37,19 @@ export default function ResumeDetailPage() {
         return;
       }
 
-      const response = await fetch(`/api/resume/${params.id}`);
-      if (response.ok) {
-        const data = (await response.json()) as { resume?: CareerPathResume };
-        if (data.resume) {
-          setResume(saveCareerPathResume(data.resume));
+      // Try server
+      try {
+        const response = await fetch(`/api/resume/${params.id}`);
+        if (response.ok) {
+          const data = (await response.json()) as { resume?: CareerPathResume };
+          if (data.resume) {
+            setResume(saveCareerPathResume(data.resume));
+            setLoading(false);
+            return;
+          }
         }
+      } catch {
+        // ignore
       }
       setLoading(false);
     }
@@ -53,6 +61,13 @@ export default function ResumeDetailPage() {
     setResume(saved);
     setMessage(status);
     window.setTimeout(() => setMessage(""), 1800);
+
+    // Also save to server
+    fetch("/api/resume/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume: saved }),
+    }).catch(() => {});
   }
 
   async function autoImprove() {
@@ -65,8 +80,8 @@ export default function ResumeDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume }),
       });
-      const data = (await response.json()) as { resume?: CareerPathResume; error?: string };
-      if (!response.ok || !data.resume) throw new Error(data.error || "Unable to improve resume.");
+      const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
+      if (!response.ok || !data.resume) throw new Error(data.error?.message || "Unable to improve resume.");
       updateResume(data.resume, "Improved resume automatically.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to improve resume.");
@@ -85,8 +100,8 @@ export default function ResumeDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume, jobDescription }),
       });
-      const data = (await response.json()) as { resume?: CareerPathResume; error?: string };
-      if (!response.ok || !data.resume) throw new Error(data.error || "Unable to tailor resume.");
+      const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
+      if (!response.ok || !data.resume) throw new Error(data.error?.message || "Unable to tailor resume.");
       const saved = saveCareerPathResume(data.resume);
       router.push(`/resume/${saved.id}`);
     } catch (caught) {
@@ -96,15 +111,33 @@ export default function ResumeDetailPage() {
     }
   }
 
-  function saveVersion() {
+  async function saveVersion() {
     if (!resume) return;
+    try {
+      const res = await fetch(`/api/resume/${resume.id}/duplicate`, { method: "POST" });
+      if (res.ok) {
+        const data = (await res.json()) as { resume?: CareerPathResume };
+        if (data.resume) {
+          saveCareerPathResume(data.resume);
+          router.push(`/resume/${data.resume.id}`);
+          return;
+        }
+      }
+    } catch {
+      // fallback to client
+    }
     const copy = duplicateCareerPathResume(resume);
     router.push(`/resume/${copy.id}`);
   }
 
-  function deleteResume() {
+  async function deleteResume() {
     if (!resume) return;
     deleteCareerPathResume(resume.id);
+    try {
+      await fetch(`/api/resume/${resume.id}`, { method: "DELETE" });
+    } catch {
+      // ignore
+    }
     router.push("/dashboard");
   }
 
@@ -148,8 +181,11 @@ export default function ResumeDetailPage() {
       <div className="min-h-screen bg-slate-50">
         <MarketingNav />
         <main className="mx-auto max-w-3xl px-4 py-12">
-          <Alert variant="error">Resume not found. It may have been deleted from local saved versions.</Alert>
-          <Button asChild className="mt-4"><Link href="/builder">Build a new resume</Link></Button>
+          <Alert variant="error">Resume not found. It may have been deleted.</Alert>
+          <div className="mt-4 flex gap-3">
+            <Button asChild><Link href="/builder">Build a new resume</Link></Button>
+            <Button asChild variant="outline"><Link href="/dashboard">Saved resumes</Link></Button>
+          </div>
         </main>
       </div>
     );
@@ -195,12 +231,12 @@ export default function ResumeDetailPage() {
               Improve Automatically
             </Button>
             <Button variant="outline" onClick={() => window.print()}>
-              <Download className="mr-2 h-4 w-4" />
-              Download PDF
+              <Printer className="mr-2 h-4 w-4" />
+              Print / Save as PDF
             </Button>
             <Button variant="outline" onClick={saveVersion}>
-              <Save className="mr-2 h-4 w-4" />
-              Save Version
+              <Copy className="mr-2 h-4 w-4" />
+              Duplicate Version
             </Button>
             <Button variant="outline" onClick={deleteResume} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />

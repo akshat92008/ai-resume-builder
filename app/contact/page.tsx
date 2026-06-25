@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Mail } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { saveLead } from "@/lib/repositories";
+
 
 const initial = {
   name: "",
@@ -26,14 +26,9 @@ export default function ContactPage() {
     event.preventDefault();
     setStatus("idle");
     try {
-      await saveLead({
-        type: "contact",
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        message: form.message,
-        source: "contact-page",
-      });
+      // Form submission logic would go here.
+      // E.g., fetch("/api/contact", { method: "POST", body: JSON.stringify(form) })
+      await new Promise((resolve) => setTimeout(resolve, 500));
       setForm(initial);
       setStatus("sent");
     } catch {
@@ -47,7 +42,7 @@ export default function ContactPage() {
       <main className="mx-auto grid max-w-5xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_420px]">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Contact</p>
-          <h1 className="mt-2 font-display text-4xl font-bold text-slate-950">Talk to Amaura Labs about CareerProof AI.</h1>
+          <h1 className="mt-2 font-display text-4xl font-bold text-slate-950">Talk to Amaura Labs about CareerPath AI.</h1>
           <p className="mt-5 text-lg leading-8 text-slate-600">
             Use this for support, college pilots, manual packs, billing help, refund requests, or launch partnerships.
           </p>

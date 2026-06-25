@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { isSupabaseMode } from "@/lib/data/client/mode";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+const isSupabaseMode = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 function LoginForm() {
   const router = useRouter();
@@ -59,7 +60,7 @@ function LoginForm() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Login to CareerProof AI</CardTitle>
+        <CardTitle>Login to CareerPath AI</CardTitle>
       </CardHeader>
       <CardContent>
         {!isSupabaseMode() && (

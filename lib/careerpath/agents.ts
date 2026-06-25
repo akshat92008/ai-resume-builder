@@ -44,17 +44,23 @@ const PROJECT_HINTS = [
   { pattern: /\bdashboard\b/i, name: "Dashboard" },
 ];
 
-export function createCareerPathId(prefix = "cp") {
+/** Generate a plain UUID compatible with Supabase uuid primary key columns. */
+export function createId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}_${crypto.randomUUID()}`;
+    return crypto.randomUUID();
   }
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  // Fallback for environments without crypto.randomUUID
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export function emptyCareerPathProfile(targetRole = ""): CareerPathProfile {
   const now = new Date().toISOString();
   return {
-    id: createCareerPathId("profile"),
+    id: createId(),
     userId: USER_ID,
     personal: {},
     target: {
@@ -84,7 +90,7 @@ export function emptyCareerPathProfile(targetRole = ""): CareerPathProfile {
 export function createBuilderSession(mode: BuilderMode, targetRole = ""): BuilderSession {
   const now = new Date().toISOString();
   const session: BuilderSession = {
-    id: createCareerPathId("session"),
+    id: createId(),
     userId: USER_ID,
     mode,
     targetRole: cleanTargetRole(targetRole),
@@ -97,7 +103,7 @@ export function createBuilderSession(mode: BuilderMode, targetRole = ""): Builde
   };
   const firstMessage = getOpeningMessage(mode, targetRole);
   session.messages.push({
-    id: createCareerPathId("msg"),
+    id: createId(),
     role: "assistant",
     content: firstMessage,
     createdAt: now,
@@ -437,7 +443,7 @@ export function createResumeRecord(input: {
   const now = new Date().toISOString();
   const audit = auditResume(input.content, input.targetRole, input.jobDescription);
   return {
-    id: createCareerPathId("resume"),
+    id: createId(),
     userId: USER_ID,
     profileId: input.profile?.id,
     title: input.title || `${input.targetRole || "CareerPath"} Resume`,
