@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBuilderSession } from "@/lib/careerpath/agents";
-import { saveSession } from "@/lib/careerpath/server-store";
+import { saveSession } from "@/lib/careerpath/db";
 import type { BuilderMode } from "@/lib/careerpath/types";
 
 export async function POST(request: Request) {
@@ -9,7 +9,8 @@ export async function POST(request: Request) {
     targetRole?: string;
   };
   const mode = body.mode ?? "build";
-  const session = saveSession(createBuilderSession(mode, body.targetRole ?? ""));
+  const session = createBuilderSession(mode, body.targetRole ?? "");
+  await saveSession(session);
   const message = session.messages[0]?.content ?? "Paste your details. Messy is fine.";
 
   return NextResponse.json({

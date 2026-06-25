@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auditResume } from "@/lib/careerpath/agents";
-import { getServerResume, saveServerResume } from "@/lib/careerpath/server-store";
+import { auditResumeAgent } from "@/lib/careerpath/orchestrator";
+import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 
 export async function POST(request: Request) {
@@ -8,12 +8,12 @@ export async function POST(request: Request) {
     resumeId?: string;
     resume?: CareerPathResume;
   };
-  const resume = body.resume ?? (body.resumeId ? getServerResume(body.resumeId) : null);
+  const resume = body.resume ?? (body.resumeId ? await getServerResume(body.resumeId) : null);
   if (!resume) return NextResponse.json({ error: "Resume not found." }, { status: 404 });
 
-  const audit = auditResume(resume.content, resume.targetRole, resume.jobDescription);
+  const audit = await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription);
   const updated = { ...resume, audit, score: audit.score, updatedAt: new Date().toISOString() };
-  saveServerResume(updated);
+  await saveServerResume(updated);
 
   return NextResponse.json({ score: audit.score, audit, resume: updated });
 }
