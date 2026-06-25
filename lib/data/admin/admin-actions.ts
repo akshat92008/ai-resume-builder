@@ -86,5 +86,6 @@ export async function deleteAdminTestimonialServer(id: string) {
   if (!admin.ok) throw new Error("Unauthorized");
   const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error("No supabase client");
-  await supabase.from("testimonials").delete().eq("id", id);
+  const { error } = await supabase.from("testimonials").delete().eq("id", id);
+  if (error) throw new Error(`Failed to delete testimonial: ${error.message}`);
 }

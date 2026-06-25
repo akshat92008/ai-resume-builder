@@ -36,13 +36,17 @@ export function PricingCards({ userEmail }: { userEmail?: string }) {
     const emailToUse = userEmail;
     setBusyPlan(plan);
     await trackEvent("upgrade_clicked", { plan, amount });
-    await saveLead({
-      type: "pricing_interest",
-      name: emailToUse.split("@")[0],
-      email: emailToUse,
-      source: "pricing",
-      metadata: { plan, amount },
-    });
+    try {
+      await saveLead({
+        type: "pricing_interest",
+        name: emailToUse.split("@")[0],
+        email: emailToUse,
+        source: "pricing",
+        metadata: { plan, amount },
+      });
+    } catch {
+      // Ignore lead capture failure
+    }
 
     try {
       const order = await createRepositoryOrder({ email: emailToUse, plan, amount_inr: amount, metadata: { source: "pricing" } });

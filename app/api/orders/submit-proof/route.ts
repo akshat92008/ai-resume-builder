@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Cannot submit proof for order with status: ${order.status}` }, { status: 400 });
     }
 
-    await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
         payment_reference: input.payment_reference,
@@ -44,6 +44,11 @@ export async function POST(req: NextRequest) {
         status: "submitted",
       })
       .eq("id", input.order_id);
+
+    if (updateError) {
+      return NextResponse.json({ error: "Failed to update payment proof." }, { status: 500 });
+    }
+
     await supabaseAdmin.from("events").insert({
       event_name: "payment_submitted",
       metadata: { order_id: input.order_id },

@@ -1,4 +1,15 @@
 -- Market ready hardening migration
+
+-- Drop old insecure public read policies
+drop policy if exists "profiles public portfolio read" on public.profiles;
+drop policy if exists "education public read" on public.education;
+drop policy if exists "skills public read" on public.skills;
+drop policy if exists "projects public read" on public.projects;
+drop policy if exists "experiences public read" on public.experiences;
+drop policy if exists "certificates public read" on public.certificates;
+drop policy if exists "achievements public read" on public.achievements;
+drop policy if exists "proof links public read" on public.proof_links;
+
 -- Fix orders insert policy
 drop policy if exists "orders owner insert" on public.orders;
 create policy "orders owner insert" on public.orders for insert with check (auth.uid() = user_id);

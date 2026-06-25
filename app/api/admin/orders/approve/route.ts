@@ -27,19 +27,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Cannot approve order with status: ${order.status}` }, { status: 400 });
       }
 
-      const { error: orderUpdateError } = await supabase
-        .from("orders")
-        .update({
-          status: "approved",
-          approved_at: new Date().toISOString(),
-          approved_by: admin.userId,
-        })
-        .eq("id", input.order_id);
-
-      if (orderUpdateError) {
-        return NextResponse.json({ error: `Failed to update order: ${orderUpdateError.message}` }, { status: 500 });
-      }
-
       if (order?.user_id) {
         const { error: profileUpdateError } = await supabase
           .from("profiles")
@@ -50,7 +37,7 @@ export async function POST(req: NextRequest) {
           .eq("id", order.user_id);
           
         if (profileUpdateError) {
-          return NextResponse.json({ error: `Order approved but failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
+          return NextResponse.json({ error: `Failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
         }
       } else if (order?.email) {
         const { error: profileUpdateError } = await supabase
@@ -62,8 +49,21 @@ export async function POST(req: NextRequest) {
           .eq("email", order.email);
           
         if (profileUpdateError) {
-          return NextResponse.json({ error: `Order approved but failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
+          return NextResponse.json({ error: `Failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
         }
+      }
+
+      const { error: orderUpdateError } = await supabase
+        .from("orders")
+        .update({
+          status: "approved",
+          approved_at: new Date().toISOString(),
+          approved_by: admin.userId,
+        })
+        .eq("id", input.order_id);
+
+      if (orderUpdateError) {
+        return NextResponse.json({ error: `Profile updated but failed to update order: ${orderUpdateError.message}` }, { status: 500 });
       }
 
       await supabase.from("events").insert({

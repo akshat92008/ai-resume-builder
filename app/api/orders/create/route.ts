@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     input.email = user.email ?? input.email;
     const order = await createPaymentOrder(input);
 
-    await supabase.from("orders").insert({
+    const { error: insertError } = await supabase.from("orders").insert({
       id: order.id,
       user_id: user.id,
       email: user.email ?? order.email,
@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
       checkout_url: order.checkout_url,
       metadata: order.metadata ?? {},
     });
+
+    if (insertError) {
+      return NextResponse.json({ error: "Unable to create order. Please try again." }, { status: 500 });
+    }
+
     await supabase.from("events").insert({
       event_name: "order_created",
       metadata: { order_id: order.id, plan: order.plan, amount_inr: order.amount_inr, provider: order.provider },

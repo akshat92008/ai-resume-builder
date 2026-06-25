@@ -111,7 +111,13 @@ export default function BillingPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+                {email ? (
+                  <div className="text-sm font-medium text-slate-900">{email}</div>
+                ) : (
+                  <div className="text-sm text-red-600 font-medium">
+                    Your account email is missing. Please update your profile before payment.
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Plan or pack</Label>
