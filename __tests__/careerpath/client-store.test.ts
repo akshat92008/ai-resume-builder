@@ -29,17 +29,27 @@ describe("Client Store", () => {
     userId: "test-user",
     title: "Test Resume",
     targetRole: "Engineer",
+    mode: "build",
     version: 1,
     status: "draft",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     content: {
-      personal: {},
+      header: {
+        name: "Test User",
+        email: "test@example.com",
+        phone: "",
+        location: "",
+        links: { linkedin: "", github: "", portfolio: "" }
+      },
       summary: "Test",
       skills: [],
       experience: [],
       projects: [],
       education: [],
+      certifications: [],
+      achievements: [],
+      languages: [],
     },
   };
 

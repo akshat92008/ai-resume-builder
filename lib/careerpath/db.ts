@@ -75,7 +75,7 @@ export async function saveSession(session: BuilderSession): Promise<void> {
   const user = await getSupabaseUser();
   const payload = {
     id: session.id,
-    user_id: user?.id,
+    user_id: user?.id || null,
     mode: session.mode,
     target_role: session.targetRole,
     current_step: session.currentStep,
@@ -86,7 +86,14 @@ export async function saveSession(session: BuilderSession): Promise<void> {
     updated_at: new Date().toISOString(),
   };
 
-  await supabase.from("builder_sessions").upsert(payload, { onConflict: "id" });
+  const admin = createSupabaseAdminClient();
+  const client = admin || supabase; // Fallback to regular client if admin is missing
+
+  const { error } = await client.from("builder_sessions").upsert(payload, { onConflict: "id" });
+  if (error) {
+    console.error("[db/saveSession] Error saving session to Supabase:", error);
+    throw new Error(`Failed to save session: ${error.message}`);
+  }
 }
 
 export async function deleteSession(id: string): Promise<void> {
@@ -119,8 +126,8 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   const user = await getSupabaseUser();
   const payload = {
     id: resume.id,
-    user_id: user?.id,
-    profile_id: resume.profileId,
+    user_id: user?.id || null,
+    profile_id: null, // Avoid FK violation against auth.users
     target_role: resume.targetRole,
     mode: resume.mode,
     status: resume.status,
@@ -133,7 +140,14 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
     updated_at: new Date().toISOString(),
   };
 
-  await supabase.from("resumes").upsert(payload, { onConflict: "id" });
+  const admin = createSupabaseAdminClient();
+  const client = admin || supabase; // Fallback to regular client if admin is missing
+
+  const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
+  if (error) {
+    console.error("[db/saveServerResume] Error saving resume to Supabase:", error);
+    throw new Error(`Failed to save resume: ${error.message}`);
+  }
 }
 
 export async function getServerResume(id: string): Promise<CareerPathResume | null> {

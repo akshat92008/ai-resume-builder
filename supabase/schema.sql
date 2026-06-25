@@ -614,11 +614,14 @@ create table if not exists public.agent_runs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   resume_id uuid references public.resumes(id) on delete set null,
+  session_id uuid references public.builder_sessions(id) on delete set null,
   agent_name text not null,
   input_json jsonb default '{}'::jsonb,
   output_json jsonb default '{}'::jsonb,
   status text default 'completed',
   error text,
+  latency_ms integer,
+  model text,
   created_at timestamptz default now()
 );
 

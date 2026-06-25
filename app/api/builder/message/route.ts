@@ -27,6 +27,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (body.message.length > 20000) {
+      return NextResponse.json(
+        { error: { code: "PAYLOAD_TOO_LARGE", message: "Input is too long. Please keep it under 20,000 characters.", recoverable: true } },
+        { status: 413 },
+      );
+    }
+
     const session = await getSession(body.sessionId);
     if (!session) {
       return NextResponse.json(

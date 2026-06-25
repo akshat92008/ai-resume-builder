@@ -94,7 +94,7 @@ export function createBuilderSession(mode: BuilderMode, targetRole = ""): Builde
     userId: USER_ID,
     mode,
     targetRole: cleanTargetRole(targetRole),
-    currentStep: targetRole ? "collect_profile" : "collect_goal",
+    currentStep: mode === "improve" ? "collect_profile" : targetRole ? "collect_profile" : "collect_goal",
     profile: emptyCareerPathProfile(targetRole),
     messages: [],
     missingQuestions: [],
