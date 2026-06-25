@@ -76,7 +76,18 @@ export async function saveAdminTestimonialServer(testimonial: any) {
   if (!admin.ok) throw new Error("Unauthorized");
   const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error("No supabase client");
-  const { data, error } = await supabase.from("testimonials").upsert(testimonial).select().single();
+  
+  const validPayload = {
+    ...(testimonial.id ? { id: testimonial.id } : {}),
+    name: testimonial.name,
+    role: testimonial.role,
+    college: testimonial.college,
+    quote: testimonial.quote,
+    rating: testimonial.rating,
+    public: testimonial.public,
+  };
+
+  const { data, error } = await supabase.from("testimonials").upsert(validPayload).select().single();
   if (error) throw new Error(error.message);
   return data;
 }

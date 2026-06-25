@@ -1,9 +1,3 @@
--- Revoke execute from all to ensure it's not callable by authenticated or anon
-revoke execute on function public.approve_order_and_update_plan(text, uuid) from public, anon, authenticated;
-
--- Grant execute only to service_role
-grant execute on function public.approve_order_and_update_plan(text, uuid) to service_role;
-
 -- Recreate the function with security definer and set search_path
 create or replace function public.approve_order_and_update_plan(p_order_id text, p_admin_id uuid)
 returns jsonb
@@ -65,3 +59,9 @@ begin
   return to_jsonb(v_order);
 end;
 $$;
+
+-- Revoke execute from all to ensure it's not callable by authenticated or anon
+revoke execute on function public.approve_order_and_update_plan(text, uuid) from public, anon, authenticated;
+
+-- Grant execute only to service_role
+grant execute on function public.approve_order_and_update_plan(text, uuid) to service_role;

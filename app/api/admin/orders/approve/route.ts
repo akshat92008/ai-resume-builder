@@ -30,10 +30,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Failed to approve order: ${rpcError.message}` }, { status: 500 });
     }
 
-    await supabase.from("events").insert({
-      event_name: "payment_approved",
-      metadata: { order_id: input.order_id, plan: order?.plan },
-    });
+    try {
+      await supabase.from("events").insert({
+        event_name: "payment_approved",
+        metadata: { 
+          order_id: input.order_id, 
+          plan: order?.plan,
+          admin_id: admin.userId
+        },
+      });
+    } catch (eventError) {
+      console.error("Failed to insert approval event:", eventError);
+    }
 
     return NextResponse.json({ ok: true, status: "approved", order });
   } catch (error) {

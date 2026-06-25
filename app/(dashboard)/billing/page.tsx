@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CreditCard, IndianRupee, Upload, Loader2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select } from "@/components/ui";
 import { getManualPaymentInstructions } from "@/lib/payments/manual";
 import { manualServicePacks, pricingPlans } from "@/lib/plans";
-import { createOrder as createRepositoryOrder, getCurrentVault, getOrders, submitPaymentProof } from "@/lib/repositories";
+import { createOrder as createRepositoryOrder, getCurrentVault, getOrders, submitPaymentProof, getCurrentUser } from "@/lib/repositories";
 import type { Order, UserVault } from "@/lib/types";
 
 export default function BillingPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [vault, setVault] = useState<UserVault | null>(null);
   const [email, setEmail] = useState("");
@@ -28,10 +29,11 @@ export default function BillingPage() {
   const orderParam = searchParams.get("order");
 
   const loadBilling = useCallback(async () => {
+    const user = await getCurrentUser();
     const nextVault = await getCurrentVault();
     if (nextVault) {
       setVault(nextVault);
-      setEmail(nextVault.profile.email || "");
+      setEmail(nextVault.profile.email || user?.email || "");
     }
     const fetchedOrders = await getOrders();
     if (orderParam) {
@@ -58,8 +60,8 @@ export default function BillingPage() {
     if (!selected) return;
     try {
       setOrderError("");
-      await createRepositoryOrder({ email, plan: selected.id, amount_inr: selected.price, metadata: { source: "billing" } });
-      setOrders(await getOrders());
+      const result = await createRepositoryOrder({ email, plan: selected.id, amount_inr: selected.price, metadata: { source: "billing" } });
+      router.push(`/billing?order=${result.id}`);
       setMessage("Order created. Complete payment and submit reference.");
     } catch (err: any) {
       setOrderError(err.message || "Failed to create order.");
@@ -133,7 +135,7 @@ export default function BillingPage() {
                   ))}
                 </Select>
               </div>
-              <Button onClick={createOrder} className="w-full">
+              <Button onClick={createOrder} className="w-full" disabled={!email}>
                 <IndianRupee className="mr-2 h-4 w-4" />
                 Create order
               </Button>
