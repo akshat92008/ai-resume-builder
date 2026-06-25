@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Briefcase } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select, Textarea } from "@/components/ui";
-import { makeId } from "@/lib/utils";
+import { createEntityId } from "@/lib/utils/ids";
 import { getCurrentVault, saveJob } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 import type { Job, JobAnalysis } from "@/lib/types";
@@ -40,7 +40,7 @@ export default function NewJobPage() {
       const data = (await response.json()) as JobAnalysis & { error?: string };
       if (!response.ok || data.error) throw new Error(data.error || "Unable to analyze job.");
       const job: Job = {
-        id: makeId("job"),
+        id: createEntityId(),
         ...form,
         analysis_json: data,
         fit_score: data.fitScore,

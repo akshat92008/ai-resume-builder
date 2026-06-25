@@ -6,7 +6,7 @@ import { Plus, Save, Trash2, Loader2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, Input, Label, Progress, Select, Tabs, Textarea } from "@/components/ui";
 import { CsvInput, Field } from "@/components/vault/VaultForms";
 import { expandProjectWithAgent } from "@/lib/agents/project-expander-agent";
-import { makeId } from "@/lib/utils";
+import { createEntityId } from "@/lib/utils/ids";
 import { trackEvent } from "@/lib/events";
 import type { Achievement, Certificate, Education, Experience, Project, ProofLink, Skill, UserVault } from "@/lib/types";
 import { getCurrentVault, saveCurrentVault } from "@/lib/repositories";
@@ -26,16 +26,16 @@ type VaultListKey = "education" | "skills" | "projects" | "experiences" | "certi
 type VaultItem = Education | Skill | Project | Experience | Certificate | Achievement | ProofLink;
 
 function emptyEducation(): Education {
-  return { id: makeId("education"), institution: "", degree: "", field: "", start_year: 0, end_year: 0, score: "", coursework: [], achievements: "" };
+  return { id: createEntityId(), institution: "", degree: "", field: "", start_year: 0, end_year: 0, score: "", coursework: [], achievements: "" };
 }
 
 function emptySkill(): Skill {
-  return { id: makeId("skill"), name: "", category: "other", proficiency: "beginner", proof_links: [] };
+  return { id: createEntityId(), name: "", category: "other", proficiency: "beginner", proof_links: [] };
 }
 
 function emptyProject(): Project {
   return {
-    id: makeId("project"),
+    id: createEntityId(),
     title: "",
     short_description: "",
     problem_solved: "",
@@ -56,19 +56,19 @@ function emptyProject(): Project {
 }
 
 function emptyExperience(): Experience {
-  return { id: makeId("experience"), company: "", role: "", start_date: "", end_date: "", description: "", responsibilities: [], achievements: [], proof_links: [], certificate_url: "" };
+  return { id: createEntityId(), company: "", role: "", start_date: "", end_date: "", description: "", responsibilities: [], achievements: [], proof_links: [], certificate_url: "" };
 }
 
 function emptyCertificate(): Certificate {
-  return { id: makeId("certificate"), title: "", issuer: "", issue_date: "", credential_url: "", related_skills: [] };
+  return { id: createEntityId(), title: "", issuer: "", issue_date: "", credential_url: "", related_skills: [] };
 }
 
 function emptyAchievement(): Achievement {
-  return { id: makeId("achievement"), title: "", description: "", date: "", proof_url: "", category: "" };
+  return { id: createEntityId(), title: "", description: "", date: "", proof_url: "", category: "" };
 }
 
 function emptyProofLink(): ProofLink {
-  return { id: makeId("proof"), title: "", url: "", type: "other", notes: "" };
+  return { id: createEntityId(), title: "", url: "", type: "other", notes: "" };
 }
 
 export default function VaultPage() {
@@ -133,9 +133,9 @@ export default function VaultPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Your Career Memory</p>
-          <h1 className="mt-1 font-display text-3xl font-bold text-slate-950">This is what CareerProof Agent remembers about your career.</h1>
-          <p className="mt-2 text-slate-600">Edit anything that is wrong. The agent will keep collecting proof conversationally from the dashboard.</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Your Career Memory (Raw Data)</p>
+          <h1 className="mt-1 font-display text-3xl font-bold text-slate-950">This is the underlying database for CareerProof Agent.</h1>
+          <p className="mt-2 text-slate-600">Edit any incorrect facts manually here. The agent will read this raw data to generate your resumes and analyze your job fit.</p>
         </div>
         <div className="flex items-center gap-3">
           {saved && <Badge variant="secondary">Saved</Badge>}

@@ -157,7 +157,7 @@ export default function DashboardPage() {
               Your AI career coach is ready.
             </h1>
             <p className="mt-2 text-slate-600">
-              I help you turn your real projects, skills, and proof into recruiter-ready resumes and portfolios.
+              I am an AI agent that analyzes your Career Memory. I find proof gaps in your projects and generate recruiter-ready resumes and portfolios based on your data.
             </p>
           </div>
           <div className="w-full rounded-md border border-blue-100 bg-blue-50 p-4 lg:w-80">

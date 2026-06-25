@@ -175,3 +175,19 @@ export const projectBulletSchema = z.object({
   project: z.unknown(),
   targetRole: optionalText,
 });
+
+export const testimonialSchema = z.object({
+  id: optionalText,
+  name: z.string().trim().min(1, "Name is required"),
+  quote: z.string().trim().min(1, "Quote is required"),
+  role: optionalText,
+  college: optionalText,
+  rating: z.coerce.number().min(1).max(5).default(5),
+  public: z.boolean().default(false),
+  avatar_url: url,
+  result: optionalText,
+});
+
+export const adminTestimonialDeleteSchema = z.object({
+  id: z.string().trim().min(1),
+});

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Select } from "@/components/ui";
-import { makeId } from "@/lib/utils";
+import { createEntityId } from "@/lib/utils/ids";
 import { getCurrentVault, getJobs, saveResume } from "@/lib/repositories";
 import { trackEvent } from "@/lib/events";
 import type { JobAnalysis, Resume, ResumeContent, ResumeWarning } from "@/lib/types";
@@ -69,7 +69,7 @@ export default function NewResumePage() {
       }
       if (!response.ok || !data.content) throw new Error(data.error || "Unable to generate resume.");
       const resume: Resume = {
-        id: makeId("resume"),
+        id: createEntityId(),
         job_id: latestJob?.id ?? null,
         title: latestJob ? `${latestJob.job_title} resume` : "Proof-backed resume",
         style,

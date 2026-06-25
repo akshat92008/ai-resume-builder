@@ -3,10 +3,18 @@ import { createPaymentOrder } from "@/lib/payments";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { orderCreateSchema } from "@/lib/validations";
+import { pricingPlans, manualServicePacks } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
   try {
     const input = orderCreateSchema.parse(await req.json());
+    const knownPlan = pricingPlans.find((p) => p.id === input.plan) || manualServicePacks.find((p) => p.id === input.plan);
+    if (!knownPlan) {
+      return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 });
+    }
+    if (knownPlan.price !== input.amount_inr) {
+      return NextResponse.json({ error: "Price mismatch. Please refresh and try again." }, { status: 400 });
+    }
     const supabase = createSupabaseAdminClient();
     const userClient = await createServerSupabaseClient();
     

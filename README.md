@@ -25,11 +25,11 @@ The product helps users create a Career Vault, calculate a Resume Proof Score, a
 
 ## Tech Stack
 
-- Next.js 15 App Router
+- Next.js 16 App Router (using proxy.ts)
 - TypeScript
 - Tailwind CSS
 - Supabase Auth and Postgres
-- Supabase Row Level Security
+- Supabase Row Level Security with Secure Public Views
 - NVIDIA NIM API via `openai` SDK
 - Zod validation
 - Vercel deployment

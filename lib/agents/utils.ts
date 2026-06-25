@@ -49,7 +49,7 @@ export function profileProofItems(vault: UserVault) {
 
 export function isPlaceholderText(value?: string) {
   if (!value) return false;
-  return /project added during onboarding|add details in career vault|i build things|demo@example\.com|lorem ipsum|\[|\]/i.test(value);
+  return /project added during onboarding|add details in career vault|i build things|demo@example\.com|lorem ipsum|placeholder|todo|fake company|fake internship|fake metric|\[|\]/i.test(value);
 }
 
 export function cleanText(value?: string) {

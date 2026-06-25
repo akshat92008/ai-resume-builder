@@ -38,13 +38,13 @@ export async function getPublicVault(slug: string): Promise<Partial<UserVault> |
     { data: achievements },
     { data: proof_links },
   ] = await Promise.all([
-    supabase.from("education").select("id, institution, degree, field, start_year, end_year, score").eq("user_id", profile.id),
-    supabase.from("skills").select("id, name, category, proficiency, proof_links").eq("user_id", profile.id),
-    supabase.from("projects").select("id, title, short_description, problem_solved, tech_stack, github_url, live_url, case_study_url, screenshots_url, features, status").eq("user_id", profile.id),
-    supabase.from("experiences").select("id, company, role, start_date, end_date, description, responsibilities, achievements").eq("user_id", profile.id),
-    supabase.from("certificates").select("id, title, issuer, issue_date, credential_url").eq("user_id", profile.id),
-    supabase.from("achievements").select("id, title, description, proof_url").eq("user_id", profile.id),
-    supabase.from("proof_links").select("id, title, url, type, notes").eq("user_id", profile.id),
+    supabase.from("public_education").select("id, institution, degree, field, start_year, end_year, score, achievements").eq("user_id", profile.id),
+    supabase.from("public_skills").select("id, name, category, proficiency, proof_links").eq("user_id", profile.id),
+    supabase.from("public_projects").select("id, title, short_description, problem_solved, tech_stack, github_url, live_url, case_study_url, screenshots_url, features, status, tags").eq("user_id", profile.id),
+    supabase.from("public_experiences").select("id, company, role, start_date, end_date, description, responsibilities, achievements").eq("user_id", profile.id),
+    supabase.from("public_certificates").select("id, title, issuer, issue_date, credential_url").eq("user_id", profile.id),
+    supabase.from("public_achievements").select("id, title, description, proof_url, category").eq("user_id", profile.id),
+    supabase.from("public_proof_links").select("id, title, url, type, notes").eq("user_id", profile.id),
   ]);
 
   return {

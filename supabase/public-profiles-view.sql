@@ -5,14 +5,17 @@ create or replace view public.public_profiles as
 select 
   id, 
   full_name, 
-  city, 
-  linkedin_url, 
-  github_url, 
-  portfolio_url, 
   headline, 
   summary, 
   public_slug, 
-  portfolio_public
+  portfolio_public, 
+  target_roles, 
+  github_url, 
+  linkedin_url, 
+  portfolio_url, 
+  city, 
+  created_at, 
+  updated_at
 from public.profiles
 where portfolio_public = true;
 

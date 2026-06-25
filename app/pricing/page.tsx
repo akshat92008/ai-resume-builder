@@ -12,7 +12,7 @@ export default async function PricingPage() {
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Pricing</p>
           <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-slate-950">Start free, upgrade when you need more proof-backed applications.</h1>
           <p className="mt-4 text-lg leading-8 text-slate-600">
-            Manual payments work from day one. Stripe, Razorpay, and Lemon Squeezy can be connected later through the provider abstraction.
+            Create a free account before payment so we can activate your plan after verification. Manual payments work from day one.
           </p>
         </div>
         <div className="mt-10">

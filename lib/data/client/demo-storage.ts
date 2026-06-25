@@ -1,4 +1,4 @@
-import { makeId } from "@/lib/utils";
+import { createEntityId } from "@/lib/utils/ids";
 import type { Job, Lead, Order, Profile, Resume, Testimonial, UserVault } from "@/lib/types";
 
 // Type definitions to avoid circular dependency
@@ -90,7 +90,7 @@ export async function getJob(id: string): Promise<Job | null> {
 export async function saveJob(job: Job): Promise<Job> {
   const jobs = await getJobs();
   const existingIndex = jobs.findIndex((j) => j.id === job.id);
-  const newJob = { ...job, user_id: DEMO_USER_ID, id: job.id || makeId("job") };
+  const newJob = { ...job, user_id: DEMO_USER_ID, id: job.id || createEntityId() };
   if (existingIndex >= 0) {
     jobs[existingIndex] = newJob;
   } else {
@@ -118,7 +118,7 @@ export async function getResume(id: string): Promise<Resume | null> {
 export async function saveResume(resume: Resume): Promise<Resume> {
   const resumes = await getResumes();
   const existingIndex = resumes.findIndex((r) => r.id === resume.id);
-  const newResume = { ...resume, user_id: DEMO_USER_ID, id: resume.id || makeId("resume") };
+  const newResume = { ...resume, user_id: DEMO_USER_ID, id: resume.id || createEntityId() };
   if (existingIndex >= 0) {
     resumes[existingIndex] = newResume;
   } else {
@@ -180,7 +180,7 @@ export async function submitPaymentProof(input: PaymentProofInput): Promise<Orde
 
 export async function saveLead(lead: Lead): Promise<Lead> {
   const leads = getLocal<Lead[]>("demo_leads", []);
-  const newLead = { ...lead, id: makeId("lead"), status: "new" as const, created_at: new Date().toISOString() };
+  const newLead = { ...lead, id: createEntityId(), status: "new" as const, created_at: new Date().toISOString() };
   leads.unshift(newLead);
   setLocal("demo_leads", leads);
   return delay(200, newLead);
@@ -286,7 +286,7 @@ export async function getAdminTestimonials(): Promise<Testimonial[]> {
 export async function saveAdminTestimonial(testimonial: Omit<Testimonial, "id"> & { id?: string }): Promise<Testimonial> {
   const tests = getLocal<Testimonial[]>("demo_testimonials", []);
   const index = tests.findIndex((t) => t.id === testimonial.id);
-  const newT = { ...testimonial, id: testimonial.id || makeId("test"), created_at: new Date().toISOString() };
+  const newT = { ...testimonial, id: testimonial.id || createEntityId(), created_at: new Date().toISOString() };
   if (index >= 0) {
     tests[index] = newT;
   } else {

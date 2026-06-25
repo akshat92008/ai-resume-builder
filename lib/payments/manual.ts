@@ -1,5 +1,5 @@
 import type { Order } from "../types";
-import { makeId } from "../utils";
+import { createEntityId } from "../utils/ids";
 
 export function createManualOrder(input: {
   email: string;
@@ -8,7 +8,7 @@ export function createManualOrder(input: {
   metadata?: Record<string, unknown>;
 }): Order {
   return {
-    id: makeId("order"),
+    id: createEntityId(),
     email: input.email,
     plan: input.plan,
     amount_inr: input.amount_inr,

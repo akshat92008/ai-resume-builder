@@ -1,6 +1,6 @@
 import type { Project, ProofLink, Skill, UserVault } from "@/lib/types";
 import type { SuggestedAction, VaultUpdate } from "@/lib/agents/types";
-import { makeId } from "@/lib/utils";
+import { createEntityId } from "@/lib/utils/ids";
 import { cleanText, unique } from "@/lib/agents/utils";
 
 function mergeUnique(existing: string[], incoming?: string[]) {
@@ -9,7 +9,7 @@ function mergeUnique(existing: string[], incoming?: string[]) {
 
 function emptyProject(title: string): Project {
   return {
-    id: makeId("project"),
+    id: createEntityId(),
     title,
     short_description: "",
     problem_solved: "",
@@ -45,7 +45,7 @@ export function applyVaultUpdates(vault: UserVault, updates: VaultUpdate[]): Use
     if (update.type === "skill") {
       const existingIndex = current.skills.findIndex((skill) => skill.name.toLowerCase() === update.data.name.toLowerCase());
       const nextSkill: Skill = {
-        id: current.skills[existingIndex]?.id ?? makeId("skill"),
+        id: current.skills[existingIndex]?.id ?? createEntityId(),
         name: update.data.name,
         category: update.data.category ?? current.skills[existingIndex]?.category ?? "other",
         proficiency: update.data.proficiency ?? current.skills[existingIndex]?.proficiency ?? "beginner",
@@ -60,7 +60,7 @@ export function applyVaultUpdates(vault: UserVault, updates: VaultUpdate[]): Use
     if (update.type === "education") {
       const existing = current.education[0];
       const nextEducation = {
-        id: existing?.id ?? makeId("education"),
+        id: existing?.id ?? createEntityId(),
         institution: existing?.institution ?? "",
         degree: update.data.degree || existing?.degree || "",
         field: update.data.field ?? existing?.field ?? "",
@@ -94,7 +94,7 @@ export function applyVaultUpdates(vault: UserVault, updates: VaultUpdate[]): Use
     }
 
     const proof: ProofLink = {
-      id: makeId("proof"),
+      id: createEntityId(),
       title: update.data.title ?? "Proof link",
       url: update.data.url,
       type: update.data.type ?? "other",

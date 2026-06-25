@@ -362,32 +362,69 @@ create policy "profiles owner read write" on public.profiles for all using (auth
 create policy "profiles admin manage" on public.profiles for all using (public.is_admin()) with check (public.is_admin());
 
 create or replace view public.public_profiles as
-  select id, full_name, headline, summary, linkedin_url, github_url, portfolio_url, target_roles, city, portfolio_public, public_slug
+  select id, full_name, headline, summary, public_slug, portfolio_public, target_roles, github_url, linkedin_url, portfolio_url, city, created_at, updated_at
   from public.profiles
   where portfolio_public = true;
 
 grant select on public.public_profiles to anon, authenticated;
 
 create policy "education owner manage" on public.education for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "education public read" on public.education for select using (public.is_public_profile(user_id));
 
 create policy "skills owner manage" on public.skills for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "skills public read" on public.skills for select using (public.is_public_profile(user_id));
 
 create policy "projects owner manage" on public.projects for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "projects public read" on public.projects for select using (public.is_public_profile(user_id));
 
 create policy "experiences owner manage" on public.experiences for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "experiences public read" on public.experiences for select using (public.is_public_profile(user_id));
 
 create policy "certificates owner manage" on public.certificates for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "certificates public read" on public.certificates for select using (public.is_public_profile(user_id));
 
 create policy "achievements owner manage" on public.achievements for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "achievements public read" on public.achievements for select using (public.is_public_profile(user_id));
 
 create policy "proof links owner manage" on public.proof_links for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "proof links public read" on public.proof_links for select using (public.is_public_profile(user_id));
+
+-- Public Views for Child Tables
+create or replace view public.public_education as
+  select id, user_id, institution, degree, field, start_year, end_year, score, achievements, created_at, updated_at
+  from public.education
+  where user_id in (select id from public.public_profiles);
+
+create or replace view public.public_skills as
+  select id, user_id, name, category, proficiency, proof_links, created_at, updated_at
+  from public.skills
+  where user_id in (select id from public.public_profiles);
+
+create or replace view public.public_projects as
+  select id, user_id, title, short_description, problem_solved, tech_stack, features, impact, github_url, live_url, case_study_url, screenshots_url, status, tags, created_at, updated_at
+  from public.projects
+  where user_id in (select id from public.public_profiles);
+
+create or replace view public.public_experiences as
+  select id, user_id, company, role, start_date, end_date, description, responsibilities, achievements, created_at, updated_at
+  from public.experiences
+  where user_id in (select id from public.public_profiles);
+
+create or replace view public.public_certificates as
+  select id, user_id, title, issuer, issue_date, credential_url, created_at, updated_at
+  from public.certificates
+  where user_id in (select id from public.public_profiles);
+
+create or replace view public.public_achievements as
+  select id, user_id, title, description, date, proof_url, category, created_at, updated_at
+  from public.achievements
+  where user_id in (select id from public.public_profiles);
+
+create or replace view public.public_proof_links as
+  select id, user_id, title, url, type, notes, created_at
+  from public.proof_links
+  where user_id in (select id from public.public_profiles);
+
+grant select on public.public_education to anon, authenticated;
+grant select on public.public_skills to anon, authenticated;
+grant select on public.public_projects to anon, authenticated;
+grant select on public.public_experiences to anon, authenticated;
+grant select on public.public_certificates to anon, authenticated;
+grant select on public.public_achievements to anon, authenticated;
+grant select on public.public_proof_links to anon, authenticated;
 
 create policy "jobs owner manage" on public.jobs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "resumes owner manage" on public.resumes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

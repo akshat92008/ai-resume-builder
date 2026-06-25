@@ -22,7 +22,7 @@ export function PricingCards({ userEmail }: { userEmail?: string }) {
       return;
     }
     if (!userEmail) {
-      router.push(`/login?next=/pricing`);
+      router.push(`/signup?next=/pricing&plan=${plan}`);
       return;
     }
     const emailToUse = userEmail;
