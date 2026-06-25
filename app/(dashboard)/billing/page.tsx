@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CreditCard, IndianRupee, Upload, Loader2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select } from "@/components/ui";
@@ -9,7 +9,7 @@ import { manualServicePacks, pricingPlans } from "@/lib/plans";
 import { createOrder as createRepositoryOrder, getCurrentVault, getOrders, submitPaymentProof, getCurrentUser } from "@/lib/repositories";
 import type { Order, UserVault } from "@/lib/types";
 
-export default function BillingPage() {
+function BillingContent() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [vault, setVault] = useState<UserVault | null>(null);
@@ -201,5 +201,19 @@ export default function BillingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      }
+    >
+      <BillingContent />
+    </Suspense>
   );
 }
