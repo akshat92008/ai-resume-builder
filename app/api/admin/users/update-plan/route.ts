@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ user: data });
-  } catch {
-    return NextResponse.json({ error: "Unable to update user plan." }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update user plan." }, { status: 400 });
   }
 }

@@ -17,6 +17,6 @@ export async function POST(req: NextRequest) {
     if (error.name === 'ZodError') {
       return NextResponse.json({ success: false, error: "Validation failed." }, { status: 400 });
     }
-    return NextResponse.json({ success: false, error: "Unable to save testimonial." }, { status: 400 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to save testimonial." }, { status: 400 });
   }
 }

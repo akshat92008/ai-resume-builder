@@ -25,12 +25,12 @@ The product helps users create a Career Vault, calculate a Resume Proof Score, a
 
 ## Tech Stack
 
-- Next.js 16 App Router (using proxy.ts)
+- Next.js 16 App Router (using proxy.ts / middleware)
 - TypeScript
 - Tailwind CSS
 - Supabase Auth and Postgres
-- Supabase Row Level Security with Secure Public Views
-- NVIDIA NIM API via `openai` SDK
+- Supabase Row Level Security with Secure Public Views (Public portfolio data is served through safe public views)
+- NVIDIA NIM API via `openai` SDK (Optional for enhanced AI)
 - Zod validation
 - Vercel deployment
 - System font stack only
@@ -45,7 +45,11 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Public pages and the demo dashboard work without Supabase or NVIDIA NIM. Add env variables when you are ready for production persistence and AI calls.
+**Important**:
+- Supabase env vars are strictly required for production persistence.
+- `NVIDIA_API_KEY` or an equivalent AI provider key is optional for enhanced AI features. Without it, the app falls back to a deterministic/rule-based mode, but quality may be lower.
+- It is highly recommended that generated resumes are manually reviewed by users to ensure accuracy.
+- A controlled beta is strongly recommended before a big public launch to gather feedback.
 
 ## Environment Variables
 
@@ -56,21 +60,12 @@ NEXT_PUBLIC_APP_URL=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-NVIDIA_API_KEY=
 ```
 
 Optional monetization:
 
 ```bash
 NEXT_PUBLIC_PAYMENT_MODE=manual
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-RAZORPAY_KEY_ID=
-RAZORPAY_KEY_SECRET=
-LEMONSQUEEZY_API_KEY=
-LEMONSQUEEZY_STORE_ID=
-LEMONSQUEEZY_WEBHOOK_SECRET=
 ```
 
 Manual payment:
@@ -125,14 +120,15 @@ NEXT_PUBLIC_UPI_ID=yourname@upi
 NEXT_PUBLIC_PAYMENT_WHATSAPP=919999999999
 ```
 
-Manual flow:
+Manual payment flow:
 
-1. User creates an order from `/pricing` or `/billing`.
-2. App shows UPI/WhatsApp instructions.
-3. User submits payment reference and screenshot URL.
-4. Admin opens `/admin/orders`.
-5. Admin approves the order.
-6. User plan updates in demo mode and in Supabase when configured.
+1. User must be logged in.
+2. User creates an order from `/pricing` or `/billing`.
+3. App shows UPI/WhatsApp instructions.
+4. User submits payment reference and screenshot URL (billing proof submission).
+5. Admin opens `/admin/orders`.
+6. Admin approves the order.
+7. User plan updates in demo mode and in Supabase when configured.
 
 Stripe, Razorpay, and Lemon Squeezy files are present under `lib/payments/`. They currently return checkout stubs unless keys are configured. Wire product IDs or checkout APIs there when ready.
 

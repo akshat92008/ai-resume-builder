@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     if (order.status === "approved" || order.status === "rejected") {
       return NextResponse.json({ error: `Cannot reject order with status: ${order.status}` }, { status: 400 });
     }
-    await supabase
+    const { error: orderUpdateError } = await supabase
       .from("orders")
       .update({
         status: "rejected",
@@ -29,13 +29,17 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", input.order_id);
 
+    if (orderUpdateError) {
+      return NextResponse.json({ error: `Failed to reject order: ${orderUpdateError.message}` }, { status: 500 });
+    }
+
     await supabase.from("events").insert({
       event_name: "payment_rejected",
       metadata: { order_id: input.order_id, plan: order?.plan, admin_id: admin.userId },
     });
 
     return NextResponse.json({ ok: true, status: "rejected" });
-  } catch {
-    return NextResponse.json({ error: "Unable to reject order." }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to reject order." }, { status: 400 });
   }
 }

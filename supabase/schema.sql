@@ -135,7 +135,8 @@ create table if not exists public.proof_links (
   related_type text,
   related_id uuid,
   notes text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 create table if not exists public.jobs (
@@ -414,7 +415,7 @@ create or replace view public.public_achievements as
   where user_id in (select id from public.public_profiles);
 
 create or replace view public.public_proof_links as
-  select id, user_id, title, url, type, created_at
+  select id, user_id, title, url, type, created_at, updated_at
   from public.proof_links
   where user_id in (select id from public.public_profiles);
 
@@ -472,6 +473,7 @@ create trigger projects_updated_at before update on public.projects for each row
 create trigger experiences_updated_at before update on public.experiences for each row execute procedure public.set_updated_at();
 create trigger certificates_updated_at before update on public.certificates for each row execute procedure public.set_updated_at();
 create trigger achievements_updated_at before update on public.achievements for each row execute procedure public.set_updated_at();
+create trigger proof_links_updated_at before update on public.proof_links for each row execute procedure public.set_updated_at();
 create trigger jobs_updated_at before update on public.jobs for each row execute procedure public.set_updated_at();
 create trigger resumes_updated_at before update on public.resumes for each row execute procedure public.set_updated_at();
 create trigger cover_letters_updated_at before update on public.cover_letters for each row execute procedure public.set_updated_at();

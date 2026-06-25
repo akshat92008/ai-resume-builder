@@ -18,6 +18,7 @@ export default function BillingPage() {
   const [proofUrl, setProofUrl] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [orderError, setOrderError] = useState("");
 
   const instructions = getManualPaymentInstructions();
   const paidOptions = [...pricingPlans.filter((item) => item.id !== "free" && item.id !== "college"), ...manualServicePacks.map((pack) => ({ id: pack.id, name: pack.name, price: pack.price }))];
@@ -38,6 +39,8 @@ export default function BillingPage() {
       if (selectedOrderIndex > -1) {
         const [selected] = fetchedOrders.splice(selectedOrderIndex, 1);
         fetchedOrders.unshift(selected);
+      } else {
+        setOrderError("Order not found or access denied. You can only view orders created by your account.");
       }
     }
     setOrders(fetchedOrders);
@@ -153,11 +156,12 @@ export default function BillingPage() {
               <CardTitle>Orders</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {orderError && <Alert variant="error">{orderError}</Alert>}
               {orders.length === 0 ? (
                 <div className="rounded-lg border border-dashed bg-slate-50 p-8 text-center text-sm text-slate-500">No orders yet.</div>
               ) : (
                 orders.map((order) => (
-                  <div key={order.id} className="rounded-lg border bg-white p-4">
+                  <div key={order.id} className={`rounded-lg border p-4 ${order.id === orderParam ? 'ring-2 ring-blue-500 bg-blue-50' : 'bg-white'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="font-semibold">{order.plan}</div>

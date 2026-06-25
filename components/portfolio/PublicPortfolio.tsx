@@ -30,12 +30,14 @@ export function PublicPortfolio({ vault, sample = false }: { vault: UserVault; s
           <div className="font-display text-lg font-bold text-slate-950">{vault.profile.full_name}</div>
           <div className="flex items-center gap-2">
             {sample && <Badge variant="secondary">Sample portfolio</Badge>}
-            <Button size="sm" asChild>
-              <a href={`mailto:${vault.profile.email}`}>
-                <Mail className="mr-2 h-4 w-4" />
-                Contact
-              </a>
-            </Button>
+            {vault.profile.email && (
+              <Button size="sm" asChild>
+                <a href={`mailto:${vault.profile.email}`}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Contact
+                </a>
+              </Button>
+            )}
           </div>
         </div>
       </header>

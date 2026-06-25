@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Cannot approve order with status: ${order.status}` }, { status: 400 });
       }
 
-      await supabase
+      const { error: orderUpdateError } = await supabase
         .from("orders")
         .update({
           status: "approved",
@@ -36,22 +36,34 @@ export async function POST(req: NextRequest) {
         })
         .eq("id", input.order_id);
 
+      if (orderUpdateError) {
+        return NextResponse.json({ error: `Failed to update order: ${orderUpdateError.message}` }, { status: 500 });
+      }
+
       if (order?.user_id) {
-        await supabase
+        const { error: profileUpdateError } = await supabase
           .from("profiles")
           .update({
             plan: order.plan,
             plan_status: "active",
           })
           .eq("id", order.user_id);
+          
+        if (profileUpdateError) {
+          return NextResponse.json({ error: `Order approved but failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
+        }
       } else if (order?.email) {
-        await supabase
+        const { error: profileUpdateError } = await supabase
           .from("profiles")
           .update({
             plan: order.plan,
             plan_status: "active",
           })
           .eq("email", order.email);
+          
+        if (profileUpdateError) {
+          return NextResponse.json({ error: `Order approved but failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
+        }
       }
 
       await supabase.from("events").insert({
@@ -61,7 +73,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, status: "approved" });
-  } catch {
-    return NextResponse.json({ error: "Unable to approve order." }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to approve order." }, { status: 400 });
   }
 }
