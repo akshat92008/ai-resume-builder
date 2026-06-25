@@ -11,68 +11,31 @@ export async function POST(req: NextRequest) {
 
     const supabase = createSupabaseAdminClient();
 
-    if (supabase) {
-      const { data: order } = await supabase
-        .from("orders")
-        .select("id,email,plan,user_id,status")
-        .eq("id", input.order_id)
-        .single();
-
-      if (!order) {
-        return NextResponse.json({ error: "Order not found." }, { status: 404 });
-      }
-
-      const allowedStatuses = ["pending", "created", "submitted"];
-      if (!allowedStatuses.includes(order.status)) {
-        return NextResponse.json({ error: `Cannot approve order with status: ${order.status}` }, { status: 400 });
-      }
-
-      if (order?.user_id) {
-        const { error: profileUpdateError } = await supabase
-          .from("profiles")
-          .update({
-            plan: order.plan,
-            plan_status: "active",
-          })
-          .eq("id", order.user_id);
-          
-        if (profileUpdateError) {
-          return NextResponse.json({ error: `Failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
-        }
-      } else if (order?.email) {
-        const { error: profileUpdateError } = await supabase
-          .from("profiles")
-          .update({
-            plan: order.plan,
-            plan_status: "active",
-          })
-          .eq("email", order.email);
-          
-        if (profileUpdateError) {
-          return NextResponse.json({ error: `Failed to update profile plan: ${profileUpdateError.message}` }, { status: 500 });
-        }
-      }
-
-      const { error: orderUpdateError } = await supabase
-        .from("orders")
-        .update({
-          status: "approved",
-          approved_at: new Date().toISOString(),
-          approved_by: admin.userId,
-        })
-        .eq("id", input.order_id);
-
-      if (orderUpdateError) {
-        return NextResponse.json({ error: `Profile updated but failed to update order: ${orderUpdateError.message}` }, { status: 500 });
-      }
-
-      await supabase.from("events").insert({
-        event_name: "payment_approved",
-        metadata: { order_id: input.order_id, plan: order?.plan },
-      });
+    if (!supabase) {
+      return NextResponse.json({ error: "Supabase admin is not configured." }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, status: "approved" });
+    const { data: order, error: rpcError } = await supabase.rpc("approve_order_and_update_plan", {
+      p_order_id: input.order_id,
+      p_admin_id: admin.userId,
+    });
+
+    if (rpcError) {
+      if (rpcError.message.includes("Order not found")) {
+        return NextResponse.json({ error: "Order not found." }, { status: 404 });
+      }
+      if (rpcError.message.includes("Cannot approve order") || rpcError.message.includes("Invalid order status") || rpcError.message.includes("Order must belong to a user")) {
+        return NextResponse.json({ error: rpcError.message }, { status: 400 });
+      }
+      return NextResponse.json({ error: `Failed to approve order: ${rpcError.message}` }, { status: 500 });
+    }
+
+    await supabase.from("events").insert({
+      event_name: "payment_approved",
+      metadata: { order_id: input.order_id, plan: order?.plan },
+    });
+
+    return NextResponse.json({ ok: true, status: "approved", order });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to approve order." }, { status: 400 });
   }

@@ -34,7 +34,7 @@ export default async function LandingPage() {
   if (supabase) {
     const { data } = await supabase
       .from('testimonials')
-      .select('*')
+      .select("id,name,role,college,quote,rating,public,created_at")
       .eq('public', true)
       .order('created_at', { ascending: false })
       .limit(4);

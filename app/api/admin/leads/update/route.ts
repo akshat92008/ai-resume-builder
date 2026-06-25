@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
       .update({ status: input.status })
       .eq("id", input.lead_id)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "Lead not found." }, { status: 404 });
 
     await supabase.from("events").insert({
       event_name: "lead_status_updated",

@@ -255,7 +255,7 @@ export type Lead = {
   created_at?: string;
 };
 
-export type OrderStatus = "pending" | "submitted" | "approved" | "rejected" | "failed";
+export type OrderStatus = "created" | "pending" | "submitted" | "approved" | "rejected" | "cancelled" | "failed";
 export type PaymentProvider = "manual" | "stripe" | "razorpay" | "lemonsqueezy";
 
 export type Order = {

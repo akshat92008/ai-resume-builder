@@ -134,7 +134,7 @@ export const leadSchema = z.object({
 });
 
 export const orderCreateSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().email().optional(),
   plan: z.string().trim().min(1),
   amount_inr: z.coerce.number().int().min(0),
   provider: z.enum(["manual", "stripe", "razorpay", "lemonsqueezy"]).optional(),
@@ -143,8 +143,8 @@ export const orderCreateSchema = z.object({
 
 export const orderProofSchema = z.object({
   order_id: z.string().trim().min(1),
-  payment_reference: z.string().trim().min(2),
-  payment_proof_url: url,
+  payment_reference: z.string().trim().min(4).max(120),
+  payment_proof_url: url.optional().or(z.literal("")),
 });
 
 export const adminApproveOrderSchema = z.object({

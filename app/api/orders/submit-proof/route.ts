@@ -31,19 +31,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
     }
 
-    const allowedStatuses = ["pending", "created", "submitted"];
+    const allowedStatuses = ["created", "pending", "submitted"];
     if (!allowedStatuses.includes(order.status)) {
       return NextResponse.json({ error: `Cannot submit proof for order with status: ${order.status}` }, { status: 400 });
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const { data: updatedOrder, error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
         payment_reference: input.payment_reference,
         payment_proof_url: input.payment_proof_url,
         status: "submitted",
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", input.order_id);
+      .eq("id", input.order_id)
+      .select()
+      .single();
 
     if (updateError) {
       return NextResponse.json({ error: "Failed to update payment proof." }, { status: 500 });
@@ -54,7 +57,7 @@ export async function POST(req: NextRequest) {
       metadata: { order_id: input.order_id },
     });
 
-    return NextResponse.json({ ok: true, status: "submitted" });
+    return NextResponse.json({ ok: true, status: "submitted", order: updatedOrder });
   } catch {
     return NextResponse.json({ error: "Unable to submit payment proof." }, { status: 400 });
   }

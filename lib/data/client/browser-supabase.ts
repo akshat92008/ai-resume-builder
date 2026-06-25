@@ -222,8 +222,9 @@ export async function submitPaymentProof(input: PaymentProofInput): Promise<Orde
   const response = await fetch("/api/orders/submit-proof", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
   });
-  if (!response.ok) throw new Error("Unable to submit payment proof.");
-  return getOrder(input.order_id);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Unable to submit payment proof.");
+  return data.order || getOrder(input.order_id);
 }
 
 export async function saveLead(lead: Lead): Promise<Lead> {

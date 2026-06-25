@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
       .update({ plan: input.plan, plan_status: "active" })
       .eq("id", input.user_id)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
     await supabase.from("events").insert({
       event_name: "admin_user_plan_updated",

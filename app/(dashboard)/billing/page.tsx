@@ -57,21 +57,27 @@ export default function BillingPage() {
   async function createOrder() {
     if (!selected) return;
     try {
+      setOrderError("");
       await createRepositoryOrder({ email, plan: selected.id, amount_inr: selected.price, metadata: { source: "billing" } });
       setOrders(await getOrders());
       setMessage("Order created. Complete payment and submit reference.");
-    } catch {
-      setMessage("Failed to create order.");
+    } catch (err: any) {
+      setOrderError(err.message || "Failed to create order.");
     }
   }
 
   async function submitProof(order: Order) {
     try {
-      await submitPaymentProof({ order_id: order.id, payment_reference: reference, payment_proof_url: proofUrl });
-      setOrders(await getOrders());
-      setMessage("Payment proof submitted. Admin can approve it from /admin/orders.");
-    } catch {
-      setMessage("Failed to submit proof.");
+      setOrderError("");
+      const result = await submitPaymentProof({ order_id: order.id, payment_reference: reference, payment_proof_url: proofUrl });
+      if (result) {
+        setOrders(orders.map(o => o.id === order.id ? result : o));
+      } else {
+        setOrders(await getOrders());
+      }
+      setMessage("Payment proof submitted. Waiting for admin approval.");
+    } catch (err: any) {
+      setOrderError(err.message || "Failed to submit proof.");
     }
   }
 

@@ -30,13 +30,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You must be logged in to create an order." }, { status: 401 });
     }
 
-    input.email = user.email ?? input.email;
-    const order = await createPaymentOrder(input);
+    let finalEmail = user.email;
+    if (!finalEmail) {
+      const { data: profile } = await supabase.from("profiles").select("email").eq("id", user.id).single();
+      finalEmail = profile?.email;
+    }
+
+    if (!finalEmail) {
+      return NextResponse.json({ error: "Your account email is missing. Please update your profile before payment." }, { status: 400 });
+    }
+
+    const safeInput = {
+      ...input,
+      email: finalEmail,
+    };
+    const order = await createPaymentOrder(safeInput);
 
     const { error: insertError } = await supabase.from("orders").insert({
       id: order.id,
       user_id: user.id,
-      email: user.email ?? order.email,
+      email: finalEmail,
       plan: order.plan,
       amount_inr: order.amount_inr,
       currency: order.currency,

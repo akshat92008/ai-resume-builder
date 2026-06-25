@@ -46,12 +46,15 @@ npm run dev
 Open `http://localhost:3000`.
 
 **Important**:
-- Supabase env vars are strictly required for production persistence. `supabase/schema.sql` is canonical for a fresh setup. If you are updating an existing Supabase project, make sure to run the latest hardening migration in `supabase/migrations`.
-- Public portfolio data is served through safe public views (`public_profiles` and its child views) to ensure privacy.
-- `NVIDIA_API_KEY` or an equivalent AI provider key is optional for enhanced AI features. Without it, the app falls back to a deterministic/rule-based mode, but quality may be lower.
-- Manual paid orders require the user to be logged in. Manual payment proof must be admin-approved before the profile plan is activated.
-- It is highly recommended that generated resumes are manually reviewed by users to ensure accuracy.
-- A controlled beta is strongly recommended before a big public launch to gather feedback.
+- `supabase/schema.sql` is canonical for a fresh setup.
+- Existing Supabase projects must run migrations in order, especially `market_ready_hardening` and `approval_transaction`. Older migrations are superseded by the final market-ready hardening migration.
+- Supabase env vars are required for production persistence.
+- `NVIDIA_API_KEY` is optional for enhanced AI.
+- Without an AI key, deterministic fallback works but quality is lower.
+- Manual paid orders require login.
+- Payment proof requires admin approval before plan activation.
+- Public portfolio data uses safe public views.
+- Do a controlled private beta before broad public launch.
 
 ## Environment Variables
 
@@ -219,23 +222,15 @@ API:
 ## Launch Checklist
 
 - schema applied
-- hardening migration applied if using existing Supabase
+- hardening migration applied
+- approval transaction migration applied
 - admin user created
-- order create tested
+- pricing → signup → billing tested
 - payment proof tested
 - admin approval tested
+- user plan activation tested
 - portfolio privacy tested
-- Supabase connected
-- NVIDIA NIM connected (optional)
-- Payment mode set
-- UPI/payment configured
-- Pricing configured
-- Portfolio sample works
-- Proof score works
-- Resume generation works
-- PDF print works
-- Landing CTAs work
-- Lead capture works
+- real resume quality tested
 
 ## Known Limitations
 
