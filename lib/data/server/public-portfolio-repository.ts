@@ -5,11 +5,20 @@ export async function getPublicVault(slug: string): Promise<Partial<UserVault> |
   const supabase = await createServerSupabaseClient();
   if (!supabase) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
+  let { data: profile } = await supabase
+    .from("public_profiles")
     .select("id, full_name, headline, summary, linkedin_url, github_url, portfolio_url, target_roles, city, portfolio_public, public_slug")
     .eq("public_slug", slug)
     .single();
+
+  if (!profile) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, headline, summary, linkedin_url, github_url, portfolio_url, target_roles, city, portfolio_public, public_slug")
+      .eq("public_slug", slug)
+      .single();
+    profile = data;
+  }
 
   if (!profile) return null;
 

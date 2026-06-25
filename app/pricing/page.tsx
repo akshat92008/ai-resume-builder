@@ -1,6 +1,6 @@
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { PricingCards } from "@/components/pricing/PricingCards";
-import { getCurrentUser } from "@/lib/repositories";
+import { getCurrentUser } from "@/lib/data/server/server-repository";
 
 export default async function PricingPage() {
   const user = await getCurrentUser();

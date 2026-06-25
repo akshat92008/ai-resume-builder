@@ -58,16 +58,16 @@ export default function DashboardPage() {
       
       if (!jobTitle) {
         const firstLine = message.split("\n")[0]?.trim();
-        if (firstLine && firstLine.length < 50 && firstLine.length > 3) {
-          if (firstLine.includes(" at ")) {
-            const parts = firstLine.split(" at ");
-            jobTitle = parts[0] || "Unknown Job";
-            company = parts[1] || company;
+        if (firstLine && firstLine.length < 80 && firstLine.length > 3) {
+          const atIndex = firstLine.toLowerCase().lastIndexOf(" at ");
+          if (atIndex !== -1) {
+            jobTitle = firstLine.substring(0, atIndex).replace(/^(i am applying for|applying to|role of|job of)\s+/i, "").trim() || "Target Role";
+            company = firstLine.substring(atIndex + 4).trim() || company;
           } else {
-            jobTitle = firstLine;
+            jobTitle = firstLine.replace(/^(i am applying for|applying to|role of|job of)\s+/i, "").trim();
           }
         } else {
-          jobTitle = "Unknown Job";
+          jobTitle = "Target Role";
         }
       }
 

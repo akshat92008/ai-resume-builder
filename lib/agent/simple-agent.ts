@@ -26,7 +26,7 @@ function responseForIntent(output: ReturnType<typeof runCareerProofAgent>, updat
   }
   if (output.intent === "build_resume") {
     if (output.blockingIssues.length) {
-      return "I generated a thin draft, but your resume is very weak. Please add more projects and skills to your Career Memory before applying.";
+      return "Your resume will be weak if I generate it now. Please add more projects and skills to your Career Memory before generating, or type 'Generate draft anyway'.";
     }
     return output.resume
       ? "I generated a proof-backed resume draft and ran a resume quality check."
@@ -119,7 +119,7 @@ function cardsForOutput(output: ReturnType<typeof runCareerProofAgent>, input: A
 function suggestedActions(output: ReturnType<typeof runCareerProofAgent>): SuggestedAction[] {
   const actions = defaultSuggestedActions();
   if (output.intent === "build_resume" && !output.vaultReport.canGenerateResume) {
-    actions.unshift({ label: "Generate Draft Anyway", action: "Generate Draft Anyway" });
+    actions.unshift({ label: "Generate draft anyway", action: "Generate draft anyway" });
   }
   if (output.vaultReport.canGenerateResume) {
     actions.unshift({ label: "Ready to generate", action: "generate_resume", href: "/resumes/new" });

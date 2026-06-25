@@ -41,7 +41,8 @@ export function runCareerProofAgent(input: CareerProofAgentInput): CareerProofAg
 
   const shouldGenerateResume = intent === "build_resume";
   const canGenerate = vaultReport.canGenerateResume;
-  const resume = shouldGenerateResume
+  const actuallyGenerate = shouldGenerateResume && (canGenerate || input.forceResumeGeneration);
+  const resume = actuallyGenerate
     ? generateResumeWithAgent(input.vault, jobFit ?? input.currentJob?.analysis_json ?? null, proofAudit, input.resumeStyle)
     : undefined;
   const resumeCritic = resume ? critiqueResumeWithAgent(resume.content, input.vault, auditProof(input.vault, resume.content, jobFit ?? null)) : undefined;
@@ -55,8 +56,11 @@ export function runCareerProofAgent(input: CareerProofAgentInput): CareerProofAg
     plan: input.vault.profile.plan,
   });
 
-  if (shouldGenerateResume && !canGenerate) {
+  if (shouldGenerateResume && !canGenerate && actuallyGenerate) {
     warnings.push("I generated a thin draft, but your resume is very weak. Please add more projects and skills to your Career Memory before applying.");
+  }
+  if (shouldGenerateResume && !canGenerate && !actuallyGenerate) {
+    warnings.push("Your resume will be weak if I generate it now. Please add more projects and skills to your Career Memory before generating, or type 'Generate draft anyway'.");
   }
   if (resumeCritic && resumeCritic.resumeQualityScore < 60) {
     warnings.push("This resume is usable as a draft, but not yet recruiter-ready.");

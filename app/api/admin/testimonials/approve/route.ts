@@ -1,8 +1,13 @@
+import { requireAdminUser } from "@/lib/supabase/admin-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { saveAdminTestimonialServer } from "@/lib/data/admin/admin-actions";
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await requireAdminUser();
+    if (!admin.ok) {
+      return NextResponse.json({ error: admin.error }, { status: admin.status });
+    }
     const { id } = await req.json();
     if (!id) {
       return NextResponse.json({ error: "Missing testimonial id" }, { status: 400 });
