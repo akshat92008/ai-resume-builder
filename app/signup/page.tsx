@@ -41,9 +41,14 @@ function SignupForm() {
       setLoading(false);
       return;
     }
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+    if (!data.session) {
+      setMessage("Check your email to confirm your account.");
       setLoading(false);
       return;
     }

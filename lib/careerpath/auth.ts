@@ -17,3 +17,19 @@ export async function requireAiAccess() {
 
   return { ok: true, user };
 }
+
+export function requireProductionPersistence() {
+  if (process.env.NODE_ENV === "production" && !isServerSupabaseConfigured) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "SUPABASE_REQUIRED",
+          message: "Production requires Supabase configuration.",
+          recoverable: false
+        }
+      },
+      { status: 500 }
+    );
+  }
+  return null;
+}

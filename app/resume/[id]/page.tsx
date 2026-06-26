@@ -30,15 +30,7 @@ export default function ResumeDetailPage() {
 
   useEffect(() => {
     async function loadResume() {
-      // Try localStorage first (fast)
-      const local = getCareerPathResume(params.id);
-      if (local) {
-        setResume(local);
-        setLoading(false);
-        return;
-      }
-
-      // Try server
+      // Try server first (ensures fresh data if logged in)
       try {
         const response = await fetch(`/api/resume/${params.id}`);
         if (response.ok) {
@@ -52,6 +44,14 @@ export default function ResumeDetailPage() {
       } catch {
         // ignore
       }
+
+      // Try localStorage as fallback (fast, offline, demo mode)
+      const local = getCareerPathResume(params.id);
+      if (local) {
+        setResume(local);
+        setLoading(false);
+        return;
+      }
       setLoading(false);
     }
     loadResume();
@@ -64,10 +64,10 @@ export default function ResumeDetailPage() {
     window.setTimeout(() => setMessage(""), 1800);
 
     // Also save to server
-    fetch("/api/resume/save", {
-      method: "POST",
+    fetch(`/api/resume/${saved.id}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resume: saved }),
+      body: JSON.stringify(saved),
     }).catch(() => {});
   }
 
@@ -79,7 +79,7 @@ export default function ResumeDetailPage() {
       const response = await fetch("/api/resume/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeId: resume.id, resume }),
+        body: JSON.stringify({ resumeId: resume.id }),
       });
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
       if (!response.ok || !data.resume) throw data;
@@ -99,7 +99,7 @@ export default function ResumeDetailPage() {
       const response = await fetch("/api/resume/tailor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeId: resume.id, resume, jobDescription }),
+        body: JSON.stringify({ resumeId: resume.id, jobDescription }),
       });
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
       if (!response.ok || !data.resume) throw data;

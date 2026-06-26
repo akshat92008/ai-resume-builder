@@ -3,7 +3,7 @@ import { createBuilderSession } from "@/lib/careerpath/agents";
 import { saveSession } from "@/lib/careerpath/db";
 import type { BuilderMode } from "@/lib/careerpath/types";
 import { z } from "zod";
-import { requireAiAccess } from "@/lib/careerpath/auth";
+import { requireAiAccess, requireProductionPersistence } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 
 const StartRequestSchema = z.object({
@@ -13,6 +13,9 @@ const StartRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const prodBlock = requireProductionPersistence();
+    if (prodBlock) return prodBlock;
+
     let userId = null;
     if (isServerSupabaseConfigured) {
       const auth = await requireAiAccess();

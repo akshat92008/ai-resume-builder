@@ -56,11 +56,15 @@ export async function checkRateLimit(
   }
 
   // Record this usage event
-  await admin.from("usage_events").insert({
+  const { error: insertError } = await admin.from("usage_events").insert({
     user_id: userId || null,
     ip_hash: finalIpHash,
     event_type: eventType,
   });
+
+  if (insertError && process.env.NODE_ENV === "production") {
+    return { allowed: false, remaining: 0, error: "RATE_LIMIT_RECORD_FAILED" };
+  }
 
   return { allowed: true, remaining: maxLimit - currentCount - 1 };
 }
