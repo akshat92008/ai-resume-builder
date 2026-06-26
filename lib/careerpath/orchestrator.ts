@@ -59,35 +59,25 @@ async function callWithValidation<T>(
             ...messages,
             {
               role: "user" as const,
-              content: "The previous output was malformed. Please return valid JSON matching the required schema exactly.",
+              content: "The previous output was malformed. Please return ONLY a valid JSON data object.",
             },
           ];
-
-      const jsonSchemaObj = zodResponseFormat(zodSchema as any, formatName).json_schema.schema;
-
-      if (provider === "nvidia") {
-        messagesToSend = messagesToSend.map(msg => 
-          msg.role === "system" 
-            ? { ...msg, content: `${msg.content}\n\nYou MUST return your response as a valid JSON object matching this exact JSON Schema:\n${JSON.stringify(jsonSchemaObj, null, 2)}` }
-            : msg
-        );
-      }
 
       const reqPayload: any = {
         model,
         messages: messagesToSend,
+        response_format: zodResponseFormat(zodSchema as any, formatName),
       };
 
       let options: any = { signal: controller.signal };
-      if (provider !== "nvidia") {
-        reqPayload.response_format = zodResponseFormat(zodSchema as any, formatName);
-      }
 
       const completion = await openai.chat.completions.create(reqPayload, options);
 
       clearTimeout(timeout);
       const content = completion.choices[0].message.content;
       if (!content) throw new Error(`Empty response from ${agentName}`);
+
+      console.log(`\n\n--- RAW OUTPUT (${agentName}) ---\n`, content, `\n--- END RAW OUTPUT ---\n\n`);
 
       // Strip markdown code blocks and extract JSON
       let cleanContent = content.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
