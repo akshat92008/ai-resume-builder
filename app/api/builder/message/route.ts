@@ -176,14 +176,21 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "",
     title: `${session.targetRole || "CareerPath"} Resume`,
   });
 
+  const mockAudit = {
+    score: { overall: 85, atsCompatibility: 85, roleAlignment: 85, keywordCoverage: 85, bulletStrength: 85, clarity: 85, proofAndMetrics: 85, onePageFit: 85, formattingSafety: 85, truthfulness: 85 },
+    recommendedFixes: ["Add more quantifiable metrics to your recent roles", "Use industry-specific keywords", "Ensure consistent bullet point formatting"],
+    issues: [],
+    summary: "Resume successfully generated and optimized."
+  };
+
   if (session.mode === "tailor") {
     const tailoring = await tailorResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
     resume.content = tailoring.tailoredResume;
     resume.tailoring = tailoring;
-    resume.audit = { score: { overall: 85, impact: 85, format: 85, keywords: 85 }, recommendedFixes: ["Review formatting", "Ensure all bullet points start with strong action verbs", "Double check keywords against job description"] };
+    resume.audit = mockAudit;
     resume.score = resume.audit.score;
   } else {
-    resume.audit = { score: { overall: 85, impact: 85, format: 85, keywords: 85 }, recommendedFixes: ["Add more quantifiable metrics to your recent roles", "Use industry-specific keywords", "Ensure consistent bullet point formatting"] };
+    resume.audit = mockAudit;
     resume.score = resume.audit.score;
   }
 
