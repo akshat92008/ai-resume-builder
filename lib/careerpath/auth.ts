@@ -21,7 +21,17 @@ export async function requireAiAccess(): Promise<{ ok: false; response: NextResp
 export const requireAppAccess = requireAiAccess;
 
 export function requireProductionPersistence() {
-  // Allow the application to run in stateless demo mode even in production
-  // This improves the first-run experience on Vercel deployments.
+  if (process.env.NODE_ENV === "production" && !isServerSupabaseConfigured) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "SUPABASE_REQUIRED",
+          message: "Vercel Deployment Error: You must add your Supabase Environment Variables to your Vercel Project Settings for the backend to work.",
+          recoverable: false
+        }
+      },
+      { status: 500 }
+    );
+  }
   return null;
 }
