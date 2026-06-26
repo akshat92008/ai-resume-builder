@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/utils";
 
 const isSupabaseMode = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
@@ -28,7 +29,7 @@ function SignupForm() {
     if (nextPath) {
       const search = new URLSearchParams();
       if (plan) search.set("plan", plan);
-      targetUrl = `${nextPath}${search.toString() ? `?${search.toString()}` : ""}`;
+      targetUrl = `${safeNextPath(nextPath)}${search.toString() ? `?${search.toString()}` : ""}`;
     }
 
     if (!isSupabaseMode()) {

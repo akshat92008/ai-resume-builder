@@ -38,3 +38,17 @@ If Supabase is not configured, the app runs entirely in-memory for development a
 - OpenAI (gpt-4o-mini)
 - Tailwind CSS
 - Zod (Validation)
+
+## Manual Launch Checklist (Real Supabase + OpenAI)
+
+Before a full launch, verify the live production behavior:
+- [ ] Signup and Login flows
+- [ ] Build Resume flow (from scratch)
+- [ ] Improve Resume flow
+- [ ] Tailor to Job flow
+- [ ] Duplicate and Delete Resume
+- [ ] Print/Save PDF behavior across browsers (Chrome/Safari)
+- [ ] Rate limits trigger correctly after repeated usage
+- [ ] Supabase database rows persist and update correctly
+- [ ] Live RLS policies protect user data
+- [ ] OpenAI cost and token usage tracking

@@ -44,8 +44,7 @@ const progressLabels = [
   "Finding missing information",
   "Writing your resume",
   "Checking ATS strength",
-  "Improving weak sections",
-  "Preparing final version",
+  "Preparing preview",
 ];
 
 export default function BuilderPage() {
