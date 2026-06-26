@@ -1,16 +1,33 @@
+"use client";
+
 import { createBrowserClient } from '@supabase/ssr';
-import { getPublicSupabaseConfig } from "./config";
 
 let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 
 export function getSupabaseBrowserClient() {
   if (browserClient) return browserClient;
   
-  const config = getPublicSupabaseConfig();
-  if (!config) return null;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  browserClient = createBrowserClient(config.url, config.anonKey);
+  if (typeof window !== "undefined") {
+    console.log("Supabase Client direct env check:", {
+      hasUrl: Boolean(url),
+      url: url,
+      hasAnonKey: Boolean(anonKey),
+    });
+  }
+  
+  if (!url || !url.startsWith("http") || !anonKey) {
+    return null;
+  }
+  
+  browserClient = createBrowserClient(url, anonKey);
   return browserClient;
 }
 
-export const isSupabaseConfigured = Boolean(getPublicSupabaseConfig());
+export const isSupabaseConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.NEXT_PUBLIC_SUPABASE_URL.startsWith("http") &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
