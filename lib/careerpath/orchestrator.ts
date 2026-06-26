@@ -94,12 +94,49 @@ async function callWithValidation<T>(
       // Strip markdown code blocks and extract JSON
       let cleanContent = content.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
       const firstBrace = cleanContent.indexOf('{');
-      const lastBrace = cleanContent.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        cleanContent = cleanContent.slice(firstBrace, lastBrace + 1);
-      }
       
-      const parsed = JSON.parse(cleanContent);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(cleanContent);
+      } catch (initialErr) {
+        if (firstBrace !== -1) {
+          let braces = 0;
+          let inString = false;
+          let escape = false;
+          let endIndex = -1;
+          for (let i = firstBrace; i < cleanContent.length; i++) {
+            const char = cleanContent[i];
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            if (char === '\\') {
+              escape = true;
+              continue;
+            }
+            if (char === '"') {
+              inString = !inString;
+              continue;
+            }
+            if (!inString) {
+              if (char === '{') braces++;
+              else if (char === '}') braces--;
+              if (braces === 0) {
+                endIndex = i;
+                break;
+              }
+            }
+          }
+          if (endIndex !== -1) {
+            cleanContent = cleanContent.slice(firstBrace, endIndex + 1);
+            parsed = JSON.parse(cleanContent);
+          } else {
+            throw initialErr;
+          }
+        } else {
+          throw initialErr;
+        }
+      }
       const result = schema.safeParse(parsed);
 
       if (result.success) {
