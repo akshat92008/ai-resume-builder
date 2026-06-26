@@ -79,9 +79,7 @@ async function callWithValidation<T>(
       };
 
       let options: any = { signal: controller.signal };
-      if (provider === "nvidia") {
-        options.extra_body = { nvext: { guided_json: jsonSchemaObj } };
-      } else {
+      if (provider !== "nvidia") {
         reqPayload.response_format = zodResponseFormat(zodSchema as any, formatName);
       }
 
@@ -445,7 +443,7 @@ If the user says rewrite/change a specific section, classify as REWRITE_SECTION.
   }
 }
 
-function inferIntentKeyword(
+export function inferIntentKeyword(
   message: string,
   hasExistingResume: boolean
 ): { intent: import("./types").AgentIntent; confidence: number } {
