@@ -15,6 +15,8 @@ import {
   tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
 
+import { requireAiAccess } from "@/lib/careerpath/auth";
+
 const MessageRequestSchema = z.object({
   sessionId: z.string().uuid(),
   message: z.string().max(20000),
@@ -22,6 +24,9 @@ const MessageRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAiAccess();
+    if (!auth.ok) return auth.response;
+
     const json = await request.json().catch(() => ({}));
     const parseResult = MessageRequestSchema.safeParse(json);
     
@@ -33,9 +38,8 @@ export async function POST(request: Request) {
     }
     const body = parseResult.data;
 
-    const user = await getSupabaseUser();
     const ipHash = request.headers.get("x-forwarded-for") || "unknown";
-    const rateLimit = await checkRateLimit(user?.id || null, ipHash, "builder_message", 15);
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "builder_message", 15);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(

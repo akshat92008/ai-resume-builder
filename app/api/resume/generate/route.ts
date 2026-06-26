@@ -5,12 +5,17 @@ import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/li
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { z } from "zod";
 
+import { requireAiAccess } from "@/lib/careerpath/auth";
+
 const GenerateRequestSchema = z.object({
   sessionId: z.string().uuid(),
 });
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAiAccess();
+    if (!auth.ok) return auth.response;
+
     const json = await request.json().catch(() => ({}));
     const parseResult = GenerateRequestSchema.safeParse(json);
     if (!parseResult.success) {
@@ -18,9 +23,8 @@ export async function POST(request: Request) {
     }
     const body = parseResult.data;
 
-    const user = await getSupabaseUser();
     const ipHash = request.headers.get("x-forwarded-for") || "unknown";
-    const rateLimit = await checkRateLimit(user?.id || null, ipHash, "resume_generate", 5);
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_generate", 5);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(

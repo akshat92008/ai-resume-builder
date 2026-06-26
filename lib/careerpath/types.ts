@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type BuilderMode = "build" | "improve" | "tailor";
 
 export type BuilderState =
@@ -127,6 +129,60 @@ export type CareerPathResumeContent = {
   achievements: string[];
   languages: string[];
 };
+
+export const ResumeContentSchema = z.object({
+  header: z.object({
+    name: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    location: z.string().optional(),
+    links: z.object({
+      linkedin: z.string().optional(),
+      github: z.string().optional(),
+      portfolio: z.string().optional(),
+    }).optional(),
+  }).optional(),
+  summary: z.string().max(3000).optional(),
+  skills: z.array(z.object({
+    category: z.string(),
+    items: z.array(z.string().max(200)),
+  })).optional(),
+  experience: z.array(z.object({
+    company: z.string(),
+    role: z.string(),
+    dates: z.string(),
+    location: z.string().optional(),
+    bullets: z.array(z.string().max(1000)),
+  })).optional(),
+  projects: z.array(z.object({
+    name: z.string(),
+    techStack: z.array(z.string()),
+    link: z.string().optional(),
+    bullets: z.array(z.string().max(1000)),
+  })).optional(),
+  education: z.array(z.object({
+    institution: z.string(),
+    degree: z.string(),
+    dates: z.string().optional(),
+    score: z.string().optional(),
+    location: z.string().optional(),
+  })).optional(),
+  certifications: z.array(z.object({
+    name: z.string(),
+    issuer: z.string().optional(),
+    date: z.string().optional(),
+    link: z.string().optional(),
+  })).optional(),
+  achievements: z.array(z.string().max(1000)).optional(),
+  languages: z.array(z.string().max(100)).optional(),
+});
+
+export const ResumePayloadSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  targetRole: z.string().optional(),
+  content: ResumeContentSchema.optional(),
+});
 
 export type CareerPathResumeScore = {
   overall: number;

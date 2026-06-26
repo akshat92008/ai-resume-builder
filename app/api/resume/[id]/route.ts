@@ -2,10 +2,17 @@ import { NextResponse } from "next/server";
 import { auditResume } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume, deleteServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
+import { ResumePayloadSchema } from "@/lib/careerpath/types";
+import { z } from "zod";
+
+const IdSchema = z.string().uuid();
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
+    if (!IdSchema.safeParse(id).success) {
+      return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
+    }
     const resume = await getServerResume(id);
     if (!resume) {
       return NextResponse.json(
@@ -26,6 +33,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
+    if (!IdSchema.safeParse(id).success) {
+      return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
+    }
     const resume = await getServerResume(id);
     if (!resume) {
       return NextResponse.json(
@@ -34,14 +44,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       );
     }
 
-    const body = (await request.json().catch(() => ({}))) as Partial<CareerPathResume> & {
-      content?: CareerPathResumeContent;
-    };
+    const text = await request.text().catch(() => "{}");
+    if (text.length > 100000) {
+      return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
+    }
+    const json = JSON.parse(text);
+    const parseResult = ResumePayloadSchema.safeParse(json);
+    if (!parseResult.success) {
+      return NextResponse.json({ error: { code: "INVALID_INPUT", message: "Invalid payload.", recoverable: true } }, { status: 400 });
+    }
+    const body = parseResult.data;
+
     const updated: CareerPathResume = {
       ...resume,
       ...body,
       id: resume.id,
-      content: body.content ?? resume.content,
+      content: (body.content as unknown as CareerPathResumeContent) ?? resume.content,
       updatedAt: new Date().toISOString(),
     };
     const audit = auditResume(updated.content, updated.targetRole, updated.jobDescription);
@@ -62,6 +80,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
+    if (!IdSchema.safeParse(id).success) {
+      return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
+    }
     await deleteServerResume(id);
     return NextResponse.json({ deleted: true });
   } catch (err) {

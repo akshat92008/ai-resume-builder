@@ -34,7 +34,7 @@ export default function LandingPage() {
                 Build a job-ready resume from messy notes in minutes.
               </h1>
               <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-                Paste your skills, projects, certificates, or old resume. CareerPath AI interviews you, fixes weak sections, tailors your resume to your target role, and exports a clean PDF.
+                Paste your skills, projects, certificates, or old resume. CareerPath AI interviews you, fixes weak sections, tailors your resume to your target role, and opens a print-ready resume you can save as PDF.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" asChild>

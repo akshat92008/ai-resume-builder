@@ -3,19 +3,23 @@ import { auditResumeAgent, tailorResumeAgent } from "@/lib/careerpath/orchestrat
 import { createResumeRecord } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume, getSupabaseUser } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
+import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { requireAiAccess } from "@/lib/careerpath/auth";
+import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const TailorRequestSchema = z.object({
   resumeId: z.string().optional(),
-  resume: z.object({
-    id: z.string().optional(),
-  }).passthrough().optional(),
+  resume: ResumePayloadSchema.optional(),
   jobDescription: z.string().max(15000).optional(),
 });
 
 export async function POST(request: Request) {
   try {
+    const auth = await requireAiAccess();
+    if (!auth.ok) return auth.response;
+
     const text = await request.text().catch(() => "{}");
     if (text.length > 100000) {
       return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
@@ -30,9 +34,15 @@ export async function POST(request: Request) {
     }
     const body = parseResult.data as { resumeId?: string; resume?: CareerPathResume; jobDescription?: string };
 
-    const user = await getSupabaseUser();
+    if (isServerSupabaseConfigured && !body.resumeId) {
+      return NextResponse.json(
+        { error: { code: "INVALID_INPUT", message: "resumeId is required.", recoverable: true } },
+        { status: 400 },
+      );
+    }
+
     const ipHash = request.headers.get("x-forwarded-for") || "unknown";
-    const rateLimit = await checkRateLimit(user?.id || null, ipHash, "resume_tailor", 3);
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_tailor", 3);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(

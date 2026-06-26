@@ -11,6 +11,7 @@ import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
 import { ScorePanel } from "@/components/careerpath/ScorePanel";
 import { saveCareerPathResume } from "@/lib/careerpath/client-store";
 import type { BuilderMode, ChatMessage, CareerPathResume } from "@/lib/careerpath/types";
+import { getApiError } from "@/lib/utils";
 
 const modeOptions: {
   mode: BuilderMode;
@@ -97,7 +98,7 @@ function BuilderExperience() {
         session?: { messages?: ChatMessage[] };
         error?: string;
       };
-      if (!response.ok || !data.sessionId) throw new Error(data.error || "Unable to start builder.");
+      if (!response.ok || !data.sessionId) throw data;
       setMode(nextMode);
       setSessionId(data.sessionId);
       setMessages(data.session?.messages ?? [
@@ -109,7 +110,7 @@ function BuilderExperience() {
         },
       ]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to start builder.");
+      setError(getApiError(caught, "Unable to start builder."));
     } finally {
       setLoading(false);
     }
@@ -139,7 +140,7 @@ function BuilderExperience() {
         resume?: CareerPathResume;
         error?: string;
       };
-      if (!response.ok) throw new Error(data.error || "I had trouble generating the resume. Your data is saved. Try again.");
+      if (!response.ok) throw data;
       setMessages((current) => [
         ...current,
         {
@@ -157,7 +158,7 @@ function BuilderExperience() {
         setCompletedProgress(progressLabels.slice(0, 2));
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "I had trouble generating the resume. Your data is saved. Try again.");
+      setError(getApiError(caught, "I had trouble generating the resume. Your data is saved. Try again."));
     } finally {
       setLoading(false);
     }

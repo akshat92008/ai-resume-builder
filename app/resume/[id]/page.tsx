@@ -15,6 +15,7 @@ import {
   saveCareerPathResume,
 } from "@/lib/careerpath/client-store";
 import type { CareerPathResume } from "@/lib/careerpath/types";
+import { getApiError } from "@/lib/utils";
 
 export default function ResumeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -81,10 +82,10 @@ export default function ResumeDetailPage() {
         body: JSON.stringify({ resume }),
       });
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
-      if (!response.ok || !data.resume) throw new Error(data.error?.message || "Unable to improve resume.");
+      if (!response.ok || !data.resume) throw data;
       updateResume(data.resume, "Improved resume automatically.");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to improve resume.");
+      setError(getApiError(caught, "Unable to improve resume."));
     } finally {
       setWorking(false);
     }
@@ -101,11 +102,11 @@ export default function ResumeDetailPage() {
         body: JSON.stringify({ resume, jobDescription }),
       });
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
-      if (!response.ok || !data.resume) throw new Error(data.error?.message || "Unable to tailor resume.");
+      if (!response.ok || !data.resume) throw data;
       const saved = saveCareerPathResume(data.resume);
       router.push(`/resume/${saved.id}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to tailor resume.");
+      setError(getApiError(caught, "Unable to tailor resume."));
     } finally {
       setWorking(false);
     }
