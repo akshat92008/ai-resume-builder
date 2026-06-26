@@ -32,10 +32,8 @@ export function getAiClient(): OpenAI {
 
 /** Model to use for all CareerPath AI agent calls. */
 export function getModel(fast?: boolean): string {
-  if (fast) {
-    return process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
-  }
-  return process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
+  // Use the 8B model by default to prevent Vercel 60s Serverless timeouts.
+  return process.env.NVIDIA_NIM_MODEL || "meta/llama-3.1-8b-instruct";
 }
 
 export const ProfileSchema = z.object({
