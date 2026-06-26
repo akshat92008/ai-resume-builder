@@ -33,6 +33,40 @@ const WELCOME_MESSAGE: ChatMsg = {
   createdAt: new Date().toISOString(),
 };
 
+const THINKING_PHRASES = [
+  "Analyzing input data...",
+  "Cross-referencing skills...",
+  "Structuring resume sections...",
+  "Drafting professional summary...",
+  "Refining bullet points...",
+  "Optimizing for ATS compatibility...",
+  "Finalizing layout...",
+];
+
+function ThinkingAnimation() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % THINKING_PHRASES.length);
+    }, 2500);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700 animate-in fade-in zoom-in duration-300">
+      <div className="relative flex h-5 w-5 items-center justify-center">
+        <Sparkles className="absolute h-4 w-4 animate-ping opacity-50" />
+        <Sparkles className="relative h-4 w-4 animate-pulse" />
+      </div>
+      <div className="flex flex-col">
+        <span className="font-medium">CareerPath AI is working...</span>
+        <span className="text-blue-600/80 text-xs transition-opacity duration-500">{THINKING_PHRASES[index]}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function AppWorkspace() {
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMsg[]>([WELCOME_MESSAGE]);
@@ -260,10 +294,7 @@ export default function AppWorkspace() {
               </div>
             ))}
             {loading && (
-              <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Working on it...
-              </div>
+              <ThinkingAnimation />
             )}
             <div ref={chatEndRef} />
           </div>
