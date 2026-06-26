@@ -136,21 +136,23 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
     session.targetRole = session.profile.target.role;
   }
 
-  const gapReport = await detectGapsAgent(session.profile, session.mode, { userId, sessionId: session.id, resumeId: session.resumeId });
   const hasAlreadyAskedQuestions = session.currentStep === "needs_info";
 
-  if (gapReport.questionsToAsk.length && !hasAlreadyAskedQuestions) {
-    session.currentStep = "needs_info";
-    session.missingQuestions = gapReport.questionsToAsk;
-    const assistantMessage = [
-      session.mode === "improve" && gapReport.questionsToAsk.length === 1 && gapReport.questionsToAsk[0].question.includes("optimize")
-        ? ""
-        : `I found ${foundSummary(session)}. I need ${gapReport.questionsToAsk.length} missing detail${gapReport.questionsToAsk.length > 1 ? "s" : ""} to make this stronger:`,
-      ...gapReport.questionsToAsk.map((question, index) => gapReport.questionsToAsk.length === 1 ? question.question : `${index + 1}. ${question.question}`),
-      session.mode === "improve" ? "You can skip if you want to keep it general." : "You can answer messily or skip anything you do not know.",
-    ].filter(Boolean).join("\n");
-    session.messages.push(systemMessage(assistantMessage));
-    return { session, assistantMessage };
+  if (!hasAlreadyAskedQuestions) {
+    const gapReport = await detectGapsAgent(session.profile, session.mode, { userId, sessionId: session.id, resumeId: session.resumeId });
+    if (gapReport.questionsToAsk.length) {
+      session.currentStep = "needs_info";
+      session.missingQuestions = gapReport.questionsToAsk;
+      const assistantMessage = [
+        session.mode === "improve" && gapReport.questionsToAsk.length === 1 && gapReport.questionsToAsk[0].question.includes("optimize")
+          ? ""
+          : `I found ${foundSummary(session)}. I need ${gapReport.questionsToAsk.length} missing detail${gapReport.questionsToAsk.length > 1 ? "s" : ""} to make this stronger:`,
+        ...gapReport.questionsToAsk.map((question, index) => gapReport.questionsToAsk.length === 1 ? question.question : `${index + 1}. ${question.question}`),
+        session.mode === "improve" ? "You can skip if you want to keep it general." : "You can answer messily or skip anything you do not know.",
+      ].filter(Boolean).join("\n");
+      session.messages.push(systemMessage(assistantMessage));
+      return { session, assistantMessage };
+    }
   }
 
   const resume = await generateFinalResume(session, "", userId);
@@ -164,7 +166,6 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
 async function generateFinalResume(session: BuilderSession, jobDescription = "", userId?: string) {
   const metadata = { userId, sessionId: session.id, resumeId: session.resumeId };
   const draft = await writeResumeAgent(session.profile, session.mode, jobDescription, metadata);
-  const draftAudit = await auditResumeAgent(draft, session.targetRole, jobDescription, metadata);
   
   const resume = createResumeRecord({
     mode: session.mode,
@@ -183,6 +184,7 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "",
     resume.audit = finalAudit;
     resume.score = finalAudit.score;
   } else {
+    const draftAudit = await auditResumeAgent(draft, session.targetRole, jobDescription, metadata);
     resume.audit = draftAudit;
     resume.score = draftAudit.score;
   }
