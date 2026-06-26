@@ -79,7 +79,15 @@ async function callWithValidation<T>(
       const content = completion.choices[0].message.content;
       if (!content) throw new Error(`Empty response from ${agentName}`);
 
-      const parsed = JSON.parse(content);
+      // Strip markdown code blocks and extract JSON
+      let cleanContent = content.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+      const firstBrace = cleanContent.indexOf('{');
+      const lastBrace = cleanContent.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        cleanContent = cleanContent.slice(firstBrace, lastBrace + 1);
+      }
+      
+      const parsed = JSON.parse(cleanContent);
       const result = schema.safeParse(parsed);
 
       if (result.success) {
