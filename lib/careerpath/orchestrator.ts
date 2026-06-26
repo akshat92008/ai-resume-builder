@@ -9,6 +9,7 @@ import {
   ResumeAuditSchema,
   TailoringResultSchema,
 } from "./llm";
+import { detectGaps } from "./agents";
 import { saveAgentRun } from "./db";
 import type {
   CareerPathProfile,
@@ -44,6 +45,9 @@ async function callWithValidation<T>(
   const inputJson = metadata?.inputJson ?? messages;
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     try {
       const openai = getOpenAIClient();
       const completion = await openai.chat.completions.create({
@@ -58,8 +62,9 @@ async function callWithValidation<T>(
               },
             ],
         response_format: zodResponseFormat(zodSchema, formatName),
-      });
+      }, { signal: controller.signal });
 
+      clearTimeout(timeout);
       const content = completion.choices[0].message.content;
       if (!content) throw new Error(`Empty response from ${agentName}`);
 
@@ -84,6 +89,7 @@ async function callWithValidation<T>(
 
       lastError = `Validation failed on attempt ${attempt + 1}: ${JSON.stringify(result.error)}`;
     } catch (err) {
+      clearTimeout(timeout);
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
@@ -167,13 +173,7 @@ export async function detectGapsAgent(
     ],
     "gapReport",
     GapReportSchema,
-    () => ({
-      readyToGenerate: true,
-      criticalMissing: [],
-      recommendedMissing: [],
-      resumeRisk: [],
-      questionsToAsk: [],
-    }),
+    () => detectGaps(profile, mode),
     { ...metadata, inputJson: { profile, mode } }
   );
 }

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { listServerResumes } from "@/lib/careerpath/db";
+import { requireAppAccess } from "@/lib/careerpath/auth";
 
 export async function GET() {
   try {
+    const auth = await requireAppAccess();
+    if (!auth.ok) return auth.response;
+
     const resumes = await listServerResumes();
     return NextResponse.json({ resumes });
   } catch (err) {

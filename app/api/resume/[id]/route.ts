@@ -3,12 +3,16 @@ import { auditResume } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume, deleteServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
 import { ResumePayloadSchema, mergeResumeContent } from "@/lib/careerpath/types";
+import { requireAppAccess } from "@/lib/careerpath/auth";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAppAccess();
+    if (!auth.ok) return auth.response;
+
     const { id } = await context.params;
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
@@ -32,6 +36,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAppAccess();
+    if (!auth.ok) return auth.response;
+
     const { id } = await context.params;
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
@@ -79,6 +86,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAppAccess();
+    if (!auth.ok) return auth.response;
+
     const { id } = await context.params;
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });

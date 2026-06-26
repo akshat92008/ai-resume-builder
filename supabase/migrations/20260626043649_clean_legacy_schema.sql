@@ -156,6 +156,7 @@ create table if not exists public.resumes (
   content_json jsonb,
   score_json jsonb default '{}'::jsonb,
   audit_json jsonb default '{}'::jsonb,
+  tailoring_json jsonb default '{}'::jsonb,
   job_description text,
   version int default 1,
   created_at timestamptz default now(),

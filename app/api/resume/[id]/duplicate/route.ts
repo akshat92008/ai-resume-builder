@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { duplicateServerResume } from "@/lib/careerpath/db";
 import { z } from "zod";
+import { requireAppAccess } from "@/lib/careerpath/auth";
 
 const IdSchema = z.string().uuid();
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAppAccess();
+    if (!auth.ok) return auth.response;
+
     const { id } = await context.params;
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });

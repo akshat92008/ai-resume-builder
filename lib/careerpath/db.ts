@@ -245,7 +245,7 @@ export async function saveAgentRun(run: {
       latency_ms: run.latencyMs || null,
       model: run.model || null,
     })
-    .then(() => {}, () => {}); // fire-and-forget
+    .then(() => {}, (err) => console.error("[agent_runs] insert failed", err)); // fire-and-forget
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseUser } from "./db";
 import { isServerSupabaseConfigured } from "../supabase/server";
 
-export async function requireAiAccess() {
+export async function requireAiAccess(): Promise<{ ok: false; response: NextResponse } | { ok: true; user: any }> {
   const user = await getSupabaseUser();
 
   if (isServerSupabaseConfigured && !user) {
@@ -17,6 +17,8 @@ export async function requireAiAccess() {
 
   return { ok: true, user };
 }
+
+export const requireAppAccess = requireAiAccess;
 
 export function requireProductionPersistence() {
   if (process.env.NODE_ENV === "production" && !isServerSupabaseConfigured) {
