@@ -66,14 +66,15 @@ async function callWithValidation<T>(
             ],
       };
 
+      let options: any = { signal: controller.signal };
       if (provider === "nvidia") {
         const jsonSchema = zodResponseFormat(zodSchema as any, formatName).json_schema.schema;
-        reqPayload.extra_body = { nvext: { guided_json: jsonSchema } };
+        options.extra_body = { nvext: { guided_json: jsonSchema } };
       } else {
         reqPayload.response_format = zodResponseFormat(zodSchema as any, formatName);
       }
 
-      const completion = await openai.chat.completions.create(reqPayload, { signal: controller.signal });
+      const completion = await openai.chat.completions.create(reqPayload, options);
 
       clearTimeout(timeout);
       const content = completion.choices[0].message.content;
