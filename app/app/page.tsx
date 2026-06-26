@@ -149,13 +149,14 @@ export default function AppWorkspace() {
         }),
       });
 
-      const data = (await res.json()) as {
-        assistantMessage?: string;
-        intent?: AgentIntent;
-        resume?: CareerPathResume;
-        resumeId?: string;
-        error?: unknown;
-      };
+      let data: any;
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const textResponse = await res.text();
+        throw new Error(`Server error (${res.status}): ${textResponse.substring(0, 150)}...`);
+      }
 
       if (!res.ok) throw data;
 

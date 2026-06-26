@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { createBuilderSession } from "@/lib/careerpath/agents";
 import { saveSession } from "@/lib/careerpath/db";
 import type { BuilderMode } from "@/lib/careerpath/types";

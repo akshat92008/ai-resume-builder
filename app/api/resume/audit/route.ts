@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";

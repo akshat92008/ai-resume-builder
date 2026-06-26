@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { getAiClient, getModel, GapReportSchema } from "@/lib/careerpath/llm";
 import { zodResponseFormat } from "openai/helpers/zod";
 

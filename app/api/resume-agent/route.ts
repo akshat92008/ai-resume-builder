@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
