@@ -38,12 +38,12 @@ export default function LandingPage() {
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" asChild>
-                  <Link href="/builder">
-                    Build My Resume <ArrowRight className="ml-2 h-4 w-4" />
+                  <Link href="/app">
+                    Open AI Agent <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild>
-                  <Link href="/builder?mode=improve">Improve Existing Resume</Link>
+                  <Link href="/login">Login</Link>
                 </Button>
               </div>
             </div>
@@ -147,8 +147,8 @@ export default function LandingPage() {
               <p className="mt-2 max-w-2xl text-slate-300">Paid plans can later unlock unlimited resumes, advanced tailoring, and more versions.</p>
             </div>
             <Button size="lg" asChild className="bg-white text-slate-950 hover:bg-slate-100">
-              <Link href="/builder">
-                Start Building <Sparkles className="ml-2 h-4 w-4" />
+              <Link href="/app">
+                Open Agent <Sparkles className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </div>
@@ -158,7 +158,7 @@ export default function LandingPage() {
       <footer className="bg-white px-4 py-10 text-center text-sm text-slate-500">
         <div>CareerPath AI by Amaura Labs.</div>
         <div className="mt-4 flex flex-wrap justify-center gap-4">
-          <Link href="/builder" className="hover:text-slate-950">Builder</Link>
+          <Link href="/app" className="hover:text-slate-950">Resume Agent</Link>
           <Link href="/dashboard" className="hover:text-slate-950">Saved resumes</Link>
           <Link href="/privacy" className="hover:text-slate-950">Privacy</Link>
           <Link href="/terms" className="hover:text-slate-950">Terms</Link>

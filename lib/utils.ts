@@ -16,6 +16,6 @@ export function getApiError(data: unknown, fallback: string) {
 }
 
 export function safeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/app";
   return value;
 }

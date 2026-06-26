@@ -1,25 +1,12 @@
 /**
  * CareerPath AI — Database Layer
  *
- * Routes all persistence through Supabase when configured,
- * falls back to in-memory server store for development/demo.
+ * All persistence through Supabase. No in-memory fallbacks.
  */
 
 import { createServerSupabaseClient, isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import {
-  memCreateSession,
-  memGetSession,
-  memUpdateSession,
-  memDeleteSession,
-  memCreateResume,
-  memGetResume,
-  memUpdateResume,
-  memDeleteResume,
-  memListResumes,
-  memSaveAgentRun,
-} from "./server-store";
-import type { BuilderSession, CareerPathResume } from "./types";
+import type { BuilderSession, CareerPathResume, ResumeMessage, ResumeVersion } from "./types";
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -38,10 +25,8 @@ export async function getSupabaseUser() {
 // ---------------------------------------------------------------------------
 
 export async function getSession(id: string): Promise<BuilderSession | null> {
-  if (!isServerSupabaseConfigured) return memGetSession(id);
-
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return memGetSession(id);
+  if (!supabase) return null;
   const { data, error } = await supabase.from("builder_sessions").select("*").eq("id", id).single();
   if (error || !data) return null;
 
@@ -61,21 +46,13 @@ export async function getSession(id: string): Promise<BuilderSession | null> {
 }
 
 export async function saveSession(session: BuilderSession): Promise<void> {
-  if (!isServerSupabaseConfigured) {
-    memCreateSession(session);
-    return;
-  }
-
   const supabase = await createServerSupabaseClient();
-  if (!supabase) {
-    memCreateSession(session);
-    return;
-  }
+  if (!supabase) throw new Error("Supabase not configured");
 
   const user = await getSupabaseUser();
   const payload = {
     id: session.id,
-    user_id: user?.id || null,
+    user_id: user?.id || session.userId || null,
     mode: session.mode,
     target_role: session.targetRole,
     current_step: session.currentStep,
@@ -87,7 +64,7 @@ export async function saveSession(session: BuilderSession): Promise<void> {
   };
 
   const admin = createSupabaseAdminClient();
-  const client = admin || supabase; // Fallback to regular client if admin is missing
+  const client = admin || supabase;
 
   const { error } = await client.from("builder_sessions").upsert(payload, { onConflict: "id" });
   if (error) {
@@ -97,11 +74,6 @@ export async function saveSession(session: BuilderSession): Promise<void> {
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  if (!isServerSupabaseConfigured) {
-    memDeleteSession(id);
-    return;
-  }
-
   const supabase = await createServerSupabaseClient();
   if (!supabase) return;
   await supabase.from("builder_sessions").delete().eq("id", id);
@@ -112,22 +84,14 @@ export async function deleteSession(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function saveServerResume(resume: CareerPathResume): Promise<void> {
-  if (!isServerSupabaseConfigured) {
-    memCreateResume(resume);
-    return;
-  }
-
   const supabase = await createServerSupabaseClient();
-  if (!supabase) {
-    memCreateResume(resume);
-    return;
-  }
+  if (!supabase) throw new Error("Supabase not configured");
 
   const user = await getSupabaseUser();
   const payload = {
     id: resume.id,
-    user_id: user?.id || null,
-    profile_id: null, // Avoid FK violation against auth.users
+    user_id: user?.id || resume.userId || null,
+    profile_id: null,
     target_role: resume.targetRole,
     mode: resume.mode,
     status: resume.status,
@@ -142,7 +106,7 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   };
 
   const admin = createSupabaseAdminClient();
-  const client = admin || supabase; // Fallback to regular client if admin is missing
+  const client = admin || supabase;
 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
   if (error) {
@@ -151,38 +115,37 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   }
 }
 
-export async function getServerResume(id: string): Promise<CareerPathResume | null> {
-  if (!isServerSupabaseConfigured) return memGetResume(id);
-
+export async function getServerResume(id: string, userId?: string): Promise<CareerPathResume | null> {
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return memGetResume(id);
-  const { data, error } = await supabase.from("resumes").select("*").eq("id", id).single();
+  if (!supabase) return null;
+
+  let query = supabase.from("resumes").select("*").eq("id", id);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query.single();
   if (error || !data) return null;
 
   return mapResumeRow(data);
 }
 
 export async function listServerResumes(): Promise<CareerPathResume[]> {
-  if (!isServerSupabaseConfigured) return memListResumes();
-
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return memListResumes();
+  if (!supabase) return [];
 
   const user = await getSupabaseUser();
-  let query = supabase.from("resumes").select("*").order("updated_at", { ascending: false });
-  if (user) query = query.eq("user_id", user.id);
-  const { data, error } = await query.limit(50);
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("resumes")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(50);
   if (error || !data) return [];
 
   return data.map(mapResumeRow);
 }
 
 export async function deleteServerResume(id: string): Promise<void> {
-  if (!isServerSupabaseConfigured) {
-    memDeleteResume(id);
-    return;
-  }
-
   const supabase = await createServerSupabaseClient();
   if (!supabase) return;
   await supabase.from("resumes").delete().eq("id", id);
@@ -206,6 +169,149 @@ export async function duplicateServerResume(id: string): Promise<CareerPathResum
   return copy;
 }
 
+/**
+ * Get the most recent resume for a given user.
+ */
+export async function getLatestResumeForUser(userId: string): Promise<CareerPathResume | null> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("resumes")
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) return null;
+  return mapResumeRow(data);
+}
+
+// ---------------------------------------------------------------------------
+// Resume Messages
+// ---------------------------------------------------------------------------
+
+export async function saveResumeMessage(msg: {
+  userId: string;
+  resumeId: string | null;
+  role: "user" | "assistant" | "system";
+  content: string;
+  intent?: string;
+}): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    console.error("[db/saveResumeMessage] Admin client not available");
+    return;
+  }
+
+  const { error } = await admin.from("resume_messages").insert({
+    user_id: msg.userId,
+    resume_id: msg.resumeId,
+    role: msg.role,
+    content: msg.content,
+    intent: msg.intent || null,
+  });
+
+  if (error) {
+    console.error("[db/saveResumeMessage] Error:", error);
+  }
+}
+
+export async function getResumeMessages(
+  resumeId: string,
+  userId: string
+): Promise<ResumeMessage[]> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("resume_messages")
+    .select("*")
+    .eq("resume_id", resumeId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (error || !data) return [];
+
+  return data.map((row: Record<string, unknown>) => ({
+    id: row.id as string,
+    userId: row.user_id as string,
+    resumeId: row.resume_id as string | null,
+    role: row.role as ResumeMessage["role"],
+    content: row.content as string,
+    intent: row.intent as string | undefined,
+    createdAt: row.created_at as string,
+  }));
+}
+
+/**
+ * Get recent messages for user without a specific resume (for workspace load).
+ */
+export async function getLatestMessagesForUser(
+  userId: string,
+  resumeId?: string
+): Promise<ResumeMessage[]> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return [];
+
+  let query = supabase
+    .from("resume_messages")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (resumeId) {
+    query = query.eq("resume_id", resumeId);
+  }
+
+  const { data, error } = await query;
+
+  if (error || !data) return [];
+
+  return data.map((row: Record<string, unknown>) => ({
+    id: row.id as string,
+    userId: row.user_id as string,
+    resumeId: row.resume_id as string | null,
+    role: row.role as ResumeMessage["role"],
+    content: row.content as string,
+    intent: row.intent as string | undefined,
+    createdAt: row.created_at as string,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Resume Versions
+// ---------------------------------------------------------------------------
+
+export async function saveResumeVersion(version: {
+  userId: string;
+  resumeId: string;
+  versionName?: string;
+  resumeJson: unknown;
+  reason?: string;
+}): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    console.error("[db/saveResumeVersion] Admin client not available");
+    return;
+  }
+
+  const { error } = await admin.from("resume_versions").insert({
+    user_id: version.userId,
+    resume_id: version.resumeId,
+    version_name: version.versionName || null,
+    resume_json: version.resumeJson,
+    reason: version.reason || null,
+  });
+
+  if (error) {
+    console.error("[db/saveResumeVersion] Error:", error);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Agent Runs
 // ---------------------------------------------------------------------------
@@ -222,10 +328,6 @@ export async function saveAgentRun(run: {
   latencyMs?: number;
   model?: string;
 }): Promise<void> {
-  // Always save to memory for debugging
-  memSaveAgentRun(run);
-
-  // Also save to Supabase if available (use admin client to bypass RLS)
   if (!isServerSupabaseConfigured) return;
   const admin = createSupabaseAdminClient();
   if (!admin) return;

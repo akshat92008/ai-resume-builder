@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Copy, FileText, Loader2, Plus, Printer, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, EmptyState } from "@/components/ui";
-import { deleteCareerPathResume, getCareerPathResumes } from "@/lib/careerpath/client-store";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 
 type LoadState = "loading" | "loaded" | "error";
@@ -20,35 +19,23 @@ export default function DashboardPage() {
   async function loadResumes() {
     setState("loading");
     try {
-      // Try server first
       const res = await fetch("/api/resumes");
       if (res.ok) {
         const data = (await res.json()) as { resumes?: CareerPathResume[] };
-        if (data.resumes?.length) {
-          setResumes(data.resumes);
-          setState("loaded");
-          return;
-        }
+        setResumes(data.resumes || []);
       }
     } catch {
-      // Fall through to localStorage
+      // Server unavailable
     }
-
-    // Fallback to localStorage
-    const local = getCareerPathResumes();
-    setResumes(local);
     setState("loaded");
   }
 
   async function removeResume(id: string) {
-    // Delete from server
     try {
       await fetch(`/api/resume/${id}`, { method: "DELETE" });
     } catch {
       // ignore
     }
-    // Also clean localStorage
-    deleteCareerPathResume(id);
     setResumes((current) => current.filter((r) => r.id !== id));
   }
 
@@ -84,8 +71,8 @@ export default function DashboardPage() {
         <EmptyState
           icon={<FileText className="h-10 w-10" />}
           title="No saved resumes yet"
-          description="Build, improve, or tailor a resume to save your first version."
-          action={<Button asChild><Link href="/builder">Build your first resume</Link></Button>}
+          description="Chat with the AI agent to build your first resume."
+          action={<Button asChild><Link href="/app">Open Resume Agent</Link></Button>}
         />
       ) : (
         <div className="grid gap-4">
@@ -144,9 +131,9 @@ function DashboardHeader() {
         <p className="mt-2 max-w-2xl text-slate-600">Open, duplicate, print or save, or delete a saved CareerPath AI resume.</p>
       </div>
       <Button asChild>
-        <Link href="/builder">
+        <Link href="/app">
           <Plus className="mr-2 h-4 w-4" />
-          Build Resume
+          New Resume
         </Link>
       </Button>
     </div>

@@ -12,6 +12,11 @@ vi.mock("../../lib/careerpath/agents", () => ({
   auditResume: vi.fn().mockReturnValue({ score: { overall: 85 } }),
 }));
 
+vi.mock("../../lib/careerpath/auth", () => ({
+  requireAppAccess: vi.fn().mockResolvedValue({ ok: true, user: { id: "user_1" } }),
+  requireAiAccess: vi.fn().mockResolvedValue({ ok: true, user: { id: "user_1" } }),
+}));
+
 import { getServerResume, saveServerResume } from "../../lib/careerpath/db";
 
 describe("Resume Security & PATCH", () => {

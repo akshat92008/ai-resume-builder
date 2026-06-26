@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { FileText, Home, PlusCircle } from "lucide-react";
+import { Home, Sparkles } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Saved Resumes", icon: Home },
-  { href: "/builder", label: "Builder", icon: PlusCircle },
+  { href: "/app", label: "Resume Agent", icon: Sparkles },
 ];
 
 export function DashboardSidebar() {
@@ -26,11 +26,7 @@ export function DashboardSidebar() {
       </nav>
       <div className="border-t border-slate-800 p-4">
         <div className="rounded-lg bg-slate-900 p-4">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <FileText className="h-4 w-4" />
-            Launch flow
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-300">Build, improve, tailor, score, and print or save resumes as PDF.</p>
+          <p className="text-sm leading-6 text-slate-300">Chat with the AI agent to build, improve, and tailor your resume.</p>
         </div>
       </div>
     </aside>

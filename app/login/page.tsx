@@ -8,7 +8,7 @@ import { MarketingNav } from "@/components/layout/MarketingNav";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/utils";
 
-const isSupabaseMode = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const isSupabaseConfigured = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 function LoginForm() {
   const router = useRouter();
@@ -23,19 +23,15 @@ function LoginForm() {
     setLoading(true);
     setMessage("");
     const nextPath = searchParams.get("next");
-    const plan = searchParams.get("plan");
 
-    let targetUrl = "/dashboard";
-    if (nextPath) {
-      const search = new URLSearchParams();
-      if (plan) search.set("plan", plan);
-      targetUrl = `${safeNextPath(nextPath)}${search.toString() ? `?${search.toString()}` : ""}`;
-    }
+    const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
 
-    if (!isSupabaseMode()) {
-      router.push(targetUrl);
+    if (!isSupabaseConfigured()) {
+      setMessage("Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      setLoading(false);
       return;
     }
+
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setMessage("Supabase is not initialized.");
@@ -53,9 +49,7 @@ function LoginForm() {
 
   const signupParams = new URLSearchParams();
   const nextPath = searchParams.get("next");
-  const plan = searchParams.get("plan");
   if (nextPath) signupParams.set("next", nextPath);
-  if (plan) signupParams.set("plan", plan);
   const signupUrl = signupParams.toString() ? `/signup?${signupParams.toString()}` : "/signup";
 
   return (
@@ -64,22 +58,22 @@ function LoginForm() {
         <CardTitle>Login to CareerPath AI</CardTitle>
       </CardHeader>
       <CardContent>
-        {!isSupabaseMode() && (
-          <Alert className="mb-5" variant="warning">
-            Supabase env vars are missing. Demo mode will take you to the dashboard without real authentication.
+        {!isSupabaseConfigured() && (
+          <Alert className="mb-5" variant="error">
+            Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable authentication.
           </Alert>
         )}
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+            <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured()} />
           </div>
           <div className="space-y-2">
             <Label>Password</Label>
-            <Input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+            <Input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured()} />
           </div>
           {message && <Alert variant="error">{message}</Alert>}
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured()}>
             {loading ? "Logging in..." : "Login"}
           </Button>
         </form>

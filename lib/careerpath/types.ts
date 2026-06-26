@@ -289,3 +289,37 @@ export type CareerPathTailoringResult = {
   tailoringSummary: string[];
   tailoredResume: CareerPathResumeContent;
 };
+
+// ---------------------------------------------------------------------------
+// Chat-first Agent Types
+// ---------------------------------------------------------------------------
+
+export type AgentIntent =
+  | "CREATE_RESUME"
+  | "IMPROVE_RESUME"
+  | "TAILOR_TO_JOB"
+  | "ADD_INFORMATION"
+  | "REWRITE_SECTION"
+  | "ASK_MISSING_INFO"
+  | "GENERATE_PDF"
+  | "GENERAL_HELP";
+
+export type ResumeMessage = {
+  id: string;
+  userId: string;
+  resumeId: string | null;
+  role: "user" | "assistant" | "system";
+  content: string;
+  intent?: string;
+  createdAt: string;
+};
+
+export type ResumeVersion = {
+  id: string;
+  userId: string;
+  resumeId: string;
+  versionName?: string;
+  resumeJson: CareerPathResumeContent;
+  reason?: string;
+  createdAt: string;
+};

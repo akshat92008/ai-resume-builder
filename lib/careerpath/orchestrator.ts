@@ -315,3 +315,107 @@ export function inferIntentAgent(message: string): {
     nextAction: intent === "tailor" ? "collect_resume_and_job" : "collect_profile_data",
   };
 }
+
+// ---------------------------------------------------------------------------
+// LLM-based Intent Inference for Chat-first Agent
+// ---------------------------------------------------------------------------
+
+const IntentSchema = z.object({
+  intent: z.enum([
+    "CREATE_RESUME",
+    "IMPROVE_RESUME",
+    "TAILOR_TO_JOB",
+    "ADD_INFORMATION",
+    "REWRITE_SECTION",
+    "ASK_MISSING_INFO",
+    "GENERATE_PDF",
+    "GENERAL_HELP",
+  ]),
+  confidence: z.number(),
+  reasoning: z.string(),
+});
+
+/**
+ * Infer user intent using LLM. Falls back to keyword matching on failure.
+ */
+export async function inferIntentLLM(
+  message: string,
+  hasExistingResume: boolean,
+  metadata?: { userId?: string; resumeId?: string }
+): Promise<{ intent: import("./types").AgentIntent; confidence: number }> {
+  try {
+    const result = await callWithValidation<z.infer<typeof IntentSchema>>(
+      "IntentInferenceAgent",
+      IntentSchema,
+      [
+        {
+          role: "system",
+          content: `You classify user messages into resume agent intents. The user is chatting with an AI resume agent.
+
+Available intents:
+- CREATE_RESUME: User wants to build a new resume from scratch, providing career details, or says "build my resume"
+- IMPROVE_RESUME: User wants to improve/strengthen an existing resume, make it ATS friendly, or says "improve this"
+- TAILOR_TO_JOB: User is pasting a job description or wants to tailor their resume to a specific job
+- ADD_INFORMATION: User wants to add a project, certificate, skill, experience, or other info to existing resume
+- REWRITE_SECTION: User wants to rewrite a specific section like summary, skills, project bullets
+- ASK_MISSING_INFO: Not usually from user — skip this
+- GENERATE_PDF: User wants to download, export, or print their resume as PDF
+- GENERAL_HELP: User is asking what they can do, greeting, or off-topic
+
+Context: User ${hasExistingResume ? "HAS" : "does NOT have"} an existing resume in the workspace.
+
+If the user provides a lot of career details (education, skills, projects) without explicit instruction, classify as CREATE_RESUME.
+If the message contains a job description or mentions "tailor" or "match this JD", classify as TAILOR_TO_JOB.
+If the user mentions adding a specific thing (project, cert, skill), classify as ADD_INFORMATION.
+If the user says rewrite/change a specific section, classify as REWRITE_SECTION.`,
+        },
+        {
+          role: "user",
+          content: message.slice(0, 2000),
+        },
+      ],
+      "intentClassification",
+      IntentSchema,
+      undefined,
+      { ...metadata, inputJson: { message: message.slice(0, 500) } }
+    );
+
+    return { intent: result.intent, confidence: result.confidence };
+  } catch {
+    // Fallback to keyword-based inference
+    return inferIntentKeyword(message, hasExistingResume);
+  }
+}
+
+function inferIntentKeyword(
+  message: string,
+  hasExistingResume: boolean
+): { intent: import("./types").AgentIntent; confidence: number } {
+  const text = message.toLowerCase();
+
+  if (/\b(download|export|print|pdf|save as)\b/.test(text)) {
+    return { intent: "GENERATE_PDF", confidence: 0.9 };
+  }
+  if (/\b(tailor|job description|match this jd|jd:)\b/.test(text) || (text.length > 300 && /\b(responsibilities|qualifications|requirements|we are looking)\b/.test(text))) {
+    return { intent: "TAILOR_TO_JOB", confidence: 0.85 };
+  }
+  if (/\b(add this project|add project|add certificate|add cert|add skill|add experience|add my github|add my linkedin)\b/.test(text)) {
+    return { intent: "ADD_INFORMATION", confidence: 0.85 };
+  }
+  if (/\b(rewrite|change|modify|update)\b/.test(text) && /\b(summary|section|skills|bullets|project|experience|header)\b/.test(text)) {
+    return { intent: "REWRITE_SECTION", confidence: 0.8 };
+  }
+  if (/\b(improve|stronger|better|ats friendly|make it ats|polish|enhance)\b/.test(text)) {
+    return { intent: "IMPROVE_RESUME", confidence: 0.8 };
+  }
+  if (/\b(help|what can you|how do i|what should)\b/.test(text) && text.length < 80) {
+    return { intent: "GENERAL_HELP", confidence: 0.7 };
+  }
+  // Default: if long text with career details, create resume; otherwise help
+  if (text.length > 100 || /\b(build|create|make|resume|fresher|i am|i know|i have)\b/.test(text)) {
+    return { intent: hasExistingResume ? "IMPROVE_RESUME" : "CREATE_RESUME", confidence: 0.7 };
+  }
+
+  return { intent: "GENERAL_HELP", confidence: 0.5 };
+}
+

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui";
 
 export function MarketingNav() {
@@ -11,14 +11,13 @@ export function MarketingNav() {
           <span className="font-display text-lg font-bold tracking-tight text-slate-950">CareerPath AI</span>
         </Link>
         <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
-          <Link href="/builder" className="hover:text-slate-950">Builder</Link>
+          <Link href="/app" className="hover:text-slate-950">Agent</Link>
           <Link href="/dashboard" className="hover:text-slate-950">Saved Resumes</Link>
-          <Link href="/builder?mode=tailor" className="hover:text-slate-950">Tailor to Job</Link>
         </nav>
         <Button size="sm" asChild>
-          <Link href="/builder">
-            <FileText className="mr-2 h-4 w-4" />
-            Build My Resume
+          <Link href="/app">
+            <Sparkles className="mr-2 h-4 w-4" />
+            Open Agent
           </Link>
         </Button>
       </div>

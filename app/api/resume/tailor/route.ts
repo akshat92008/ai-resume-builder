@@ -5,7 +5,7 @@ import { getServerResume, saveServerResume, getSupabaseUser } from "@/lib/career
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
-import { requireAiAccess, requireProductionPersistence } from "@/lib/careerpath/auth";
+import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
 import { z } from "zod";
@@ -18,9 +18,6 @@ const TailorRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const prodBlock = requireProductionPersistence();
-    if (prodBlock) return prodBlock;
-
     const auth = await requireAiAccess();
     if (!auth.ok) return auth.response;
 

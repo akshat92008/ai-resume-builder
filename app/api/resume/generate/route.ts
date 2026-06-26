@@ -5,7 +5,7 @@ import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/li
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { z } from "zod";
 
-import { requireAiAccess, requireProductionPersistence } from "@/lib/careerpath/auth";
+import { requireAiAccess } from "@/lib/careerpath/auth";
 
 const GenerateRequestSchema = z.object({
   sessionId: z.string().uuid(),
@@ -13,9 +13,6 @@ const GenerateRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const prodBlock = requireProductionPersistence();
-    if (prodBlock) return prodBlock;
-
     const auth = await requireAiAccess();
     if (!auth.ok) return auth.response;
 

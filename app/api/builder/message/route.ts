@@ -15,7 +15,7 @@ import {
   tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
 
-import { requireAiAccess, requireProductionPersistence } from "@/lib/careerpath/auth";
+import { requireAiAccess } from "@/lib/careerpath/auth";
 
 const MessageRequestSchema = z.object({
   sessionId: z.string().uuid(),
@@ -24,9 +24,6 @@ const MessageRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const prodBlock = requireProductionPersistence();
-    if (prodBlock) return prodBlock;
-
     const auth = await requireAiAccess();
     if (!auth.ok) return auth.response;
 
