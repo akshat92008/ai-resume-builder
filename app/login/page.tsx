@@ -5,10 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/utils";
-
-const isSupabaseConfigured = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 function LoginForm() {
   const router = useRouter();
@@ -26,7 +24,7 @@ function LoginForm() {
 
     const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
 
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseConfigured) {
       setMessage("Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
       setLoading(false);
       return;
@@ -58,7 +56,7 @@ function LoginForm() {
         <CardTitle>Login to CareerPath AI</CardTitle>
       </CardHeader>
       <CardContent>
-        {!isSupabaseConfigured() && (
+        {!isSupabaseConfigured && (
           <Alert className="mb-5" variant="error">
             Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable authentication.
           </Alert>
@@ -66,14 +64,14 @@ function LoginForm() {
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured()} />
+            <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           <div className="space-y-2">
             <Label>Password</Label>
-            <Input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured()} />
+            <Input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           {message && <Alert variant="error">{message}</Alert>}
-          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured()}>
+          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured}>
             {loading ? "Logging in..." : "Login"}
           </Button>
         </form>
