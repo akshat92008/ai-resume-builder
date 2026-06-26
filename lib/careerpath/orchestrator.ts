@@ -26,7 +26,7 @@ import type {
 
 async function callWithValidation<T>(
   agentName: string,
-  schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
+  schema: { safeParse: (data: unknown) => { success: boolean; data?: any; error?: unknown } },
   messages: { role: "system" | "user"; content: string }[],
   formatName: string,
   zodSchema: Parameters<typeof zodResponseFormat>[0],

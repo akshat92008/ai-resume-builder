@@ -132,56 +132,56 @@ export type CareerPathResumeContent = {
 
 export const ResumeContentSchema = z.object({
   header: z.object({
-    name: z.string().optional(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-    location: z.string().optional(),
+    name: z.string().optional().nullable(),
+    email: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    location: z.string().optional().nullable(),
     links: z.object({
-      linkedin: z.string().optional(),
-      github: z.string().optional(),
-      portfolio: z.string().optional(),
-    }).optional(),
-  }).optional(),
-  summary: z.string().max(3000).optional(),
+      linkedin: z.string().optional().nullable(),
+      github: z.string().optional().nullable(),
+      portfolio: z.string().optional().nullable(),
+    }).optional().nullable(),
+  }).optional().nullable(),
+  summary: z.string().max(3000).optional().nullable(),
   skills: z.array(z.object({
     category: z.string(),
     items: z.array(z.string().max(200)),
-  })).optional(),
+  })).optional().nullable(),
   experience: z.array(z.object({
     company: z.string(),
     role: z.string(),
     dates: z.string(),
-    location: z.string().optional(),
+    location: z.string().optional().nullable(),
     bullets: z.array(z.string().max(1000)),
-  })).optional(),
+  })).optional().nullable(),
   projects: z.array(z.object({
     name: z.string(),
     techStack: z.array(z.string()),
-    link: z.string().optional(),
+    link: z.string().optional().nullable(),
     bullets: z.array(z.string().max(1000)),
-  })).optional(),
+  })).optional().nullable(),
   education: z.array(z.object({
     institution: z.string(),
     degree: z.string(),
-    dates: z.string().optional(),
-    score: z.string().optional(),
-    location: z.string().optional(),
-  })).optional(),
+    dates: z.string().optional().nullable(),
+    score: z.string().optional().nullable(),
+    location: z.string().optional().nullable(),
+  })).optional().nullable(),
   certifications: z.array(z.object({
     name: z.string(),
-    issuer: z.string().optional(),
-    date: z.string().optional(),
-    link: z.string().optional(),
-  })).optional(),
-  achievements: z.array(z.string().max(1000)).optional(),
-  languages: z.array(z.string().max(100)).optional(),
+    issuer: z.string().optional().nullable(),
+    date: z.string().optional().nullable(),
+    link: z.string().optional().nullable(),
+  })).optional().nullable(),
+  achievements: z.array(z.string().max(1000)).optional().nullable(),
+  languages: z.array(z.string().max(100)).optional().nullable(),
 });
 
 export const ResumePayloadSchema = z.object({
   id: z.string().optional(),
   title: z.string().optional(),
   targetRole: z.string().optional(),
-  content: ResumeContentSchema.optional(),
+  content: ResumeContentSchema.optional().nullable(),
 });
 
 export function mergeResumeContent(base: CareerPathResumeContent, patch: Partial<CareerPathResumeContent>): CareerPathResumeContent {
