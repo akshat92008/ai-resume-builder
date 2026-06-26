@@ -21,17 +21,7 @@ export async function requireAiAccess(): Promise<{ ok: false; response: NextResp
 export const requireAppAccess = requireAiAccess;
 
 export function requireProductionPersistence() {
-  if (process.env.NODE_ENV === "production" && !isServerSupabaseConfigured) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "SUPABASE_REQUIRED",
-          message: "Production requires Supabase configuration.",
-          recoverable: false
-        }
-      },
-      { status: 500 }
-    );
-  }
+  // Allow the application to run in stateless demo mode even in production
+  // This improves the first-run experience on Vercel deployments.
   return null;
 }
