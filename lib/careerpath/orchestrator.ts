@@ -393,6 +393,15 @@ function inferIntentKeyword(
 ): { intent: import("./types").AgentIntent; confidence: number } {
   const text = message.toLowerCase();
 
+  // If the message is long (e.g. pasting career details or job description),
+  // prioritize building/improving/tailoring over simple commands like download/print
+  if (text.length > 500) {
+    if (/\b(tailor|job description|match this jd|jd:)\b/.test(text) || /\b(responsibilities|qualifications|requirements|we are looking)\b/.test(text)) {
+      return { intent: "TAILOR_TO_JOB", confidence: 0.85 };
+    }
+    return { intent: hasExistingResume ? "IMPROVE_RESUME" : "CREATE_RESUME", confidence: 0.7 };
+  }
+
   if (/\b(download|export|print|pdf|save as)\b/.test(text)) {
     return { intent: "GENERATE_PDF", confidence: 0.9 };
   }

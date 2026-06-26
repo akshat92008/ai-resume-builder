@@ -13,12 +13,12 @@ export function getAiClient(): OpenAI {
   const provider = process.env.AI_PROVIDER || "nvidia";
 
   if (provider === "nvidia") {
-    const apiKey = process.env.NVIDIA_NIM_API_KEY;
+    const apiKey = process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY;
     const baseURL = process.env.NVIDIA_NIM_BASE_URL || "https://integrate.api.nvidia.com/v1";
 
     if (!apiKey) {
       throw new Error(
-        "NVIDIA_NIM_API_KEY is required for CareerPath AI generation. " +
+        "NVIDIA_NIM_API_KEY (or NVIDIA_API_KEY) is required for CareerPath AI generation. " +
         "Set it in your .env.local file."
       );
     }
