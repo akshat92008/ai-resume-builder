@@ -59,6 +59,9 @@ describe("Resume Security & PATCH", () => {
     expect(savedArg.status).toBe("final");
     expect(savedArg.title).toBe("Senior Software Engineer");
     expect(savedArg.content.summary).toBe("New summary");
+    // Verify that mergeResumeContent successfully preserved missing properties
+    expect(savedArg.content.experience).toBeDefined();
+    expect(savedArg.content.header).toBeDefined();
     // The route explicitly updates the score based on the new audit, not from the payload
     expect(savedArg.score.overall).toBe(85);
   });

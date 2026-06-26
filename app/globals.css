@@ -49,13 +49,10 @@
 /* ------------------------------------------------------------------ */
 @media print {
   /* Hide all UI chrome */
-  nav,
-  header,
-  footer,
-  button,
-  aside,
+  .site-header,
   .no-print,
-  [class*="no-print"] {
+  aside,
+  button {
     display: none !important;
   }
 

@@ -132,6 +132,10 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
   }
 
   session.profile = await extractProfileDataAgent(userMessage, session.profile, session.targetRole, { userId, sessionId: session.id, resumeId: session.resumeId });
+  if (!session.targetRole && session.profile.target.role) {
+    session.targetRole = session.profile.target.role;
+  }
+
   const gapReport = await detectGapsAgent(session.profile, session.mode, { userId, sessionId: session.id, resumeId: session.resumeId });
   const hasAlreadyAskedQuestions = session.currentStep === "needs_info";
 
@@ -139,10 +143,12 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
     session.currentStep = "needs_info";
     session.missingQuestions = gapReport.questionsToAsk;
     const assistantMessage = [
-      `I found ${foundSummary(session)}. I need ${gapReport.questionsToAsk.length} missing detail${gapReport.questionsToAsk.length > 1 ? "s" : ""} to make this stronger:`,
-      ...gapReport.questionsToAsk.map((question, index) => `${index + 1}. ${question.question}`),
-      "You can answer messily or skip anything you do not know.",
-    ].join("\n");
+      session.mode === "improve" && gapReport.questionsToAsk.length === 1 && gapReport.questionsToAsk[0].question.includes("optimize")
+        ? ""
+        : `I found ${foundSummary(session)}. I need ${gapReport.questionsToAsk.length} missing detail${gapReport.questionsToAsk.length > 1 ? "s" : ""} to make this stronger:`,
+      ...gapReport.questionsToAsk.map((question, index) => gapReport.questionsToAsk.length === 1 ? question.question : `${index + 1}. ${question.question}`),
+      session.mode === "improve" ? "You can skip if you want to keep it general." : "You can answer messily or skip anything you do not know.",
+    ].filter(Boolean).join("\n");
     session.messages.push(systemMessage(assistantMessage));
     return { session, assistantMessage };
   }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auditResume } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume, deleteServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
-import { ResumePayloadSchema } from "@/lib/careerpath/types";
+import { ResumePayloadSchema, mergeResumeContent } from "@/lib/careerpath/types";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
@@ -59,7 +59,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       ...resume,
       ...body,
       id: resume.id,
-      content: (body.content as unknown as CareerPathResumeContent) ?? resume.content,
+      content: body.content ? mergeResumeContent(resume.content, body.content as Partial<CareerPathResumeContent>) : resume.content,
       updatedAt: new Date().toISOString(),
     };
     const audit = auditResume(updated.content, updated.targetRole, updated.jobDescription);

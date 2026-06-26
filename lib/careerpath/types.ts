@@ -184,6 +184,29 @@ export const ResumePayloadSchema = z.object({
   content: ResumeContentSchema.optional(),
 });
 
+export function mergeResumeContent(base: CareerPathResumeContent, patch: Partial<CareerPathResumeContent>): CareerPathResumeContent {
+  return {
+    ...base,
+    ...patch,
+    header: {
+      ...base.header,
+      ...patch.header,
+      links: {
+        ...base.header?.links,
+        ...patch.header?.links,
+      },
+    },
+    summary: patch.summary ?? base.summary ?? "",
+    skills: patch.skills ?? base.skills ?? [],
+    experience: patch.experience ?? base.experience ?? [],
+    projects: patch.projects ?? base.projects ?? [],
+    education: patch.education ?? base.education ?? [],
+    certifications: patch.certifications ?? base.certifications ?? [],
+    achievements: patch.achievements ?? base.achievements ?? [],
+    languages: patch.languages ?? base.languages ?? [],
+  };
+}
+
 export type CareerPathResumeScore = {
   overall: number;
   atsCompatibility: number;

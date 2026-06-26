@@ -169,7 +169,7 @@ export function detectGaps(profile: CareerPathProfile, mode: BuilderMode): GapRe
   if (!profile.target.role) {
     criticalMissing.push("target role");
     questionsToAsk.push({
-      question: "What role are you targeting?",
+      question: mode === "improve" ? "What role should I optimize this resume for?" : "What role are you targeting?",
       reason: "The resume needs a clear role angle.",
       priority: "critical",
     });

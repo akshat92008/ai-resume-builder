@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Demo mode: saved CareerPath resumes are stored in this browser.
           </div>
         )}
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 sm:px-6 lg:px-8">
+        <header className="site-header flex h-16 shrink-0 items-center justify-between border-b bg-white px-4 sm:px-6 lg:px-8">
           <Link href="/" className="font-display font-bold text-slate-950 md:hidden">
             CareerPath AI
           </Link>

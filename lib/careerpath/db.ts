@@ -136,6 +136,7 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
     score_json: resume.score,
     audit_json: resume.audit,
     job_description: resume.jobDescription,
+    tailoring_json: resume.tailoring || null,
     version: resume.version,
     updated_at: new Date().toISOString(),
   };
@@ -264,6 +265,7 @@ function mapResumeRow(data: Record<string, unknown>): CareerPathResume {
     score: data.score_json as CareerPathResume["score"],
     audit: data.audit_json as CareerPathResume["audit"],
     jobDescription: data.job_description as string | undefined,
+    tailoring: data.tailoring_json as CareerPathResume["tailoring"],
     version: (data.version as number) || 1,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
