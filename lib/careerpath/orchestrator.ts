@@ -53,23 +53,34 @@ async function callWithValidation<T>(
     try {
       const openai = getAiClient();
       
+      let messagesToSend = attempt === 0
+        ? messages
+        : [
+            ...messages,
+            {
+              role: "user" as const,
+              content: "The previous output was malformed. Please return valid JSON matching the required schema exactly.",
+            },
+          ];
+
+      const jsonSchemaObj = zodResponseFormat(zodSchema as any, formatName).json_schema.schema;
+
+      if (provider === "nvidia") {
+        messagesToSend = messagesToSend.map(msg => 
+          msg.role === "system" 
+            ? { ...msg, content: `${msg.content}\n\nYou MUST return your response as a valid JSON object matching this exact JSON Schema:\n${JSON.stringify(jsonSchemaObj, null, 2)}` }
+            : msg
+        );
+      }
+
       const reqPayload: any = {
         model,
-        messages: attempt === 0
-          ? messages
-          : [
-              ...messages,
-              {
-                role: "user" as const,
-                content: "The previous output was malformed. Please return valid JSON matching the required schema exactly.",
-              },
-            ],
+        messages: messagesToSend,
       };
 
       let options: any = { signal: controller.signal };
       if (provider === "nvidia") {
-        const jsonSchema = zodResponseFormat(zodSchema as any, formatName).json_schema.schema;
-        options.extra_body = { nvext: { guided_json: jsonSchema } };
+        options.extra_body = { nvext: { guided_json: jsonSchemaObj } };
       } else {
         reqPayload.response_format = zodResponseFormat(zodSchema as any, formatName);
       }
