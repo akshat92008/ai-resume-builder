@@ -43,6 +43,7 @@ async function callWithValidation<T>(
   let lastError: string | undefined;
   
   const inputJson = metadata?.inputJson ?? messages;
+  const provider = process.env.AI_PROVIDER || "nvidia";
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const controller = new AbortController();
@@ -50,7 +51,8 @@ async function callWithValidation<T>(
 
     try {
       const openai = getAiClient();
-      const completion = await openai.chat.completions.create({
+      
+      const reqPayload: any = {
         model,
         messages: attempt === 0
           ? messages
@@ -61,8 +63,16 @@ async function callWithValidation<T>(
                 content: "The previous output was malformed. Please return valid JSON matching the required schema exactly.",
               },
             ],
-        response_format: zodResponseFormat(zodSchema, formatName),
-      }, { signal: controller.signal });
+      };
+
+      if (provider === "nvidia") {
+        const jsonSchema = zodResponseFormat(zodSchema as any, formatName).json_schema.schema;
+        reqPayload.extra_body = { nvext: { guided_json: jsonSchema } };
+      } else {
+        reqPayload.response_format = zodResponseFormat(zodSchema as any, formatName);
+      }
+
+      const completion = await openai.chat.completions.create(reqPayload, { signal: controller.signal });
 
       clearTimeout(timeout);
       const content = completion.choices[0].message.content;

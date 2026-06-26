@@ -52,3 +52,9 @@ Before a full launch, verify the live production behavior:
 - [ ] Supabase database rows persist and update correctly
 - [ ] Live RLS policies protect user data
 - [ ] AI usage and token tracking
+- [ ] verify ProfileExtractionAgent with NIM
+- [ ] verify GapDetectionAgent with NIM
+- [ ] verify ResumeWriterAgent with NIM
+- [ ] verify ATSAuditAgent with NIM
+- [ ] verify ImproveAgent with NIM
+- [ ] verify TailorAgent with NIM
