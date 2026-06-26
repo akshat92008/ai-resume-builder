@@ -4,6 +4,7 @@ import { getServerResume, saveServerResume, deleteServerResume } from "@/lib/car
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
 import { ResumePayloadSchema, mergeResumeContent } from "@/lib/careerpath/types";
 import { requireAppAccess } from "@/lib/careerpath/auth";
+import { parseJsonBody } from "@/lib/careerpath/api-utils";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
@@ -55,7 +56,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (text.length > 100000) {
       return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
     }
-    const json = JSON.parse(text);
+    const json = parseJsonBody(text);
+    if ("error" in json && json.error === "INVALID_JSON") {
+      return NextResponse.json(
+        { error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } },
+        { status: 400 }
+      );
+    }
     const parseResult = ResumePayloadSchema.safeParse(json);
     if (!parseResult.success) {
       return NextResponse.json({ error: { code: "INVALID_INPUT", message: "Invalid payload.", recoverable: true } }, { status: 400 });

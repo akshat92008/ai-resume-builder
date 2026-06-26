@@ -230,7 +230,7 @@ export async function saveAgentRun(run: {
   const admin = createSupabaseAdminClient();
   if (!admin) return;
 
-  await admin
+  const { error: insertError } = await admin
     .from("agent_runs")
     .insert({
       id: crypto.randomUUID(),
@@ -244,8 +244,11 @@ export async function saveAgentRun(run: {
       error: run.error || null,
       latency_ms: run.latencyMs || null,
       model: run.model || null,
-    })
-    .then(() => {}, (err) => console.error("[agent_runs] insert failed", err)); // fire-and-forget
+    });
+
+  if (insertError) {
+    console.error("[agent_runs] insert failed", insertError);
+  }
 }
 
 // ---------------------------------------------------------------------------

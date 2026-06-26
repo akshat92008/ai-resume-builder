@@ -57,18 +57,30 @@ export default function ResumeDetailPage() {
     loadResume();
   }, [params.id]);
 
-  function updateResume(next: CareerPathResume, status = "Saved changes.") {
+  function updateResume(next: CareerPathResume, status = "Saved locally.") {
     const saved = saveCareerPathResume(next);
     setResume(saved);
     setMessage(status);
-    window.setTimeout(() => setMessage(""), 1800);
+    const timer = window.setTimeout(() => setMessage(""), 1800);
 
     // Also save to server
     fetch(`/api/resume/${saved.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(saved),
-    }).catch(() => {});
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Sync failed");
+        window.clearTimeout(timer);
+        setMessage("Synced to account.");
+        window.setTimeout(() => setMessage(""), 1800);
+      })
+      .catch(() => {
+        window.clearTimeout(timer);
+        setMessage("");
+        setError("Failed to sync to account. Saved locally.");
+        window.setTimeout(() => setError(""), 4000);
+      });
   }
 
   async function autoImprove() {

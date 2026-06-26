@@ -5,6 +5,7 @@ vi.mock("../../lib/careerpath/db", () => ({
   getServerResume: vi.fn(),
   saveServerResume: vi.fn(),
   deleteServerResume: vi.fn(),
+  getSupabaseUser: vi.fn().mockResolvedValue({ id: "user_1" }),
 }));
 
 vi.mock("../../lib/careerpath/agents", () => ({

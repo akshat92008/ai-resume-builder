@@ -6,6 +6,7 @@ import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { requireAiAccess, requireProductionPersistence } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
+import { parseJsonBody } from "@/lib/careerpath/api-utils";
 import { z } from "zod";
 
 const AuditRequestSchema = z.object({
@@ -26,7 +27,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
     }
     
-    const json = JSON.parse(text);
+    const json = parseJsonBody(text);
+    if ("error" in json && json.error === "INVALID_JSON") {
+      return NextResponse.json(
+        { error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } },
+        { status: 400 }
+      );
+    }
     const parseResult = AuditRequestSchema.safeParse(json);
     if (!parseResult.success) {
       return NextResponse.json(
