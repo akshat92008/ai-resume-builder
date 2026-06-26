@@ -36,10 +36,11 @@ async function callWithValidation<T>(
     resumeId?: string;
     userId?: string;
     inputJson?: unknown;
+    fast?: boolean;
   }
 ): Promise<T> {
   const startMs = Date.now();
-  const model = getModel();
+  const model = getModel(metadata?.fast);
   let lastError: string | undefined;
   
   const inputJson = metadata?.inputJson ?? messages;
@@ -149,7 +150,7 @@ export async function extractProfileDataAgent(
     "profile",
     ProfileSchema,
     () => existing as unknown as ParsedProfile, // fallback
-    { ...metadata, inputJson: { input, targetRole } }
+    { ...metadata, fast: true, inputJson: { input, targetRole } }
   );
 
   return {
@@ -184,7 +185,7 @@ export async function detectGapsAgent(
     "gapReport",
     GapReportSchema,
     () => detectGaps(profile, mode),
-    { ...metadata, inputJson: { profile, mode } }
+    { ...metadata, fast: true, inputJson: { profile, mode } }
   );
 }
 
