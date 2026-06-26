@@ -57,7 +57,8 @@ export default function BuilderPage() {
 
 function BuilderExperience() {
   const searchParams = useSearchParams();
-  const initialMode = searchParams.get("mode") as BuilderMode | null;
+  const rawMode = searchParams.get("mode") as BuilderMode | null;
+  const initialMode = rawMode && modeOptions.some((o) => o.mode === rawMode) ? rawMode : "build";
   const [mode, setMode] = useState<BuilderMode | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -68,9 +69,7 @@ function BuilderExperience() {
   const [completedProgress, setCompletedProgress] = useState<string[]>([]);
 
   useEffect(() => {
-    if (initialMode && modeOptions.some((option) => option.mode === initialMode)) {
-      startMode(initialMode);
-    }
+    startMode(initialMode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMode]);
 
@@ -209,9 +208,14 @@ function BuilderExperience() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!mode && (
+                {!mode && !loading && (
                   <div className="rounded-md border border-dashed bg-slate-50 p-5 text-sm text-slate-500">
                     Pick Build Resume, Improve Resume, or Tailor to Job to begin.
+                  </div>
+                )}
+                {!mode && loading && (
+                  <div className="flex justify-center p-5">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                   </div>
                 )}
                 <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
