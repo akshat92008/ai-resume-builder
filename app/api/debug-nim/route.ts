@@ -3,6 +3,14 @@ import { getAiClient, getModel, GapReportSchema } from "@/lib/careerpath/llm";
 import { zodResponseFormat } from "openai/helpers/zod";
 
 export async function GET() {
+  const apiKey = (process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY || "");
+  const debugInfo = {
+    keyLength: apiKey.length,
+    startsWith: apiKey.substring(0, 5),
+    endsWith: apiKey.substring(apiKey.length - 5),
+    provider: process.env.AI_PROVIDER || "not-set"
+  };
+
   try {
     const openai = getAiClient();
     const model = getModel();
@@ -37,8 +45,9 @@ export async function GET() {
       raw: parsed,
       validated: result.success,
       errors: result.error?.issues,
+      debugInfo
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message, debugInfo }, { status: 500 });
   }
 }
