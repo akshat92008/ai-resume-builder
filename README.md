@@ -15,7 +15,7 @@ CareerPath AI turns messy career data into a clean, ATS-friendly, role-aligned r
 
 ```bash
 cp .env.example .env.local
-# Add OPENAI_API_KEY
+# Add NVIDIA_NIM_API_KEY
 npm install
 npm run dev
 ```
@@ -27,19 +27,19 @@ If Supabase is not configured, the app runs entirely in-memory for development a
 1. Set up a Supabase project.
 2. Run `supabase/schema.sql` in the SQL Editor.
 3. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to Vercel.
-4. Add `OPENAI_API_KEY` to Vercel.
-*Note: Production requires login + Supabase + OpenAI key.*
+4. Add `NVIDIA_NIM_API_KEY`, `NVIDIA_NIM_BASE_URL`, and `NVIDIA_NIM_MODEL` to Vercel.
+*Note: Production requires login + Supabase + NVIDIA NIM key.*
 
 ## Tech Stack
 
 - Next.js 16 (App Router)
 - React 19
 - Supabase (Auth, Database)
-- OpenAI (gpt-4o-mini)
+- NVIDIA NIM (meta/llama-3.3-70b-instruct or similar)
 - Tailwind CSS
 - Zod (Validation)
 
-## Manual Launch Checklist (Real Supabase + OpenAI)
+## Manual Launch Checklist (Real Supabase + NVIDIA NIM)
 
 Before a full launch, verify the live production behavior:
 - [ ] Signup and Login flows
@@ -51,4 +51,4 @@ Before a full launch, verify the live production behavior:
 - [ ] Rate limits trigger correctly after repeated usage
 - [ ] Supabase database rows persist and update correctly
 - [ ] Live RLS policies protect user data
-- [ ] OpenAI cost and token usage tracking
+- [ ] AI usage and token tracking

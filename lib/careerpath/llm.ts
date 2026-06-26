@@ -1,30 +1,38 @@
 import OpenAI from "openai";
 import { z } from "zod";
 
-let _openaiClient: OpenAI | null = null;
+let _aiClient: OpenAI | null = null;
 
 /**
- * Lazy-initialized OpenAI client. Only instantiated at runtime when called,
+ * Lazy-initialized AI client. Only instantiated at runtime when called,
  * never during build-time module evaluation.
  */
-export function getOpenAIClient(): OpenAI {
-  if (_openaiClient) return _openaiClient;
+export function getAiClient(): OpenAI {
+  if (_aiClient) return _aiClient;
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "OPENAI_API_KEY is required for CareerPath AI generation. " +
-      "Set it in your .env.local file."
-    );
+  const provider = process.env.AI_PROVIDER || "nvidia";
+
+  if (provider === "nvidia") {
+    const apiKey = process.env.NVIDIA_NIM_API_KEY;
+    const baseURL = process.env.NVIDIA_NIM_BASE_URL || "https://integrate.api.nvidia.com/v1";
+
+    if (!apiKey) {
+      throw new Error(
+        "NVIDIA_NIM_API_KEY is required for CareerPath AI generation. " +
+        "Set it in your .env.local file."
+      );
+    }
+
+    _aiClient = new OpenAI({ apiKey, baseURL });
+    return _aiClient;
   }
 
-  _openaiClient = new OpenAI({ apiKey });
-  return _openaiClient;
+  throw new Error(`Unsupported AI_PROVIDER: ${provider}`);
 }
 
 /** Model to use for all CareerPath AI agent calls. */
 export function getModel(): string {
-  return process.env.OPENAI_MODEL || "gpt-4o-mini";
+  return process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
 }
 
 export const ProfileSchema = z.object({

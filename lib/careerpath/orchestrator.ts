@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
 import {
-  getOpenAIClient,
+  getAiClient,
   getModel,
   ProfileSchema,
   GapReportSchema,
@@ -49,7 +49,7 @@ async function callWithValidation<T>(
     const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
     try {
-      const openai = getOpenAIClient();
+      const openai = getAiClient();
       const completion = await openai.chat.completions.create({
         model,
         messages: attempt === 0
