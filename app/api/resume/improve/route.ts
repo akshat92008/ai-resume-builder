@@ -57,9 +57,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const startingAudit = resume.audit ?? await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription);
-    const content = await improveResumeAgent(resume.content, startingAudit, resume.targetRole);
-    const audit = await auditResumeAgent(content, resume.targetRole, resume.jobDescription);
+    const metadata = { userId: auth.user?.id, resumeId: resume.id };
+    const startingAudit = resume.audit ?? await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription, metadata);
+    const content = await improveResumeAgent(resume.content, startingAudit, resume.targetRole, metadata);
+    const audit = await auditResumeAgent(content, resume.targetRole, resume.jobDescription, metadata);
     const updated: CareerPathResume = {
       ...resume,
       content,

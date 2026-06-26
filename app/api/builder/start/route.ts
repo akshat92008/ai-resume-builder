@@ -3,6 +3,8 @@ import { createBuilderSession } from "@/lib/careerpath/agents";
 import { saveSession } from "@/lib/careerpath/db";
 import type { BuilderMode } from "@/lib/careerpath/types";
 import { z } from "zod";
+import { requireAiAccess } from "@/lib/careerpath/auth";
+import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 
 const StartRequestSchema = z.object({
   mode: z.enum(["build", "improve", "tailor"]).optional(),
@@ -11,6 +13,13 @@ const StartRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    let userId = null;
+    if (isServerSupabaseConfigured) {
+      const auth = await requireAiAccess();
+      if (!auth.ok) return auth.response;
+      userId = auth.user?.id || null;
+    }
+
     const json = await request.json().catch(() => ({}));
     const parseResult = StartRequestSchema.safeParse(json);
     if (!parseResult.success) {
@@ -23,6 +32,7 @@ export async function POST(request: Request) {
     
     const mode = body.mode ?? "build";
     const session = createBuilderSession(mode, body.targetRole ?? "");
+    if (userId) session.userId = userId;
     await saveSession(session);
     const message = session.messages[0]?.content ?? "Paste your details. Messy is fine.";
 

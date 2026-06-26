@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
     });
 
-    const response = await runSessionTurn(session, userMessage);
+    const response = await runSessionTurn(session, userMessage, auth.user?.id);
     await saveSession(response.session);
 
     if (response.resume) await saveServerResume(response.resume);
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function runSessionTurn(session: BuilderSession, userMessage: string): Promise<{
+async function runSessionTurn(session: BuilderSession, userMessage: string, userId?: string): Promise<{
   session: BuilderSession;
   assistantMessage: string;
   resume?: CareerPathResume;
@@ -112,7 +112,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string): Pro
   }
 
   if (session.mode === "tailor" && session.currentStep === "collect_profile") {
-    session.profile = await extractProfileDataAgent(userMessage, session.profile, session.targetRole);
+    session.profile = await extractProfileDataAgent(userMessage, session.profile, session.targetRole, { userId, sessionId: session.id, resumeId: session.resumeId });
     session.currentStep = "collect_job";
     const assistantMessage = "Now paste the job description. I will only tailor with skills and claims supported by your resume.";
     session.messages.push(systemMessage(assistantMessage));
@@ -120,7 +120,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string): Pro
   }
 
   if (session.mode === "tailor" && session.currentStep === "collect_job") {
-    const resume = await generateFinalResume(session, userMessage);
+    const resume = await generateFinalResume(session, userMessage, userId);
     session.currentStep = "generated";
     session.resumeId = resume.id;
     const assistantMessage = `Your tailored resume is ready. Match score: ${resume.tailoring?.matchScore ?? resume.score?.overall ?? 0}/100. I left unsupported job keywords out instead of inventing them.`;
@@ -128,8 +128,8 @@ async function runSessionTurn(session: BuilderSession, userMessage: string): Pro
     return { session, assistantMessage, resume };
   }
 
-  session.profile = await extractProfileDataAgent(userMessage, session.profile, session.targetRole);
-  const gapReport = await detectGapsAgent(session.profile, session.mode);
+  session.profile = await extractProfileDataAgent(userMessage, session.profile, session.targetRole, { userId, sessionId: session.id, resumeId: session.resumeId });
+  const gapReport = await detectGapsAgent(session.profile, session.mode, { userId, sessionId: session.id, resumeId: session.resumeId });
   const hasAlreadyAskedQuestions = session.currentStep === "needs_info";
 
   if (gapReport.questionsToAsk.length && !hasAlreadyAskedQuestions) {
@@ -144,7 +144,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string): Pro
     return { session, assistantMessage };
   }
 
-  const resume = await generateFinalResume(session);
+  const resume = await generateFinalResume(session, "", userId);
   session.currentStep = "generated";
   session.resumeId = resume.id;
   const assistantMessage = `Your resume is ready. Resume Score: ${resume.score?.overall ?? 0}/100. Top fixes: ${(resume.audit?.recommendedFixes ?? []).slice(0, 3).join(" ")}`;
@@ -152,9 +152,10 @@ async function runSessionTurn(session: BuilderSession, userMessage: string): Pro
   return { session, assistantMessage, resume };
 }
 
-async function generateFinalResume(session: BuilderSession, jobDescription = "") {
-  const draft = await writeResumeAgent(session.profile, session.mode, jobDescription);
-  const draftAudit = await auditResumeAgent(draft, session.targetRole, jobDescription);
+async function generateFinalResume(session: BuilderSession, jobDescription = "", userId?: string) {
+  const metadata = { userId, sessionId: session.id, resumeId: session.resumeId };
+  const draft = await writeResumeAgent(session.profile, session.mode, jobDescription, metadata);
+  const draftAudit = await auditResumeAgent(draft, session.targetRole, jobDescription, metadata);
   
   const resume = createResumeRecord({
     mode: session.mode,
@@ -166,10 +167,10 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "")
   });
 
   if (session.mode === "tailor") {
-    const tailoring = await tailorResumeAgent(resume.content, session.targetRole, jobDescription);
+    const tailoring = await tailorResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
     resume.content = tailoring.tailoredResume;
     resume.tailoring = tailoring;
-    const finalAudit = await auditResumeAgent(resume.content, session.targetRole, jobDescription);
+    const finalAudit = await auditResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
     resume.audit = finalAudit;
     resume.score = finalAudit.score;
   } else {

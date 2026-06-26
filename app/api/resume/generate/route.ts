@@ -36,8 +36,9 @@ export async function POST(request: Request) {
     const session = await getSession(body.sessionId);
     if (!session) return NextResponse.json({ error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } }, { status: 404 });
 
-    const draft = await writeResumeAgent(session.profile, session.mode, session.profile.rawNotes);
-    const draftAudit = await auditResumeAgent(draft, session.targetRole);
+    const metadata = { userId: auth.user?.id, sessionId: session.id, resumeId: session.resumeId };
+    const draft = await writeResumeAgent(session.profile, session.mode, session.profile.rawNotes, metadata);
+    const draftAudit = await auditResumeAgent(draft, session.targetRole, "", metadata);
     
     const resume = createResumeRecord({
       mode: session.mode,

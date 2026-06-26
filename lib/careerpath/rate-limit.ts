@@ -17,8 +17,14 @@ export async function checkRateLimit(
     return { allowed: false, remaining: 0, error: "RATE_LIMIT_CONFIG_MISSING" };
   }
 
-  const salt = process.env.RATE_LIMIT_SALT || "default-salt";
-  const finalIpHash = crypto.createHash("sha256").update(ipHash + salt).digest("hex");
+  const salt = process.env.RATE_LIMIT_SALT;
+  if (!salt) {
+    if (process.env.NODE_ENV === "production") {
+      return { allowed: false, remaining: 0, error: "RATE_LIMIT_SALT_MISSING" };
+    }
+  }
+  const finalSalt = salt || "default-salt";
+  const finalIpHash = crypto.createHash("sha256").update(ipHash + finalSalt).digest("hex");
 
   // Count events for the last 24 hours
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -38,7 +44,10 @@ export async function checkRateLimit(
   const { count, error } = await query;
   if (error) {
     console.error("[rate-limit] Error checking rate limit:", error);
-    return { allowed: true, remaining: maxLimit }; // Fail open
+    if (process.env.NODE_ENV === "production") {
+      return { allowed: false, remaining: 0, error: "RATE_LIMIT_CHECK_FAILED" };
+    }
+    return { allowed: true, remaining: maxLimit }; // Fail open only in dev
   }
 
   const currentCount = count || 0;

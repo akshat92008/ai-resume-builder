@@ -79,7 +79,7 @@ export default function ResumeDetailPage() {
       const response = await fetch("/api/resume/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume }),
+        body: JSON.stringify({ resumeId: resume.id, resume }),
       });
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
       if (!response.ok || !data.resume) throw data;
@@ -99,7 +99,7 @@ export default function ResumeDetailPage() {
       const response = await fetch("/api/resume/tailor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume, jobDescription }),
+        body: JSON.stringify({ resumeId: resume.id, resume, jobDescription }),
       });
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
       if (!response.ok || !data.resume) throw data;

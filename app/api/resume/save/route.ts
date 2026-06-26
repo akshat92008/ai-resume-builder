@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
+import { requireAiAccess } from "@/lib/careerpath/auth";
+import { isServerSupabaseConfigured } from "@/lib/supabase/server";
+import { getServerResume } from "@/lib/careerpath/db";
+import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { z } from "zod";
 
 const SaveRequestSchema = z.object({
-  resume: z.object({
-    id: z.string(),
-  }).passthrough(),
+  resume: ResumePayloadSchema,
 });
 
 export async function POST(request: Request) {
@@ -24,6 +26,25 @@ export async function POST(request: Request) {
       );
     }
     const body = parseResult.data as { resume: CareerPathResume };
+
+    if (isServerSupabaseConfigured) {
+      const auth = await requireAiAccess();
+      if (!auth.ok) return auth.response;
+      const user = auth.user;
+      
+      if (user) {
+        if (body.resume.id) {
+          const existing = await getServerResume(body.resume.id);
+          if (existing && existing.userId && existing.userId !== user.id) {
+            return NextResponse.json(
+              { error: { code: "FORBIDDEN", message: "You do not own this resume.", recoverable: true } },
+              { status: 403 }
+            );
+          }
+        }
+        body.resume.userId = user.id;
+      }
+    }
 
     await saveServerResume(body.resume);
     return NextResponse.json({ resumeId: body.resume.id, saved: true });

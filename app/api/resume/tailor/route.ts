@@ -65,8 +65,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const tailoring = await tailorResumeAgent(resume.content, resume.targetRole, body.jobDescription);
-    const audit = await auditResumeAgent(tailoring.tailoredResume, resume.targetRole, body.jobDescription);
+    const metadata = { userId: auth.user?.id, resumeId: resume.id };
+    const tailoring = await tailorResumeAgent(resume.content, resume.targetRole, body.jobDescription, metadata);
+    const audit = await auditResumeAgent(tailoring.tailoredResume, resume.targetRole, body.jobDescription, metadata);
     const tailored = createResumeRecord({
       mode: "tailor",
       targetRole: resume.targetRole,

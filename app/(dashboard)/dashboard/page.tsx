@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Copy, Download, FileText, Loader2, Plus, Printer, Trash2 } from "lucide-react";
+import { Copy, FileText, Loader2, Plus, Printer, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardContent, EmptyState } from "@/components/ui";
 import { deleteCareerPathResume, getCareerPathResumes } from "@/lib/careerpath/client-store";
 import type { CareerPathResume } from "@/lib/careerpath/types";
@@ -118,7 +118,7 @@ export default function DashboardPage() {
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => window.open(`/resume/${resume.id}`, "_blank")}>
                       <Printer className="mr-1.5 h-3.5 w-3.5" />
-                      Print PDF
+                      Print / Save PDF
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => removeResume(resume.id)} className="text-red-600">
                       <Trash2 className="mr-1.5 h-3.5 w-3.5" />

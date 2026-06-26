@@ -113,6 +113,7 @@ export async function extractProfileDataAgent(
   input: string,
   existing: CareerPathProfile,
   targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; }
 ): Promise<CareerPathProfile> {
   type ParsedProfile = z.infer<typeof ProfileSchema>;
   const result = await callWithValidation<ParsedProfile>(
@@ -132,6 +133,7 @@ export async function extractProfileDataAgent(
     "profile",
     ProfileSchema,
     () => existing as unknown as ParsedProfile, // fallback
+    { ...metadata, inputJson: { input, targetRole } }
   );
 
   return {
@@ -147,6 +149,7 @@ export async function extractProfileDataAgent(
 export async function detectGapsAgent(
   profile: CareerPathProfile,
   mode: BuilderMode,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; }
 ): Promise<GapReport> {
   return callWithValidation<GapReport>(
     "GapDetectionAgent",
@@ -171,6 +174,7 @@ export async function detectGapsAgent(
       resumeRisk: [],
       questionsToAsk: [],
     }),
+    { ...metadata, inputJson: { profile, mode } }
   );
 }
 
@@ -178,6 +182,7 @@ export async function writeResumeAgent(
   profile: CareerPathProfile,
   mode: BuilderMode,
   jobDescription = "",
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; }
 ): Promise<CareerPathResumeContent> {
   return callWithValidation<CareerPathResumeContent>(
     "ResumeWriterAgent",
@@ -195,6 +200,8 @@ export async function writeResumeAgent(
     ],
     "resume",
     ResumeContentSchema,
+    undefined,
+    { ...metadata, inputJson: { profile, mode, jobDescription } }
   );
 }
 
@@ -202,6 +209,7 @@ export async function auditResumeAgent(
   contentParam: CareerPathResumeContent,
   targetRole: string,
   jobDescription = "",
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; }
 ): Promise<CareerPathResumeAudit> {
   return callWithValidation<CareerPathResumeAudit>(
     "ATSAuditAgent",
@@ -219,6 +227,8 @@ export async function auditResumeAgent(
     ],
     "audit",
     ResumeAuditSchema,
+    undefined,
+    { ...metadata, inputJson: { content: contentParam, targetRole, jobDescription } }
   );
 }
 
@@ -226,6 +236,7 @@ export async function improveResumeAgent(
   contentParam: CareerPathResumeContent,
   audit: CareerPathResumeAudit,
   targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; }
 ): Promise<CareerPathResumeContent> {
   return callWithValidation<CareerPathResumeContent>(
     "ResumeImprovementAgent",
@@ -243,6 +254,8 @@ export async function improveResumeAgent(
     ],
     "resume",
     ResumeContentSchema,
+    undefined,
+    { ...metadata, inputJson: { content: contentParam, audit, targetRole } }
   );
 }
 
@@ -250,6 +263,7 @@ export async function tailorResumeAgent(
   resumeContent: CareerPathResumeContent,
   targetRole: string,
   jobDescription: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; }
 ): Promise<CareerPathTailoringResult> {
   return callWithValidation<CareerPathTailoringResult>(
     "JobTailoringAgent",
@@ -267,6 +281,8 @@ export async function tailorResumeAgent(
     ],
     "tailoring",
     TailoringResultSchema,
+    undefined,
+    { ...metadata, inputJson: { content: resumeContent, targetRole, jobDescription } }
   );
 }
 

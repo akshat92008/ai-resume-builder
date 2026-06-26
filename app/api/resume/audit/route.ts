@@ -58,7 +58,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const audit = await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription);
+    const metadata = { userId: auth.user?.id, resumeId: resume.id };
+    const audit = await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription, metadata);
     const updated = { ...resume, audit, score: audit.score, updatedAt: new Date().toISOString() };
     await saveServerResume(updated as CareerPathResume);
 
