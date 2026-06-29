@@ -17,6 +17,7 @@ import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CareerPathResume, ResumeMessage, AgentIntent } from "@/lib/careerpath/types";
 import { getApiError } from "@/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
 
 type ChatMsg = {
   id: string;
@@ -54,16 +55,38 @@ function ThinkingAnimation() {
   }, []);
 
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700 animate-in fade-in zoom-in duration-300">
-      <div className="relative flex h-5 w-5 items-center justify-center">
-        <Sparkles className="absolute h-4 w-4 animate-ping opacity-50" />
-        <Sparkles className="relative h-4 w-4 animate-pulse" />
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow-sm border border-blue-100"
+    >
+      <div className="relative flex h-6 w-6 items-center justify-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+        >
+          <Sparkles className="h-5 w-5 text-blue-500" />
+        </motion.div>
       </div>
-      <div className="flex flex-col">
-        <span className="font-medium">CareerPath AI is working...</span>
-        <span className="text-blue-600/80 text-xs transition-opacity duration-500">{THINKING_PHRASES[index]}</span>
+      <div className="flex flex-col overflow-hidden w-full relative h-[38px] justify-center">
+        <span className="font-semibold text-[13px] leading-tight text-blue-700">CareerPath AI is working</span>
+        <div className="relative h-[16px] w-full overflow-hidden mt-0.5">
+          <AnimatePresence mode="popLayout">
+            <motion.span
+              key={index}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="absolute left-0 text-[12px] text-blue-600/80 whitespace-nowrap"
+            >
+              {THINKING_PHRASES[index]}
+            </motion.span>
+          </AnimatePresence>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -337,7 +360,7 @@ export default function AppWorkspace() {
         </div>
 
         {/* Resume preview */}
-        <div className="hidden flex-1 overflow-y-auto bg-slate-100 p-6 lg:block">
+        <div className="hidden flex-1 overflow-y-auto bg-slate-100 p-6 lg:block print:block print:bg-white print:p-0 print:overflow-visible">
           {currentResume ? (
             <div className="mx-auto max-w-[800px]">
               <div className="no-print mb-4 flex items-center justify-between">
@@ -378,7 +401,7 @@ export default function AppWorkspace() {
 
         {/* Mobile preview — shown below chat on small screens */}
         {currentResume && (
-          <div className="border-t p-4 lg:hidden">
+          <div className="border-t p-4 lg:hidden print:hidden">
             <details className="group">
               <summary className="no-print flex cursor-pointer items-center gap-2 rounded-lg bg-white p-3 text-sm font-medium text-slate-700 shadow-sm">
                 <FileText className="h-4 w-4 text-blue-600" />

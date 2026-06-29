@@ -87,12 +87,18 @@
     max-width: 100% !important;
   }
 
-  /* Prevent awkward section breaks */
-  section,
-  .resume-print-page > section,
-  .resume-print-page > div {
+  /* Prevent awkward section breaks for small elements */
+  .resume-print-page h2,
+  .resume-print-page h3,
+  .resume-print-page li {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* Prevent headings from being orphaned */
+  h2, h3 {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   /* Prevent header from breaking */
