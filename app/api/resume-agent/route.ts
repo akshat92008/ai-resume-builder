@@ -22,6 +22,7 @@ import {
   emptyCareerPathProfile,
   extractProfileData,
   auditResume,
+  tailorResume,
 } from "@/lib/careerpath/agents";
 import { mergeResumeContent } from "@/lib/careerpath/types";
 import type { AgentIntent, CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
@@ -311,11 +312,11 @@ async function handleTailorToJob(
     reason: "Pre-tailoring snapshot",
   });
 
-  const tailoring = await tailorResumeAgent(
-    currentResume.content,
-    currentResume.targetRole,
-    message,
-    metadata,
+  // Use fast synchronous tailoring to prevent Vercel function timeouts
+  const tailoring = tailorResume(
+    currentResume,
+    currentResume.profile,
+    message
   );
 
   const finalAudit = auditResume(
