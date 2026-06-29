@@ -1,6 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
-import crypto from "crypto";
 
 export async function checkRateLimit(
   userId: string | null,
@@ -18,7 +17,13 @@ export async function checkRateLimit(
   }
 
   const salt = process.env.RATE_LIMIT_SALT || "fallback-production-salt-secure-hash";
-  const finalIpHash = crypto.createHash("sha256").update(ipHash + salt).digest("hex");
+  
+  // Use Web Crypto API for Edge compatibility
+  const encoder = new TextEncoder();
+  const data = encoder.encode(ipHash + salt);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const finalIpHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
   // Count events for the last 24 hours
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

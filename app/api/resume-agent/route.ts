@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
+export const runtime = "edge";
 import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
@@ -12,9 +13,7 @@ import {
 } from "@/lib/careerpath/db";
 import {
   inferIntentLLM,
-  extractProfileDataAgent,
   writeResumeAgent,
-  auditResumeAgent,
   improveResumeAgent,
   tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
@@ -22,6 +21,7 @@ import {
   createResumeRecord,
   emptyCareerPathProfile,
   extractProfileData,
+  auditResume,
 } from "@/lib/careerpath/agents";
 import { mergeResumeContent } from "@/lib/careerpath/types";
 import type { AgentIntent, CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
@@ -184,29 +184,16 @@ async function handleCreateResume(
   userId: string,
   metadata: { userId: string; resumeId?: string },
 ) {
-  // Extract profile from message
+  // Extract profile from message using regex/sync (Instant)
   const profile = emptyCareerPathProfile();
   profile.userId = userId;
 
-  const extractedProfile = await extractProfileDataAgent(
-    message,
-    profile,
-    profile.target.role,
-    metadata,
-  );
+  const extractedProfile = extractProfileData(message, profile, profile.target.role);
+  // Ensure the LLM knows to look at the raw notes for context
+  extractedProfile.rawNotes = message;
 
   // Build resume
   const content = await writeResumeAgent(extractedProfile, "build", "", metadata);
-  // Skip the heavy audit agent during creation to prevent Vercel 60s timeout
-  // We provide a fast default audit score and instruct the user to ask for improvements.
-  const audit = {
-    score: {
-      overall: 80, atsCompatibility: 80, roleAlignment: 80, keywordCoverage: 80, bulletStrength: 80, clarity: 80, proofAndMetrics: 80, onePageFit: 80, formattingSafety: 80, truthfulness: 80
-    },
-    issues: [],
-    recommendedFixes: ["Say 'improve this resume' for a deep ATS analysis and rewrite."],
-    summary: "Initial resume generated."
-  };
 
   const resume = createResumeRecord({
     mode: "build",
@@ -216,13 +203,11 @@ async function handleCreateResume(
     title: `${extractedProfile.target.role || "CareerPath"} Resume`,
   });
   resume.userId = userId;
-  resume.audit = audit;
-  resume.score = audit.score;
 
   await saveServerResume(resume);
 
-  const score = audit.score?.overall ?? 0;
-  const fixes = audit.recommendedFixes?.slice(0, 2).join(" ") || "";
+  const score = resume.score?.overall ?? 0;
+  const fixes = resume.audit?.recommendedFixes?.slice(0, 2).join(" ") || "";
 
   return {
     assistantMessage: `Your resume is ready! Score: ${score}/100. ${fixes}\n\nYou can now say things like "Add a project", "Improve this", "Tailor to a job description", or "Rewrite my summary".`,
@@ -274,11 +259,10 @@ async function handleImproveResume(
     metadata,
   );
 
-  const finalAudit = await auditResumeAgent(
+  const finalAudit = auditResume(
     improved,
     currentResume.targetRole,
-    currentResume.jobDescription || "",
-    metadata,
+    currentResume.jobDescription || ""
   );
 
   const updatedResume: CareerPathResume = {
@@ -334,11 +318,10 @@ async function handleTailorToJob(
     metadata,
   );
 
-  const finalAudit = await auditResumeAgent(
+  const finalAudit = auditResume(
     tailoring.tailoredResume,
     currentResume.targetRole,
-    message,
-    metadata,
+    message
   );
 
   const updatedResume: CareerPathResume = {
@@ -395,11 +378,10 @@ async function handleAddInformation(
   // Merge — preserve existing content and add new content
   const merged = mergeResumeContent(currentResume.content, updatedContent);
 
-  const audit = await auditResumeAgent(
+  const audit = auditResume(
     merged,
     currentResume.targetRole,
-    currentResume.jobDescription || "",
-    metadata,
+    currentResume.jobDescription || ""
   );
 
   const updatedResume: CareerPathResume = {
@@ -451,11 +433,10 @@ async function handleRewriteSection(
     metadata,
   );
 
-  const finalAudit = await auditResumeAgent(
+  const finalAudit = auditResume(
     improved,
     currentResume.targetRole,
-    currentResume.jobDescription || "",
-    metadata,
+    currentResume.jobDescription || ""
   );
 
   const updatedResume: CareerPathResume = {
