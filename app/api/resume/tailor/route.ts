@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
-import { auditResumeAgent, tailorResumeAgent } from "@/lib/careerpath/orchestrator";
-import { createResumeRecord } from "@/lib/careerpath/agents";
+import { auditResume, createResumeRecord } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume, getSupabaseUser } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
@@ -11,6 +10,9 @@ import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
 import { z } from "zod";
+import { handleResumeMessage } from "@/lib/resume/agent";
+import { deriveRenderableResume } from "@/lib/resume/render";
+import { contentToResumeState } from "@/lib/resume/types";
 
 const TailorRequestSchema = z.object({
   resumeId: z.string().optional(),
@@ -76,30 +78,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const metadata = { userId: auth.user?.id, resumeId: resume.id };
-    const tailoring = await tailorResumeAgent(resume.content, resume.targetRole, body.jobDescription, metadata);
-    const audit = await auditResumeAgent(tailoring.tailoredResume, resume.targetRole, body.jobDescription, metadata);
+    const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
+    const brain = await handleResumeMessage({
+      userMessage: body.jobDescription,
+      currentResume: state,
+    });
+    const tailoredContent = deriveRenderableResume(brain.resume || state);
+    const audit = auditResume(tailoredContent, resume.targetRole, body.jobDescription);
     const tailored = createResumeRecord({
       mode: "tailor",
       targetRole: resume.targetRole,
-      content: tailoring.tailoredResume,
+      content: tailoredContent,
       profile: resume.profile,
       jobDescription: body.jobDescription,
       version: resume.version + 1,
       title: `${resume.targetRole} Tailored Resume`,
     });
-    tailored.tailoring = tailoring;
+    tailored.tailoring = {
+      matchScore: audit.score.roleAlignment,
+      matchedKeywords: brain.matchedKeywords || [],
+      safeKeywordsAdded: [],
+      missingKeywordsNotAdded: brain.missingKeywords || [],
+      tailoringSummary: ["Reordered supported facts toward the job description without adding missing skills."],
+      tailoredResume: tailoredContent,
+    };
     tailored.audit = audit;
     tailored.score = audit.score;
     await saveServerResume(tailored);
 
     return NextResponse.json({
       newResumeId: tailored.id,
-      matchScore: tailoring.matchScore,
-      matchedKeywords: tailoring.matchedKeywords,
-      missingKeywords: tailoring.missingKeywordsNotAdded,
-      tailoredContent: tailoring.tailoredResume,
-      tailoring,
+      matchScore: tailored.tailoring.matchScore,
+      matchedKeywords: tailored.tailoring.matchedKeywords,
+      missingKeywords: tailored.tailoring.missingKeywordsNotAdded,
+      tailoredContent,
+      tailoring: tailored.tailoring,
       resume: tailored,
     });
   } catch (err) {

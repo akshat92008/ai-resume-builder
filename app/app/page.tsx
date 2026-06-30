@@ -6,16 +6,19 @@ import {
   Download,
   FileText,
   FolderOpen,
+  Gauge,
   Loader2,
   LogOut,
   Plus,
   Send,
   Sparkles,
+  Target,
 } from "lucide-react";
-import { Alert, Button, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Tabs, Textarea } from "@/components/ui";
 import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
+import { ScorePanel } from "@/components/careerpath/ScorePanel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { CareerPathResume, ResumeMessage, AgentIntent } from "@/lib/careerpath/types";
+import type { CareerPathResume, CareerWorkspaceState, ResumeMessage } from "@/lib/careerpath/types";
 import { getApiError } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -30,9 +33,18 @@ const WELCOME_MESSAGE: ChatMsg = {
   id: "welcome",
   role: "assistant",
   content:
-    "Welcome to CareerPath AI! Tell me what you want to do.\n\nExamples:\n• \"Build my resume from this information…\"\n• Paste your current resume and say \"Improve this\"\n• Paste a job description and say \"Tailor my resume to this job\"\n• \"Add this project: [details]\"\n• \"Rewrite my summary\"\n• \"Download PDF\"",
+    "CareerPath AI is your personal AI career agent. Paste messy career info once, then I can build your career memory, tailor your resume to jobs, prepare application packs, track applications, and improve your strategy over time.",
   createdAt: new Date().toISOString(),
 };
+
+const COMMAND_CHIPS = [
+  "Build my resume from messy info",
+  "Tailor to a job description",
+  "Create application pack",
+  "Track this application",
+  "Analyze my job search",
+  "Generate frontend resume version",
+];
 
 const THINKING_PHRASES = [
   "Analyzing input data...",
@@ -96,6 +108,8 @@ export default function AppWorkspace() {
   const [input, setInput] = useState("");
   const [currentResume, setCurrentResume] = useState<CareerPathResume | null>(null);
   const [currentResumeId, setCurrentResumeId] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<CareerWorkspaceState | null>(null);
+  const [activeTab, setActiveTab] = useState("resume");
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
@@ -120,12 +134,14 @@ export default function AppWorkspace() {
         resume?: CareerPathResume;
         resumeId?: string;
         messages?: ResumeMessage[];
+        workspace?: CareerWorkspaceState;
       };
 
       if (data.resume) {
         setCurrentResume(data.resume);
         setCurrentResumeId(data.resumeId || data.resume.id);
       }
+      if (data.workspace) setWorkspace(data.workspace);
 
       if (data.messages && data.messages.length > 0) {
         const restored: ChatMsg[] = data.messages
@@ -197,6 +213,7 @@ export default function AppWorkspace() {
       } else if (data.resumeId) {
         setCurrentResumeId(data.resumeId);
       }
+      if (data.workspace) setWorkspace(data.workspace);
     } catch (caught) {
       setError(getApiError(caught, "Something went wrong. Your data is saved. Try again."));
     } finally {
@@ -215,6 +232,7 @@ export default function AppWorkspace() {
   async function startNewResume() {
     setCurrentResume(null);
     setCurrentResumeId(null);
+    setWorkspace(null);
     setMessages([
       {
         id: "new",
@@ -236,6 +254,11 @@ export default function AppWorkspace() {
 
   function handleDownloadPdf() {
     window.print();
+  }
+
+  function useCommand(command: string) {
+    setInput(command);
+    textareaRef.current?.focus();
   }
 
   if (initialLoading) {
@@ -296,12 +319,29 @@ export default function AppWorkspace() {
         </div>
       </header>
 
-      {/* Main workspace */}
-      <main className="flex min-h-0 flex-1">
-        {/* Chat panel */}
-        <div className="no-print flex w-full flex-col border-r bg-white lg:w-[440px] xl:w-[480px]">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)_320px] xl:grid-cols-[430px_minmax(0,1fr)_360px]">
+        <section className="no-print flex min-h-[520px] flex-col border-r bg-white">
+          <div className="border-b px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Your personal AI career agent</p>
+            <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-950">CareerPath AI</h1>
+            <p className="mt-1 text-sm leading-5 text-slate-600">
+              Build your career memory once, tailor every resume, prepare applications, and learn from outcomes.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {COMMAND_CHIPS.map((command) => (
+                <button
+                  key={command}
+                  type="button"
+                  onClick={() => useCommand(command)}
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800"
+                >
+                  {command}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -323,14 +363,12 @@ export default function AppWorkspace() {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Error */}
           {error && (
             <div className="px-4 pb-2">
               <Alert variant="error">{error}</Alert>
             </div>
           )}
 
-          {/* Input */}
           <div className="border-t bg-white p-4">
             <div className="flex gap-2">
               <Textarea
@@ -339,9 +377,9 @@ export default function AppWorkspace() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a command or paste career details..."
+                placeholder="Paste career info, a job description, or ask CareerPath AI what to do next..."
                 disabled={loading}
-                className="min-h-[52px] flex-1 resize-none"
+                className="min-h-[70px] flex-1 resize-none"
               />
               <Button
                 onClick={sendMessage}
@@ -357,49 +395,63 @@ export default function AppWorkspace() {
               </Button>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Resume preview */}
-        <div className="hidden flex-1 overflow-y-auto bg-slate-100 p-6 lg:block print:block print:bg-white print:p-0 print:overflow-visible">
-          {currentResume ? (
-            <div className="mx-auto max-w-[800px]">
-              <div className="no-print mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-950">
-                    {currentResume.title}
-                  </h2>
-                  <p className="text-sm text-slate-500">
-                    {currentResume.targetRole} | Score:{" "}
-                    {currentResume.score?.overall ?? "—"}/100 | v
-                    {currentResume.version}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-700">
-                    Live Preview
-                  </span>
-                </div>
-              </div>
-              <ResumeDocument content={currentResume.content} />
-            </div>
-          ) : (
-            <div className="flex min-h-[500px] items-center justify-center">
-              <div className="text-center">
-                <FileText className="mx-auto h-12 w-12 text-slate-300" />
-                <h2 className="mt-4 text-lg font-semibold text-slate-950">
-                  Resume preview will appear here
-                </h2>
-                <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                  Start by typing in the chat. Paste your career details, and
-                  CareerPath AI will build your resume.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        <section className="min-h-0 overflow-y-auto bg-slate-100 print:block print:bg-white print:p-0 print:overflow-visible">
+          <div className="no-print border-b bg-white px-4">
+            <Tabs
+              active={activeTab}
+              onChange={setActiveTab}
+              tabs={[
+                { id: "resume", label: "Resume" },
+                { id: "tailor", label: "Tailor" },
+                { id: "pack", label: "Application Pack" },
+                { id: "applications", label: "Applications" },
+                { id: "memory", label: "Memory" },
+              ]}
+            />
+          </div>
+          <div className="p-4 sm:p-6 print:p-0">
+            {activeTab === "resume" && (
+              <ResumeTab resume={currentResume} />
+            )}
+            {activeTab === "tailor" && (
+              <TailorTab resume={currentResume} workspace={workspace} onCommand={useCommand} />
+            )}
+            {activeTab === "pack" && (
+              <ApplicationPackTab workspace={workspace} onCommand={useCommand} />
+            )}
+            {activeTab === "applications" && (
+              <ApplicationsTab workspace={workspace} onCommand={useCommand} />
+            )}
+            {activeTab === "memory" && (
+              <MemoryTab workspace={workspace} onCommand={useCommand} />
+            )}
+          </div>
+        </section>
 
-        {/* Mobile preview — shown below chat on small screens */}
+        <aside className="no-print hidden min-h-0 overflow-y-auto border-l bg-white p-4 lg:block">
+          <div className="space-y-4">
+            {currentResume?.score && (
+              <ScorePanel score={currentResume.score} audit={currentResume.audit} />
+            )}
+            <section className="rounded-lg border bg-white p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Target className="h-4 w-4 text-blue-600" />
+                <h2 className="text-sm font-semibold text-slate-950">Career Memory</h2>
+              </div>
+              <MemorySummary workspace={workspace} />
+            </section>
+            <section className="rounded-lg border bg-white p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Gauge className="h-4 w-4 text-blue-600" />
+                <h2 className="text-sm font-semibold text-slate-950">Next Actions</h2>
+              </div>
+              <NextActions workspace={workspace} />
+            </section>
+          </div>
+        </aside>
+
         {currentResume && (
           <div className="border-t p-4 lg:hidden print:hidden">
             <details className="group">
@@ -407,7 +459,7 @@ export default function AppWorkspace() {
                 <FileText className="h-4 w-4 text-blue-600" />
                 View Resume Preview
                 <span className="ml-auto text-xs text-slate-400">
-                  Score: {currentResume.score?.overall ?? "—"}/100
+                  Score: {currentResume.score?.overall ?? "-"} /100
                 </span>
               </summary>
               <div className="mt-3">
@@ -418,5 +470,306 @@ export default function AppWorkspace() {
         )}
       </main>
     </div>
+  );
+}
+
+function ResumeTab({ resume }: { resume: CareerPathResume | null }) {
+  if (!resume) {
+    return (
+      <div className="flex min-h-[500px] items-center justify-center">
+        <div className="text-center">
+          <FileText className="mx-auto h-12 w-12 text-slate-300" />
+          <h2 className="mt-4 text-lg font-semibold text-slate-950">Resume preview will appear here</h2>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+            Paste messy career details into the agent. CareerPath AI will extract memory, mine achievements, and build a proof-based resume.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[820px]">
+      <div className="no-print mb-4 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">{resume.title}</h2>
+          <p className="text-sm text-slate-500">
+            {resume.targetRole} | Interview Conversion Score: {resume.resumeDocument?.score?.overall ?? resume.score?.overall ?? "-"} /100 | v{resume.version}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-600" />
+          <span className="text-xs font-medium text-blue-700">Live Preview</span>
+        </div>
+      </div>
+      <ProofStrip resume={resume} />
+      <ResumeDocument content={resume.content} />
+    </div>
+  );
+}
+
+function TailorTab({
+  resume,
+  workspace,
+  onCommand,
+}: {
+  resume: CareerPathResume | null;
+  workspace: CareerWorkspaceState | null;
+  onCommand: (command: string) => void;
+}) {
+  const tailoring = resume?.tailoring;
+  const job = workspace?.jobDescription;
+  return (
+    <div className="mx-auto max-w-4xl space-y-4">
+      <SectionShell title="Job Tailoring" description="Paste a job description in the agent to tailor without keyword stuffing.">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Metric label="Match" value={`${tailoring?.matchScore ?? resume?.resumeDocument?.score?.roleMatch ?? "-"} /100`} />
+          <Metric label="Matched keywords" value={tailoring?.matchedKeywords?.length ?? job?.keywords.length ?? 0} />
+          <Metric label="Missing" value={tailoring?.missingKeywordsNotAdded?.length ?? 0} />
+        </div>
+        <button
+          type="button"
+          onClick={() => onCommand("Tailor my resume to this job description: ")}
+          className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Tailor to a job
+        </button>
+      </SectionShell>
+      {tailoring && (
+        <SectionShell title="Changes Made">
+          <List items={tailoring.tailoringSummary} />
+          {tailoring.missingKeywordsNotAdded.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold text-slate-900">Unsupported keywords left out</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tailoring.missingKeywordsNotAdded.map((keyword) => (
+                  <Badge key={keyword} variant="outline">{keyword}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </SectionShell>
+      )}
+    </div>
+  );
+}
+
+function ApplicationPackTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  const pack = workspace?.applicationPack;
+  if (!pack) {
+    return (
+      <SectionShell title="Application Pack" description="Generate the complete kit for a job: cover letter, recruiter DM, cold email, LinkedIn note, why-fit answer, interview questions, prep plan, and follow-up.">
+        <button
+          type="button"
+          onClick={() => onCommand("Here is a job description. Prepare everything I need to apply: ")}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Create application pack
+        </button>
+      </SectionShell>
+    );
+  }
+  return (
+    <div className="mx-auto max-w-4xl space-y-4">
+      <TextBlock title="Cover Letter" text={pack.coverLetter} />
+      <TextBlock title="Recruiter DM" text={pack.recruiterDM} />
+      <TextBlock title="Cold Email" text={pack.coldEmail} />
+      <TextBlock title="LinkedIn Message" text={pack.linkedinMessage} />
+      <TextBlock title="Why Fit Answer" text={pack.whyFitAnswer} />
+      <SectionShell title="Interview Questions">
+        <div className="space-y-3">
+          {pack.interviewQuestions.map((item) => (
+            <div key={item.question} className="rounded-md border bg-slate-50 p-3">
+              <p className="font-medium text-slate-950">{item.question}</p>
+              <p className="mt-1 text-xs text-slate-500">{item.whyAsked}</p>
+              <p className="mt-2 text-sm text-slate-700">{item.suggestedAnswer}</p>
+            </div>
+          ))}
+        </div>
+      </SectionShell>
+      <TextBlock title="Preparation Plan" text={pack.preparationPlan.map((item, index) => `${index + 1}. ${item}`).join("\n")} />
+      <TextBlock title="Follow-up Message" text={pack.followUpMessage} />
+    </div>
+  );
+}
+
+function ApplicationsTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  const applications = workspace?.applications ?? [];
+  const statuses = ["saved", "applied", "follow_up_needed", "interview", "rejected", "offer", "ghosted"];
+  return (
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Application Tracker</h2>
+          <p className="text-sm text-slate-500">Track jobs so CareerPath AI can learn from your search loop.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onCommand("Track this job application: ")}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Track application
+        </button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {statuses.map((status) => {
+          const items = applications.filter((item) => item.status === status);
+          return (
+            <section key={status} className="min-h-[160px] rounded-lg border bg-white p-3">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold capitalize text-slate-900">{status.replaceAll("_", " ")}</h3>
+                <Badge variant="secondary">{items.length}</Badge>
+              </div>
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div key={item.id} className="rounded-md border bg-slate-50 p-3">
+                    <p className="font-medium text-slate-950">{item.company}</p>
+                    <p className="text-sm text-slate-600">{item.role}</p>
+                    <p className="mt-2 text-xs text-slate-500">{item.followUpAt ? "Next: follow up scheduled" : "Next: prepare or update status"}</p>
+                  </div>
+                ))}
+                {items.length === 0 && <p className="text-xs text-slate-400">No jobs yet.</p>}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MemoryTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  return (
+    <div className="mx-auto max-w-4xl space-y-4">
+      <SectionShell title="Career Memory Vault" description="CareerPath AI remembers reusable career proof so you do not rebuild from scratch every time.">
+        <MemorySummary workspace={workspace} expanded />
+      </SectionShell>
+      <SectionShell title="Career Interview">
+        <List items={(workspace?.careerProfile?.gaps ?? []).slice(0, 5).map((gap) => `${gap.question} (${gap.importance})`)} empty="No major missing details found yet." />
+        <button
+          type="button"
+          onClick={() => onCommand("Use these answers to improve my resume: ")}
+          className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Use answers to improve resume
+        </button>
+      </SectionShell>
+      <SectionShell title="Smart Resume Versions">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(workspace?.smartVersions ?? []).map((version) => (
+            <div key={version.versionType} className="rounded-md border bg-slate-50 p-3">
+              <h3 className="text-sm font-semibold text-slate-950">{version.title}</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-600">{version.whenToUse}</p>
+              <p className="mt-2 text-xs text-slate-500">Emphasizes: {version.emphasizes.slice(0, 3).join(", ")}</p>
+            </div>
+          ))}
+        </div>
+      </SectionShell>
+    </div>
+  );
+}
+
+function MemorySummary({ workspace, expanded = false }: { workspace: CareerWorkspaceState | null; expanded?: boolean }) {
+  const profile = workspace?.careerProfile;
+  if (!profile) return <p className="text-sm leading-6 text-slate-500">No career memory yet. Paste messy career info to build it.</p>;
+  return (
+    <div className="space-y-3 text-sm">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Target</p>
+        <p className="mt-1 text-slate-900">{profile.target.targetRoles.join(", ") || "Not set yet"}</p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Strongest assets</p>
+        <List items={profile.strengths.map((item) => item.title).slice(0, expanded ? 8 : 3)} empty="Add projects, education, or experience to identify strengths." />
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Missing proof</p>
+        <List items={profile.gaps.map((item) => item.area.replaceAll("_", " ")).slice(0, expanded ? 8 : 4)} empty="No obvious proof gaps." />
+      </div>
+      {expanded && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Skills</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {profile.skills.slice(0, 18).map((skill) => <Badge key={skill.id} variant="secondary">{skill.name}</Badge>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NextActions({ workspace }: { workspace: CareerWorkspaceState | null }) {
+  const profileGaps = workspace?.careerProfile?.gaps ?? [];
+  const insights = workspace?.insights ?? [];
+  const actions = [
+    ...profileGaps.slice(0, 3).map((item) => item.question),
+    ...insights.slice(0, 2).map((item) => item.suggestedAction),
+  ].slice(0, 5);
+  return <List items={actions} empty="Build a resume or track applications to see next actions." />;
+}
+
+function ProofStrip({ resume }: { resume: CareerPathResume }) {
+  const bullets = resume.resumeDocument?.bullets ?? [];
+  if (!bullets.length) return null;
+  const counts = bullets.reduce<Record<string, number>>((acc, bullet) => {
+    acc[bullet.proofLevel] = (acc[bullet.proofLevel] || 0) + 1;
+    return acc;
+  }, {});
+  return (
+    <div className="no-print mb-4 rounded-lg border bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {["verified", "strong", "estimated", "weak", "risky"].map((level) => (
+          <Badge key={level} variant={level === "weak" || level === "risky" ? "outline" : "secondary"}>
+            {level}: {counts[level] || 0}
+          </Badge>
+        ))}
+      </div>
+      {bullets.some((bullet) => bullet.riskFlags.length > 0) && (
+        <p className="mt-2 text-xs text-amber-700">Needs proof: add metric, link, result, or technical detail.</p>
+      )}
+    </div>
+  );
+}
+
+function SectionShell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+      {description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-md border bg-slate-50 p-3">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1 text-xl font-bold text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function TextBlock({ title, text }: { title: string; text: string }) {
+  return (
+    <SectionShell title={title}>
+      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{text}</p>
+      <button
+        type="button"
+        onClick={() => navigator.clipboard?.writeText(text)}
+        className="mt-3 rounded-md border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+      >
+        Copy
+      </button>
+    </SectionShell>
+  );
+}
+
+function List({ items, empty = "Nothing yet." }: { items: string[]; empty?: string }) {
+  if (!items.length) return <p className="text-sm text-slate-500">{empty}</p>;
+  return (
+    <ul className="space-y-1 text-sm leading-6 text-slate-700">
+      {items.map((item) => <li key={item}>- {item}</li>)}
+    </ul>
   );
 }

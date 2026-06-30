@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getLatestResumeForUser, getLatestMessagesForUser } from "@/lib/careerpath/db";
+import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 
 /**
  * GET /api/app-state
@@ -26,6 +27,7 @@ export async function GET() {
       resume: resume || null,
       resumeId: resume?.id || null,
       messages,
+      workspace: buildCareerWorkspaceState(resume),
     });
   } catch (err) {
     console.error("[app-state] Error:", err);
