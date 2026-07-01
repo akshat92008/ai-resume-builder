@@ -572,7 +572,8 @@ export function routeCareerCommand(input: string, context: CareerContext = {}): 
   const wantsImprove = /\b(improve|stronger|better|ats|polish|rewrite)\b/.test(text);
   const wantsLinkedIn = /\blinkedin\b/.test(text) && /\b(optimi[sz]e|profile|headline|about|featured|seo)\b/.test(text);
   const wantsAchievementLog = isAchievementLogInput(input);
-  const careerData = /\b(i am|i built|i made|i know|project|certificate|education|college|intern|fresher|student|optimized|improved|shipped|launched|reduced|increased|won|published)\b/.test(text) || input.length > 140;
+  const wantsMemory = /\b(add this|add to|career memory|my github|my linkedin|my resume|link|url)\b/.test(text) || /https?:\/\/[^\s]+/.test(text);
+  const careerData = /\b(i am|i built|i made|i know|project|certificate|education|college|intern|fresher|student|optimized|improved|shipped|launched|reduced|increased|won|published)\b/.test(text) || input.length > 140 || wantsMemory;
 
   if (wantsPack) return command("generate_application_pack", false, true, true, false, false, "I will tailor the resume and prepare the full application pack.");
   if (wantsTrack) return command("track_job_application", false, false, false, true, false, "I will save this as a tracked application.");

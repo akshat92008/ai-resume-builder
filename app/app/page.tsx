@@ -146,7 +146,6 @@ export default function AppWorkspace() {
   const [currentResume, setCurrentResume] = useState<CareerPathResume | null>(null);
   const [currentResumeId, setCurrentResumeId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<CareerWorkspaceState | null>(null);
-  const [activeTab, setActiveTab] = useState("dashboard");
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
@@ -264,12 +263,6 @@ export default function AppWorkspace() {
       if (data.resume) {
         setCurrentResume(data.resume);
         setCurrentResumeId(data.resumeId || data.resume.id);
-        // Auto-navigate to relevant tab based on what was just generated
-        if (data.workspace?.achievementLog) setActiveTab("achievements");
-        else if (data.workspace?.applicationPack) setActiveTab("cover");
-        else if (data.workspace?.jobIntelligence) setActiveTab("job");
-        else if (data.resume.tailoring) setActiveTab("tailor");
-        else setActiveTab("dashboard");
       } else if (data.resumeId) {
         setCurrentResumeId(data.resumeId);
       }
@@ -379,7 +372,7 @@ export default function AppWorkspace() {
         </div>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)_320px] xl:grid-cols-[430px_minmax(0,1fr)_360px]">
+      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[400px_minmax(0,1fr)] xl:grid-cols-[450px_minmax(0,1fr)]">
         <section className="no-print flex min-h-[520px] flex-col border-r bg-white">
           <div className="border-b px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Store once. Generate forever.</p>
@@ -458,104 +451,39 @@ export default function AppWorkspace() {
         </section>
 
         <section className="min-h-0 overflow-y-auto bg-slate-100 print:block print:bg-white print:p-0 print:overflow-visible">
-          <div className="no-print border-b bg-white px-4">
-            <Tabs
-              active={activeTab}
-              onChange={setActiveTab}
-              tabs={[
-                { id: "dashboard", label: "Dashboard" },
-                { id: "memory", label: "Memory" },
-                { id: "resume", label: "Resume" },
-                { id: "job", label: "Job Intel" },
-                { id: "tailor", label: "Tailor" },
-                { id: "audit", label: "ATS Audit" },
-                { id: "improve", label: "Improve" },
-                { id: "cover", label: "Cover Letter" },
-                { id: "linkedin", label: "LinkedIn" },
-                { id: "applications", label: "Applications" },
-                { id: "coach", label: "Coach" },
-                { id: "achievements", label: "Achievements" },
-              ]}
-            />
-          </div>
-          <div className="p-4 sm:p-6 print:p-0">
-            {activeTab === "dashboard" && (
-              <DashboardTab workspace={workspace} resume={currentResume} onCommand={useCommand} />
-            )}
-            {activeTab === "memory" && (
-              <MemoryTab workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "resume" && (
-              <ResumeTab resume={currentResume} />
-            )}
-            {activeTab === "job" && (
-              <JobIntelligenceTab workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "tailor" && (
-              <TailorTab resume={currentResume} workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "audit" && (
-              <ATSAuditTab resume={currentResume} />
-            )}
-            {activeTab === "improve" && (
-              <ImproveTab resume={currentResume} workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "cover" && (
-              <CoverLetterTab workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "linkedin" && (
-              <LinkedInTab workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "applications" && (
-              <ApplicationsTab workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "coach" && (
-              <CoachTab workspace={workspace} />
-            )}
-            {activeTab === "achievements" && (
-              <AchievementLoggerTab workspace={workspace} onCommand={useCommand} />
+          <div className="p-4 sm:p-6 print:p-0 max-w-4xl mx-auto flex flex-col gap-6">
+            {currentResume ? (
+              <>
+                <div className="flex items-center justify-between no-print mb-2">
+                  <h2 className="text-lg font-semibold text-slate-900">Resume Preview</h2>
+                  {currentResume.score && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-600">ATS Score:</span>
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                        currentResume.score.overall >= 80 ? "bg-emerald-100 text-emerald-700" :
+                        currentResume.score.overall >= 60 ? "bg-amber-100 text-amber-700" :
+                        "bg-rose-100 text-rose-700"
+                      }`}>
+                        {currentResume.score.overall}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-lg border bg-white p-4 shadow-sm">
+                  <ResumeDocument content={currentResume.content} />
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center py-20 text-slate-500">
+                <FileText className="h-12 w-12 text-slate-300 mb-4" />
+                <h3 className="text-lg font-medium text-slate-900 mb-2">No Resume Yet</h3>
+                <p className="max-w-md">
+                  Your resume preview will appear here. Paste your career history, LinkedIn URL, or upload a document to the chat to get started.
+                </p>
+              </div>
             )}
           </div>
         </section>
-
-        <aside className="no-print hidden min-h-0 overflow-y-auto border-l bg-white p-4 lg:block">
-          <div className="space-y-4">
-            {currentResume?.score && (
-              <ScorePanel score={currentResume.score} audit={currentResume.audit} />
-            )}
-            <section className="rounded-lg border bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Target className="h-4 w-4 text-blue-600" />
-                <h2 className="text-sm font-semibold text-slate-950">Career Memory</h2>
-              </div>
-              <MemorySummary workspace={workspace} />
-            </section>
-            <section className="rounded-lg border bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Gauge className="h-4 w-4 text-blue-600" />
-                <h2 className="text-sm font-semibold text-slate-950">Next Actions</h2>
-              </div>
-              <NextActions workspace={workspace} />
-            </section>
-          </div>
-        </aside>
-
-        {currentResume && (
-          <div className="border-t p-4 lg:hidden print:hidden">
-            <details className="group">
-              <summary className="no-print flex cursor-pointer items-center gap-2 rounded-lg bg-white p-3 text-sm font-medium text-slate-700 shadow-sm">
-                <FileText className="h-4 w-4 text-blue-600" />
-                View Resume Preview
-                <span className="ml-auto text-xs text-slate-400">
-                  Score: {currentResume.score?.overall ?? "-"} /100
-                </span>
-              </summary>
-              <div className="mt-3">
-                <ResumeDocument content={currentResume.content} />
-              </div>
-            </details>
-          </div>
-        )}
       </main>
       
       {showAchievementModal && (
