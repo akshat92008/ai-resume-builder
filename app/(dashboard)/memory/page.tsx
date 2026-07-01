@@ -35,7 +35,7 @@ export default function MemoryPage() {
   }
 
   function handleAddAchievement() {
-    setProfile(prev => prev ? { ...prev, achievements: [{ id: crypto.randomUUID(), text: "", proofLevel: "unverified" }, ...(prev.achievements || [])] } : null);
+    setProfile(prev => prev ? { ...prev, achievements: [{ id: crypto.randomUUID(), text: "", proofLevel: "weak" }, ...(prev.achievements || [])] } : null);
   }
 
   function handleUpdateAchievement(index: number, text: string) {
