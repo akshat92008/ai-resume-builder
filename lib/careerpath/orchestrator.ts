@@ -841,3 +841,47 @@ Rules:
     { ...metadata, inputJson: { targetRole, jobDescLength: jobDescription.length } }
   );
 }
+
+/**
+ * Agent to answer general career questions based on the user's workspace context.
+ */
+export async function answerCareerQuestionAgent(
+  question: string,
+  workspace: any,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string; fast?: boolean }
+): Promise<string> {
+  const startMs = Date.now();
+  const model = getModel(metadata?.fast);
+  const openai = getAiClient();
+  
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: `You are CareerPath AI, an expert career coach and resume strategist.
+Your goal is to answer the user's general career questions based on their provided "Career Workspace Data" (which includes their resume profile, ATS scores, insights, and career memory).
+
+Rules:
+- Be encouraging, concise, and highly specific to their data.
+- If they ask about their score, look at the ATS score in their workspace data.
+- If they ask what jobs to apply for, suggest roles based on their skills and experience.
+- Do NOT use markdown code blocks to wrap your entire response.
+- Use formatting (bullet points, bold text) to make your answer easy to read.`,
+        },
+        {
+          role: "user",
+          content: `My Career Workspace Data:\n${JSON.stringify(workspace, null, 2)}\n\nMy Question:\n${question}`,
+        },
+      ],
+      max_tokens: 1500,
+      temperature: 0.7,
+    });
+
+    return completion.choices[0].message.content || "I couldn't process that question right now.";
+  } catch (error) {
+    console.error("answerCareerQuestionAgent failed:", error);
+    return "I'm having trouble answering that right now due to a network error. Please try again.";
+  }
+}

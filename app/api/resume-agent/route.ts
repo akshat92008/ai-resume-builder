@@ -26,6 +26,7 @@ import {
   generatePersonaResumesAgent,
   generateATSViewAgent,
   generateOutreachAgent,
+  answerCareerQuestionAgent,
 } from "@/lib/careerpath/orchestrator";
 import { validateResumeTruthfulness } from "@/lib/resume/validator";
 import {
@@ -258,11 +259,13 @@ async function processIntent(
           workspace,
         };
       }
+      const generalWorkspace = buildCareerWorkspaceState(currentResume);
+      const answer = await answerCareerQuestionAgent(message, generalWorkspace, { ...metadata, fast: true });
       return {
-        assistantMessage: `CareerPath AI V1 is built around Career Memory.\n\nPaste career notes once, then I can generate resumes, tailor to job descriptions, run ATS audits, improve weak bullets, write cover letters, optimize LinkedIn sections, track applications, coach your next steps, and log new achievements as they happen.`,
+        assistantMessage: answer,
         resume: currentResume,
         resumeId: currentResume?.id || null,
-        workspace: buildCareerWorkspaceState(currentResume),
+        workspace: generalWorkspace,
       };
 
     default:
