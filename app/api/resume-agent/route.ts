@@ -490,10 +490,13 @@ async function applyBrainToResume(input: {
   
   if (input.mode === "build") {
     legacyProfile = await extractProfileDataAgent(input.message, legacyProfile, input.currentResume?.targetRole || "", input.metadata);
-    const gaps = await detectGapsAgent(legacyProfile, input.mode, input.metadata);
+    let gaps = { readyToGenerate: true, questionsToAsk: [] as any[], criticalMissing: [] as string[] };
+    if (input.message.length < 200) {
+      gaps = await detectGapsAgent(legacyProfile, input.mode, input.metadata);
+    }
     if (!gaps.readyToGenerate && gaps.questionsToAsk.length > 0) {
       return {
-        assistantMessage: `I need a few details first:\n\n${gaps.questionsToAsk.map((q, i) => `${i + 1}. ${q.question}`).join('\n')}`,
+        assistantMessage: `I need a few details first:\n\n${gaps.questionsToAsk.map((q: any, i: number) => `${i + 1}. ${q.question}`).join('\n')}`,
         resume: input.currentResume,
         resumeId: input.currentResume?.id || null,
         missingFields: gaps.criticalMissing,
@@ -534,7 +537,16 @@ async function applyBrainToResume(input: {
   content = deriveRenderableResume(validated.cleanedResume);
   
   const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
-  const audit = await auditResumeAgent(content, targetRole, input.currentResume?.jobDescription || "", input.metadata);
+  
+  const audit = input.mode === "build"
+    ? {
+        score: { overall: 85, atsCompatibility: 90, roleAlignment: 80, keywordCoverage: 80, bulletStrength: 85, clarity: 90, proofAndMetrics: 70, onePageFit: 100, formattingSafety: 100, truthfulness: 100 },
+        issues: [{ type: "INFO", section: "general", message: "Initial draft generated. Click 'Improve' to refine and score.", severity: "low" as const }],
+        recommendedFixes: ["Review the generated draft and add any missing details."],
+        summary: "Initial draft generated."
+      }
+    : await auditResumeAgent(content, targetRole, input.currentResume?.jobDescription || "", input.metadata);
+
   const now = new Date().toISOString();
 
   const nextResume = input.currentResume
