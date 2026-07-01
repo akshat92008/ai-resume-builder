@@ -272,7 +272,7 @@ export async function writeResumeAgent(
     "resume",
     ResumeContentSchema,
     undefined,
-    { ...metadata, inputJson: { profile, mode, jobDescription } }
+    { ...metadata, fast: true, inputJson: { profile, mode, jobDescription } }
   );
 }
 
