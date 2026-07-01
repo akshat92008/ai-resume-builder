@@ -115,7 +115,18 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   const client = admin || supabase;
 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
+
   if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('application_pack_json')) {
+      console.warn("[db/saveServerResume] Schema outdated. Retrying without new columns.");
+      const { application_pack_json, applications_json, job_search_insights_json, ...fallbackPayload } = payload;
+      const { error: fallbackError } = await client.from("resumes").upsert(fallbackPayload, { onConflict: "id" });
+      if (fallbackError) {
+        console.error("[db/saveServerResume] Error saving resume (fallback):", fallbackError);
+        throw new Error(`Failed to save resume: ${fallbackError.message}`);
+      }
+      return;
+    }
     console.error("[db/saveServerResume] Error saving resume to Supabase:", error);
     throw new Error(`Failed to save resume: ${error.message}`);
   }

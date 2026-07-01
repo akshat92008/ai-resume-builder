@@ -59,7 +59,9 @@ const RequestSchema = z.object({
 export async function POST(request: Request) {
   try {
     const auth = await requireAppAccess();
-    if (!auth.ok) return auth.response;
+    if (!auth.user) {
+      return NextResponse.json({ error: { code: "AUTH_REQUIRED", message: "Please log in to use CareerPath AI.", recoverable: true } }, { status: 401 });
+    }
     const userId = auth.user.id;
 
     const json = await request.json().catch(() => ({}));
@@ -145,7 +147,7 @@ export async function POST(request: Request) {
       {
         error: {
           code: "AGENT_ERROR",
-          message: "Something went wrong. Your data is saved. Please try again.",
+          message: `Something went wrong: ${err instanceof Error ? err.message : String(err)}. Please try again.`,
           recoverable: true,
         },
       },
@@ -529,12 +531,16 @@ async function applyBrainToResume(input: {
   }
 
   const beforeState = input.currentResume ? contentToResumeState(input.currentResume.content, { id: input.currentResume.id, targetRole: input.currentResume.targetRole }) : null;
+  console.log("[DEBUG] Before state created");
   const afterState = contentToResumeState(content, { id: input.currentResume?.id || "new", targetRole: input.currentResume?.targetRole });
+  console.log("[DEBUG] After state created");
   
   const validationMode = input.mode === "tailor" ? "TAILOR_TO_JOB" : input.mode === "improve" ? "IMPROVE_EXISTING_RESUME" : "BUILD_FROM_DATA";
   const validated = validateResumeTruthfulness(beforeState, afterState, input.message, { type: validationMode, confidence: 1, reason: "LLM Orchestrator" } as any);
+  console.log("[DEBUG] Truthfulness validated");
   
   content = deriveRenderableResume(validated.cleanedResume);
+  console.log("[DEBUG] Renderable resume derived");
   
   const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
   

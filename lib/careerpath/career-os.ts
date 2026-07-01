@@ -108,32 +108,42 @@ export function legacyProfileToCareerProfile(
     confidenceNotes: [],
   };
 
+  const personal = source.personal || {} as any;
+  const target = source.target || {} as any;
+  const education = source.education || [];
+  const experience = source.experience || [];
+  const projects = source.projects || [];
+  const certifications = source.certifications || [];
+  const achievements = source.achievements || [];
+  const languages = source.languages || [];
+  const skills = source.skills || { programming: [], frameworks: [], tools: [], databases: [], aiTools: [], softSkills: [] };
+
   const links = [
-    source.personal.linkedin ? link("LinkedIn", source.personal.linkedin, "linkedin") : null,
-    source.personal.github ? link("GitHub", source.personal.github, "github") : null,
-    source.personal.portfolio ? link("Portfolio", source.personal.portfolio, "portfolio") : null,
+    personal.linkedin ? link("LinkedIn", personal.linkedin, "linkedin") : null,
+    personal.github ? link("GitHub", personal.github, "github") : null,
+    personal.portfolio ? link("Portfolio", personal.portfolio, "portfolio") : null,
   ].filter(Boolean) as CareerProfile["links"];
 
   const careerProfile: CareerProfile = {
     id: source.id,
     userId: userId || source.userId || null,
     personal: {
-      fullName: source.personal.name,
-      email: source.personal.email,
-      phone: source.personal.phone,
-      location: source.personal.location,
-      linkedin: source.personal.linkedin,
-      github: source.personal.github,
-      portfolio: source.personal.portfolio,
+      fullName: personal.name,
+      email: personal.email,
+      phone: personal.phone,
+      location: personal.location,
+      linkedin: personal.linkedin,
+      github: personal.github,
+      portfolio: personal.portfolio,
     },
     target: {
-      targetRoles: unique([source.target.role].filter(Boolean)),
-      targetIndustries: unique([source.target.industry].filter(Boolean)),
+      targetRoles: unique([target.role].filter(Boolean)),
+      targetIndustries: unique([target.industry].filter(Boolean)),
       targetLocations: [],
       workPreference: "any",
-      experienceLevel: normalizeExperienceLevel(source.target.experienceLevel),
+      experienceLevel: normalizeExperienceLevel(target.experienceLevel),
     },
-    education: source.education.map((item) => ({
+    education: education.map((item: any) => ({
       id: createId(),
       institution: item.institution || "Education",
       degree: item.degree,
@@ -143,18 +153,18 @@ export function legacyProfileToCareerProfile(
       grade: item.score,
       location: item.location,
     })),
-    experience: source.experience.map((item) => ({
+    experience: experience.map((item: any) => ({
       id: createId(),
       company: item.company || "Experience",
-      title: item.role || source.target.role || "Contributor",
+      title: item.role || target.role || "Contributor",
       startDate: item.startDate,
       endDate: item.endDate,
       responsibilities: item.responsibilities,
-      achievements: item.achievements.map((achievement) => achievementItem(achievement, "strong")),
+      achievements: item.achievements.map((achievement: any) => achievementItem(achievement, "strong")),
       technologies: [],
       proofLevel: item.achievements.length ? "strong" : "weak",
     })),
-    projects: source.projects.map((item) => ({
+    projects: projects.map((item: any) => ({
       id: createId(),
       name: item.name,
       description: item.description,
@@ -164,7 +174,7 @@ export function legacyProfileToCareerProfile(
       status: inferProjectStatus(item.links, item.impact),
       proofLevel: proofFromProject(item.links, item.impact, item.techStack),
     })),
-    skills: Object.entries(source.skills).flatMap(([category, skills]) =>
+    skills: Object.entries(skills).flatMap(([category, skills]) =>
       skills.map((skillName) => ({
         id: createId(),
         name: skillName,
@@ -172,14 +182,14 @@ export function legacyProfileToCareerProfile(
         evidence: evidenceForSkill(skillName, source),
       })),
     ),
-    certifications: source.certifications.map((item) => ({
+    certifications: certifications.map((item: any) => ({
       id: createId(),
       name: item.name,
       issuer: item.issuer,
       date: item.date,
       credentialUrl: item.credentialLink,
     })),
-    achievements: source.achievements.map((item) => achievementItem(item, "strong")),
+    achievements: achievements.map((item: any) => achievementItem(item, "strong")),
     links,
     rawInputs: source.rawNotes || rawInput
       ? [{ id: createId(), content: [source.rawNotes, rawInput].filter(Boolean).join("\n\n"), source: "chat", createdAt: now }]
