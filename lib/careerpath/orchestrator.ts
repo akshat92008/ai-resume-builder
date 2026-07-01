@@ -82,6 +82,8 @@ async function callWithValidation<T>(
         model,
         messages: messagesToSend,
         response_format: zodResponseFormat(zodSchema as any, formatName),
+        max_tokens: 4000,
+        temperature: 0.2,
       };
 
       let options: any = { signal: controller.signal };
