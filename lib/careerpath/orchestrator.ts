@@ -299,7 +299,7 @@ export async function auditResumeAgent(
     "audit",
     ResumeAuditSchema,
     undefined,
-    { ...metadata, inputJson: { content: contentParam, targetRole, jobDescription } }
+    { ...metadata, fast: true, inputJson: { content: contentParam, targetRole, jobDescription } }
   );
 }
 
@@ -353,7 +353,7 @@ export async function tailorResumeAgent(
     "tailoring",
     TailoringResultSchema,
     undefined,
-    { ...metadata, inputJson: { content: resumeContent, targetRole, jobDescription } }
+    { ...metadata, fast: true, inputJson: { content: resumeContent, targetRole, jobDescription } }
   );
 }
 
