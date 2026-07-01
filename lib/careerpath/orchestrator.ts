@@ -328,7 +328,7 @@ export async function improveResumeAgent(
     "resume",
     ResumeContentSchema,
     undefined,
-    { ...metadata, inputJson: { content: contentParam, audit, targetRole } }
+    { ...metadata, fast: true, inputJson: { content: contentParam, audit, targetRole } }
   );
 }
 
@@ -440,7 +440,7 @@ If the user says rewrite/change a specific section, classify as REWRITE_SECTION.
       "intentClassification",
       IntentSchema,
       undefined,
-      { ...metadata, inputJson: { message: message.slice(0, 500) } }
+      { ...metadata, fast: true, inputJson: { message: message.slice(0, 500) } }
     );
 
     return { intent: result.intent, confidence: result.confidence };

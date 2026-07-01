@@ -491,7 +491,7 @@ async function applyBrainToResume(input: {
   if (input.mode === "build") {
     legacyProfile = await extractProfileDataAgent(input.message, legacyProfile, input.currentResume?.targetRole || "", input.metadata);
     let gaps = { readyToGenerate: true, questionsToAsk: [] as any[], criticalMissing: [] as string[] };
-    if (input.message.length < 200) {
+    if (input.message.length < 50) {
       gaps = await detectGapsAgent(legacyProfile, input.mode, input.metadata);
     }
     if (!gaps.readyToGenerate && gaps.questionsToAsk.length > 0) {
