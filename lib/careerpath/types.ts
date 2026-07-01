@@ -305,15 +305,37 @@ export type CareerPathTailoringResult = {
 
 export type ProofLevel = "verified" | "strong" | "estimated" | "weak" | "risky";
 
+export type CareerDocument = {
+  id: string;
+  name: string;
+  type:
+    | "resume"
+    | "certificate"
+    | "offer_letter"
+    | "portfolio"
+    | "pdf"
+    | "transcript"
+    | "reference_letter"
+    | "other";
+  url?: string;
+  notes?: string;
+  createdAt: string;
+};
+
 export type EducationItem = {
   id: string;
   institution: string;
   degree?: string;
   field?: string;
+  branch?: string;
   startDate?: string;
   endDate?: string;
   grade?: string;
   location?: string;
+  relevantCoursework?: string[];
+  thesis?: string;
+  awards?: string[];
+  activities?: string[];
   notes?: string;
 };
 
@@ -329,6 +351,11 @@ export type ExperienceItem = {
   responsibilities: string[];
   achievements: AchievementItem[];
   technologies: string[];
+  projects?: string[];
+  metrics?: string[];
+  leadership?: string[];
+  businessImpact?: string[];
+  documents?: CareerDocument[];
   proofLevel?: ProofLevel;
 };
 
@@ -336,9 +363,19 @@ export type ProjectItem = {
   id: string;
   name: string;
   description?: string;
+  problem?: string;
+  solution?: string;
   role?: string;
   technologies: string[];
   links: LinkItem[];
+  github?: string;
+  liveDemo?: string;
+  screenshots?: string[];
+  architecture?: string;
+  challenges?: string[];
+  learnings?: string[];
+  metrics?: string[];
+  tags?: string[];
   achievements: AchievementItem[];
   status?: "idea" | "built" | "deployed" | "users" | "revenue" | "archived";
   proofLevel?: ProofLevel;
@@ -348,6 +385,7 @@ export type SkillItem = {
   id: string;
   name: string;
   category?: "technical" | "soft" | "tool" | "language" | "domain";
+  subcategory?: "programming" | "framework" | "database" | "cloud" | "devops" | "ai" | "design" | "language" | "tool" | "soft";
   proficiency?: "beginner" | "intermediate" | "advanced" | "expert";
   evidence?: string[];
 };
@@ -357,6 +395,7 @@ export type CertificationItem = {
   name: string;
   issuer?: string;
   date?: string;
+  expiryDate?: string;
   credentialUrl?: string;
   skills?: string[];
 };
@@ -414,17 +453,38 @@ export type CareerProfile = {
     fullName?: string;
     email?: string;
     phone?: string;
+    website?: string;
     location?: string;
     linkedin?: string;
     github?: string;
     portfolio?: string;
+    preferredPronouns?: string;
+    timezone?: string;
+    nationality?: string;
+    workAuthorization?: string;
+    visaStatus?: string;
+    languages?: string[];
   };
   target: {
     targetRoles: string[];
+    dreamRole?: string;
+    dreamCompanies?: string[];
+    targetSalary?: string;
     targetIndustries: string[];
     targetLocations: string[];
+    preferredCountries?: string[];
     workPreference?: "remote" | "hybrid" | "onsite" | "any";
+    remote?: boolean;
+    hybrid?: boolean;
+    relocation?: boolean;
     experienceLevel?: "student" | "fresher" | "intern" | "junior" | "mid" | "senior" | "career_switcher";
+  };
+  preferences: {
+    resumeLength?: "one_page" | "two_page" | "auto";
+    writingTone?: "professional" | "confident" | "concise" | "warm" | "executive";
+    targetSeniority?: string;
+    templatePreference?: "ats" | "modern" | "minimal" | "design";
+    atsPreference?: "strict" | "balanced" | "design_safe";
   };
   education: EducationItem[];
   experience: ExperienceItem[];
@@ -432,6 +492,7 @@ export type CareerProfile = {
   skills: SkillItem[];
   certifications: CertificationItem[];
   achievements: AchievementItem[];
+  documents: CareerDocument[];
   links: LinkItem[];
   rawInputs: RawCareerInput[];
   gaps: CareerGap[];
@@ -525,10 +586,35 @@ export type JobDescription = {
   rawText: string;
   extractedSkills: string[];
   responsibilities: string[];
+  hiddenExpectations: string[];
   requiredExperience?: string;
   seniority?: string;
+  salaryClues: string[];
+  requiredTools: string[];
+  niceToHaveSkills: string[];
+  industry?: string;
   keywords: string[];
   createdAt: string;
+};
+
+export type KeywordRanking = {
+  keyword: string;
+  importance: "critical" | "high" | "medium" | "low";
+  presentInCareerMemory: boolean;
+};
+
+export type JobIntelligenceReport = {
+  job: JobDescription;
+  fitPercentage: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  missingExperience: string[];
+  keywordRanking: KeywordRanking[];
+  hiddenExpectations: string[];
+  salaryClues: string[];
+  requiredTools: string[];
+  niceToHaveSkills: string[];
+  industry?: string;
 };
 
 export type TailoringResult = {
@@ -612,8 +698,45 @@ export type JobSearchInsight = {
   priority: "low" | "medium" | "high";
 };
 
+export type LinkedInOptimization = {
+  headline: string;
+  about: string;
+  experienceUpdates: string[];
+  skills: string[];
+  featured: string[];
+  keywords: string[];
+  seoNotes: string[];
+};
+
+export type CareerCoachNote = {
+  id: string;
+  title: string;
+  message: string;
+  action: string;
+  priority: "low" | "medium" | "high";
+};
+
+export type CareerHealth = {
+  overall: number;
+  memoryCompleteness: number;
+  resumeScore: number;
+  applicationCount: number;
+  skillGapCount: number;
+  recentActivity: string[];
+  latestDocuments: string[];
+};
+
+export type AchievementLoggerResult = {
+  achievement: AchievementItem;
+  suggestedResumeBullet: string;
+  linkedSkills: string[];
+  linkedProjectIds: string[];
+  memoryUpdates: string[];
+};
+
 export type CareerCommandIntent =
   | "build_career_profile"
+  | "log_achievement"
   | "answer_interview_questions"
   | "generate_resume"
   | "generate_resume_version"
@@ -622,6 +745,7 @@ export type CareerCommandIntent =
   | "track_job_application"
   | "analyze_job_search"
   | "improve_resume"
+  | "optimize_linkedin"
   | "general_career_question";
 
 export type CareerContext = {
@@ -637,6 +761,7 @@ export type CareerCommandResult = {
   shouldGenerateApplicationPack: boolean;
   shouldTrackApplication: boolean;
   shouldAnalyzeSearch: boolean;
+  shouldLogAchievement: boolean;
   suggestedResponse: string;
 };
 
@@ -644,9 +769,14 @@ export type CareerWorkspaceState = {
   careerProfile?: CareerProfile | null;
   mining?: AchievementMiningResult | null;
   smartVersions?: SmartResumeVersion[];
+  jobIntelligence?: JobIntelligenceReport | null;
   applicationPack?: ApplicationPack | null;
   applications?: JobApplication[];
   insights?: JobSearchInsight[];
+  linkedInOptimization?: LinkedInOptimization | null;
+  careerHealth?: CareerHealth | null;
+  coachNotes?: CareerCoachNote[];
+  achievementLog?: AchievementLoggerResult | null;
   jobDescription?: JobDescription | null;
   command?: CareerCommandResult | null;
 };

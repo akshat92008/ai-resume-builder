@@ -13,25 +13,13 @@ import {
   Send,
   Sparkles,
   Target,
-  MessageSquare,
-  BarChart3,
-  Users,
-  Monitor,
-  ArrowRightLeft,
-  Mail,
 } from "lucide-react";
 import { Alert, Badge, Button, Tabs, Textarea } from "@/components/ui";
 import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
+import { AchievementPromptModal } from "@/components/careerpath/AchievementPromptModal";
 import { ScorePanel } from "@/components/careerpath/ScorePanel";
-import { StarInterviewPanel } from "@/components/careerpath/StarInterviewPanel";
-import { ImpactEstimatorPanel } from "@/components/careerpath/ImpactEstimatorPanel";
-import { GapAnalysisPanel } from "@/components/careerpath/GapAnalysisPanel";
-import { MultiPersonaPanel } from "@/components/careerpath/MultiPersonaPanel";
-import { ATSViewPanel } from "@/components/careerpath/ATSViewPanel";
-import { HumanizePanel } from "@/components/careerpath/HumanizePanel";
-import { OutreachPanel } from "@/components/careerpath/OutreachPanel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { CareerPathResume, CareerWorkspaceState, ImpactSuggestion, PersonaResume, ResumeMessage } from "@/lib/careerpath/types";
+import type { CareerPathResume, CareerWorkspaceState, ResumeMessage } from "@/lib/careerpath/types";
 import { getApiError } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -46,22 +34,20 @@ const WELCOME_MESSAGE: ChatMsg = {
   id: "welcome",
   role: "assistant",
   content:
-    "CareerPath AI is your personal AI career agent. Paste messy career info once, then I can build your career memory, tailor your resume to jobs, prepare application packs, track applications, and improve your strategy over time.",
+    "CareerPath AI is your AI Career Memory. Paste messy career info once, then generate resumes, job tailoring, ATS audits, cover letters, LinkedIn sections, application tracking, coaching, and new achievement updates from the same source of truth.",
   createdAt: new Date().toISOString(),
 };
 
 const COMMAND_CHIPS = [
-  // Core
-  "Build my resume from messy info",
+  "Build Career Memory from messy info",
+  "Generate my ATS resume",
   "Tailor to a job description",
-  // Premium agentic features
-  "Interview me (STAR)",
-  "Humanize this resume",
-  "Add metrics to my bullets",
-  "Gap analysis for my target role",
-  "Generate 3 persona versions",
-  "Show ATS view",
-  "Write cover letter + outreach",
+  "Audit my resume",
+  "Improve my resume",
+  "Write cover letter",
+  "Optimize LinkedIn profile",
+  "Track this application",
+  "Log achievement: ",
 ];
 
 const THINKING_PHRASES = [
@@ -71,13 +57,11 @@ const THINKING_PHRASES = [
   "Drafting professional summary...",
   "Refining bullet points...",
   "Optimizing for ATS compatibility...",
-  "Running STAR interview analysis...",
-  "De-AI-ifying your resume...",
-  "Mining impact metrics...",
-  "Mapping skill gaps to target role...",
-  "Generating persona variants...",
-  "Simulating ATS parse...",
-  "Crafting personalized outreach...",
+  "Mining career memory...",
+  "Checking missing proof...",
+  "Analyzing job keywords...",
+  "Preparing application copy...",
+  "Updating career health...",
   "Finalizing layout...",
 ];
 
@@ -127,6 +111,34 @@ function ThinkingAnimation() {
   );
 }
 
+function formatMessageText(text: string) {
+  return text.split('\n').map((line, i) => {
+    const isBullet = line.trim().startsWith('- ');
+    const content = isBullet ? line.replace(/^\s*-\s*/, '') : line;
+    
+    const parts = content.split(/(\*\*.*?\*\*)/g);
+    const formatted = parts.map((part, j) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+
+    if (isBullet) {
+      return (
+        <div key={i} className="flex items-start gap-2 mt-1">
+          <span className="text-blue-500 mt-0.5">•</span>
+          <span>{formatted}</span>
+        </div>
+      );
+    }
+    
+    if (!line.trim()) return <div key={i} className="h-2" />;
+    
+    return <p key={i} className={i > 0 ? "mt-1.5" : ""}>{formatted}</p>;
+  });
+}
+
 export default function AppWorkspace() {
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMsg[]>([WELCOME_MESSAGE]);
@@ -134,12 +146,29 @@ export default function AppWorkspace() {
   const [currentResume, setCurrentResume] = useState<CareerPathResume | null>(null);
   const [currentResumeId, setCurrentResumeId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<CareerWorkspaceState | null>(null);
-  const [activeTab, setActiveTab] = useState("resume");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showAchievementModal, setShowAchievementModal] = useState(false);
+
+  useEffect(() => {
+    const lastPrompt = localStorage.getItem("last_achievement_prompt");
+    const now = Date.now();
+    const threeDays = 3 * 24 * 60 * 60 * 1000;
+    
+    if (!lastPrompt || (now - parseInt(lastPrompt, 10)) > threeDays) {
+      const timer = setTimeout(() => setShowAchievementModal(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  function handleCloseAchievementModal() {
+    localStorage.setItem("last_achievement_prompt", Date.now().toString());
+    setShowAchievementModal(false);
+  }
 
   // Load workspace state on mount
   useEffect(() => {
@@ -188,10 +217,10 @@ export default function AppWorkspace() {
     }
   }
 
-  async function sendMessage() {
-    if (!input.trim() || loading) return;
-    const content = input.trim();
-    setInput("");
+  async function sendMessage(overrideText?: string) {
+    const content = (overrideText || input).trim();
+    if (!content || loading) return;
+    if (!overrideText) setInput("");
     setError("");
     setLoading(true);
 
@@ -236,13 +265,11 @@ export default function AppWorkspace() {
         setCurrentResume(data.resume);
         setCurrentResumeId(data.resumeId || data.resume.id);
         // Auto-navigate to relevant tab based on what was just generated
-        if (data.resume.starInterview) setActiveTab("interview");
-        else if (data.resume.humanizedResume) setActiveTab("humanize");
-        else if (data.resume.impactEstimates) setActiveTab("impact");
-        else if (data.resume.gapAnalysis) setActiveTab("gaps");
-        else if (data.resume.multiPersona) setActiveTab("personas");
-        else if (data.resume.atsView) setActiveTab("atsview");
-        else if (data.resume.outreachPack) setActiveTab("outreach");
+        if (data.workspace?.achievementLog) setActiveTab("achievements");
+        else if (data.workspace?.applicationPack) setActiveTab("cover");
+        else if (data.workspace?.jobIntelligence) setActiveTab("job");
+        else if (data.resume.tailoring) setActiveTab("tailor");
+        else setActiveTab("dashboard");
       } else if (data.resumeId) {
         setCurrentResumeId(data.resumeId);
       }
@@ -270,7 +297,7 @@ export default function AppWorkspace() {
       {
         id: "new",
         role: "assistant",
-        content: "Starting fresh! Paste your career details — education, skills, projects, experience — and I'll build you a new resume.",
+        content: "Starting a fresh Career Memory. Paste education, skills, projects, experience, goals, links, documents, or achievements.",
         createdAt: new Date().toISOString(),
       },
     ]);
@@ -325,7 +352,7 @@ export default function AppWorkspace() {
             className="hidden sm:flex"
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New Resume
+            New Memory
           </Button>
           <Button
             variant="outline"
@@ -334,7 +361,7 @@ export default function AppWorkspace() {
             className="hidden sm:flex"
           >
             <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-            Saved Resumes
+            Saved Work
           </Button>
           <Button
             variant="outline"
@@ -355,10 +382,10 @@ export default function AppWorkspace() {
       <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)_320px] xl:grid-cols-[430px_minmax(0,1fr)_360px]">
         <section className="no-print flex min-h-[520px] flex-col border-r bg-white">
           <div className="border-b px-4 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Your personal AI career agent</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Store once. Generate forever.</p>
             <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-950">CareerPath AI</h1>
             <p className="mt-1 text-sm leading-5 text-slate-600">
-              Build your career memory once, tailor every resume, prepare applications, and learn from outcomes.
+              Build Career Memory once, then produce resumes, audits, tailoring, letters, LinkedIn copy, tracker updates, and coaching from it.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {COMMAND_CHIPS.map((command) => (
@@ -387,7 +414,7 @@ export default function AppWorkspace() {
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">
                   {msg.role === "assistant" ? "CareerPath AI" : "You"}
                 </div>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                <div className="text-sm">{formatMessageText(msg.content)}</div>
               </div>
             ))}
             {loading && (
@@ -436,88 +463,57 @@ export default function AppWorkspace() {
               active={activeTab}
               onChange={setActiveTab}
               tabs={[
-                { id: "resume", label: "Resume" },
-                { id: "tailor", label: "Tailor" },
-                { id: "pack", label: "App Pack" },
-                { id: "applications", label: "Applications" },
+                { id: "dashboard", label: "Dashboard" },
                 { id: "memory", label: "Memory" },
-                ...(currentResume?.starInterview ? [{ id: "interview", label: "⭐ Interview" }] : []),
-                ...(currentResume?.humanizedResume ? [{ id: "humanize", label: "✦ Humanize" }] : []),
-                ...(currentResume?.impactEstimates ? [{ id: "impact", label: "📈 Impact" }] : []),
-                ...(currentResume?.gapAnalysis ? [{ id: "gaps", label: "🎯 Gaps" }] : []),
-                ...(currentResume?.multiPersona ? [{ id: "personas", label: "👥 Personas" }] : []),
-                ...(currentResume?.atsView ? [{ id: "atsview", label: "🤖 ATS View" }] : []),
-                ...(currentResume?.outreachPack ? [{ id: "outreach", label: "✉️ Outreach" }] : []),
+                { id: "resume", label: "Resume" },
+                { id: "job", label: "Job Intel" },
+                { id: "tailor", label: "Tailor" },
+                { id: "audit", label: "ATS Audit" },
+                { id: "improve", label: "Improve" },
+                { id: "cover", label: "Cover Letter" },
+                { id: "linkedin", label: "LinkedIn" },
+                { id: "applications", label: "Applications" },
+                { id: "coach", label: "Coach" },
+                { id: "achievements", label: "Achievements" },
               ]}
             />
           </div>
           <div className="p-4 sm:p-6 print:p-0">
-            {activeTab === "resume" && (
-              <ResumeTab resume={currentResume} />
-            )}
-            {activeTab === "tailor" && (
-              <TailorTab resume={currentResume} workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "pack" && (
-              <ApplicationPackTab workspace={workspace} onCommand={useCommand} />
-            )}
-            {activeTab === "applications" && (
-              <ApplicationsTab workspace={workspace} onCommand={useCommand} />
+            {activeTab === "dashboard" && (
+              <DashboardTab workspace={workspace} resume={currentResume} onCommand={useCommand} />
             )}
             {activeTab === "memory" && (
               <MemoryTab workspace={workspace} onCommand={useCommand} />
             )}
-            {/* Premium Differentiation Tabs */}
-            {activeTab === "interview" && currentResume?.starInterview && (
-              <div className="mx-auto max-w-2xl">
-                <StarInterviewPanel
-                  result={currentResume.starInterview}
-                  onAnswer={(questionId, answer) => {
-                    useCommand(`I answered interview question ${questionId}: ${answer}`);
-                  }}
-                />
-              </div>
+            {activeTab === "resume" && (
+              <ResumeTab resume={currentResume} />
             )}
-            {activeTab === "humanize" && currentResume?.humanizedResume && (
-              <div className="mx-auto max-w-2xl">
-                <HumanizePanel result={currentResume.humanizedResume} />
-              </div>
+            {activeTab === "job" && (
+              <JobIntelligenceTab workspace={workspace} onCommand={useCommand} />
             )}
-            {activeTab === "impact" && currentResume?.impactEstimates && (
-              <div className="mx-auto max-w-2xl">
-                <ImpactEstimatorPanel
-                  result={currentResume.impactEstimates}
-                  onAccept={(suggestion: ImpactSuggestion) => {
-                    useCommand(`Accept this metric improvement for ${suggestion.itemName}: ${suggestion.improvedBullet}`);
-                  }}
-                  onReject={(_id: string) => {}}
-                />
-              </div>
+            {activeTab === "tailor" && (
+              <TailorTab resume={currentResume} workspace={workspace} onCommand={useCommand} />
             )}
-            {activeTab === "gaps" && currentResume?.gapAnalysis && (
-              <div className="mx-auto max-w-2xl">
-                <GapAnalysisPanel result={currentResume.gapAnalysis} />
-              </div>
+            {activeTab === "audit" && (
+              <ATSAuditTab resume={currentResume} />
             )}
-            {activeTab === "personas" && currentResume?.multiPersona && (
-              <div className="mx-auto max-w-2xl">
-                <MultiPersonaPanel
-                  result={currentResume.multiPersona}
-                  onSavePersona={(_persona: PersonaResume) => {
-                    useCommand(`Save persona resume: ${_persona.persona}`);
-                  }}
-                />
-              </div>
+            {activeTab === "improve" && (
+              <ImproveTab resume={currentResume} workspace={workspace} onCommand={useCommand} />
             )}
-            {activeTab === "atsview" && currentResume?.atsView && (
-              <div className="mx-auto max-w-2xl">
-                <ATSViewPanel result={currentResume.atsView} />
-              </div>
+            {activeTab === "cover" && (
+              <CoverLetterTab workspace={workspace} onCommand={useCommand} />
             )}
-            {activeTab === "outreach" && currentResume?.outreachPack && (
-              <div className="mx-auto max-w-2xl">
-                <OutreachPanel pack={currentResume.outreachPack} />
-              </div>
+            {activeTab === "linkedin" && (
+              <LinkedInTab workspace={workspace} onCommand={useCommand} />
+            )}
+            {activeTab === "applications" && (
+              <ApplicationsTab workspace={workspace} onCommand={useCommand} />
+            )}
+            {activeTab === "coach" && (
+              <CoachTab workspace={workspace} />
+            )}
+            {activeTab === "achievements" && (
+              <AchievementLoggerTab workspace={workspace} onCommand={useCommand} />
             )}
           </div>
         </section>
@@ -561,6 +557,74 @@ export default function AppWorkspace() {
           </div>
         )}
       </main>
+      
+      {showAchievementModal && (
+        <AchievementPromptModal
+          onClose={handleCloseAchievementModal}
+          onLogAchievement={async (text) => {
+            handleCloseAchievementModal();
+            await sendMessage(text);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DashboardTab({
+  workspace,
+  resume,
+  onCommand,
+}: {
+  workspace: CareerWorkspaceState | null;
+  resume: CareerPathResume | null;
+  onCommand: (command: string) => void;
+}) {
+  const health = workspace?.careerHealth;
+  const profile = workspace?.careerProfile;
+  return (
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="Career health" value={`${health?.overall ?? 0} /100`} />
+        <Metric label="Memory" value={`${health?.memoryCompleteness ?? 0}%`} />
+        <Metric label="Resume" value={`${health?.resumeScore ?? resume?.score?.overall ?? 0} /100`} />
+        <Metric label="Applications" value={health?.applicationCount ?? 0} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <SectionShell title="Career Memory">
+          <MemorySummary workspace={workspace} expanded />
+        </SectionShell>
+        <SectionShell title="Next Actions">
+          <NextActions workspace={workspace} />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => onCommand("Improve my resume")} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Improve resume
+            </button>
+            <button type="button" onClick={() => onCommand("Log achievement: ")} className="rounded-md border px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Log achievement
+            </button>
+          </div>
+        </SectionShell>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <SectionShell title="Career Goals">
+          <List
+            items={[
+              profile?.target.dreamRole ? `Dream role: ${profile.target.dreamRole}` : "",
+              profile?.target.targetRoles.length ? `Target roles: ${profile.target.targetRoles.join(", ")}` : "",
+              profile?.target.dreamCompanies?.length ? `Dream companies: ${profile.target.dreamCompanies.join(", ")}` : "",
+              profile?.target.workPreference ? `Work mode: ${profile.target.workPreference}` : "",
+            ].filter(Boolean)}
+            empty="No goals stored yet."
+          />
+        </SectionShell>
+        <SectionShell title="Skill Gaps">
+          <List items={(workspace?.careerProfile?.gaps ?? []).slice(0, 5).map((gap) => gap.question)} empty="No major gaps found." />
+        </SectionShell>
+        <SectionShell title="Latest Documents">
+          <List items={health?.latestDocuments ?? []} empty="No documents saved yet." />
+        </SectionShell>
+      </div>
     </div>
   );
 }
@@ -586,7 +650,7 @@ function ResumeTab({ resume }: { resume: CareerPathResume | null }) {
         <div>
           <h2 className="text-lg font-semibold text-slate-950">{resume.title}</h2>
           <p className="text-sm text-slate-500">
-            {resume.targetRole} | Interview Conversion Score: {resume.resumeDocument?.score?.overall ?? resume.score?.overall ?? "-"} /100 | v{resume.version}
+            {resume.targetRole} | Career Readiness Score: {resume.resumeDocument?.score?.overall ?? resume.score?.overall ?? "-"} /100 | v{resume.version}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -596,6 +660,158 @@ function ResumeTab({ resume }: { resume: CareerPathResume | null }) {
       </div>
       <ProofStrip resume={resume} />
       <ResumeDocument content={resume.content} />
+    </div>
+  );
+}
+
+function JobIntelligenceTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  const report = workspace?.jobIntelligence;
+  if (!report) {
+    return (
+      <SectionShell title="Job Intelligence" description="Paste a job description to extract role signals before tailoring.">
+        <button
+          type="button"
+          onClick={() => onCommand("Analyze and tailor to this job description: ")}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Add job description
+        </button>
+      </SectionShell>
+    );
+  }
+  return (
+    <div className="mx-auto max-w-5xl space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="Fit" value={`${report.fitPercentage} /100`} />
+        <Metric label="Matched" value={report.matchedSkills.length} />
+        <Metric label="Missing skills" value={report.missingSkills.length} />
+        <Metric label="Keywords" value={report.keywordRanking.length} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionShell title={report.job.title || "Job Description"}>
+          <List items={[
+            report.job.company ? `Company: ${report.job.company}` : "",
+            report.job.location ? `Location: ${report.job.location}` : "",
+            report.industry ? `Industry: ${report.industry}` : "",
+            report.job.seniority ? `Seniority: ${report.job.seniority}` : "",
+            report.job.requiredExperience ? `Experience: ${report.job.requiredExperience}` : "",
+          ].filter(Boolean)} />
+        </SectionShell>
+        <SectionShell title="Hidden Expectations">
+          <List items={report.hiddenExpectations} empty="No hidden expectations detected." />
+        </SectionShell>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <SectionShell title="Matched Skills">
+          <BadgeCloud items={report.matchedSkills} empty="No matched skills yet." />
+        </SectionShell>
+        <SectionShell title="Missing Skills">
+          <BadgeCloud items={report.missingSkills} empty="No missing skills detected." />
+        </SectionShell>
+        <SectionShell title="Salary Clues">
+          <List items={report.salaryClues} empty="No salary clues found." />
+        </SectionShell>
+      </div>
+      <SectionShell title="Keyword Ranking">
+        <div className="grid gap-2 md:grid-cols-2">
+          {report.keywordRanking.map((item) => (
+            <div key={item.keyword} className="flex items-center justify-between rounded-md border bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-medium text-slate-800">{item.keyword}</span>
+              <span className={item.presentInCareerMemory ? "text-emerald-700" : "text-amber-700"}>
+                {item.importance} | {item.presentInCareerMemory ? "in memory" : "missing"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </SectionShell>
+    </div>
+  );
+}
+
+function ATSAuditTab({ resume }: { resume: CareerPathResume | null }) {
+  const audit = resume?.audit;
+  if (!audit) {
+    return (
+      <SectionShell title="ATS Audit">
+        <p className="text-sm text-slate-500">Build or paste a resume to see ATS scoring.</p>
+      </SectionShell>
+    );
+  }
+  return (
+    <div className="mx-auto max-w-5xl space-y-4">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <Metric label="Overall" value={`${audit.score.overall} /100`} />
+        <Metric label="Keywords" value={`${audit.score.keywordCoverage} /100`} />
+        <Metric label="Format" value={`${audit.score.formattingSafety} /100`} />
+        <Metric label="Grammar" value={`${audit.score.clarity} /100`} />
+        <Metric label="Proof" value={`${audit.score.proofAndMetrics} /100`} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <SectionShell title="Weak Bullets">
+            <List items={audit.issues.filter(i => i.type === 'WEAK_BULLET').map((issue) => `${issue.section}: ${issue.message}`)} empty="No weak bullets found." />
+          </SectionShell>
+          <SectionShell title="Missing Metrics">
+            <List items={audit.issues.filter(i => i.type === 'MISSING_METRIC').map((issue) => `${issue.section}: ${issue.message}`)} empty="No missing metrics." />
+          </SectionShell>
+          <SectionShell title="Timeline Issues">
+            <List items={audit.issues.filter(i => i.type === 'TIMELINE_GAP').map((issue) => `${issue.section}: ${issue.message}`)} empty="No timeline gaps detected." />
+          </SectionShell>
+          <SectionShell title="Other Issues">
+            <List items={audit.issues.filter(i => !['WEAK_BULLET', 'MISSING_METRIC', 'TIMELINE_GAP'].includes(i.type)).map((issue) => `${issue.section}: ${issue.message}`)} empty="No other issues found." />
+          </SectionShell>
+        </div>
+        <div className="space-y-4">
+          <SectionShell title="Recommendations">
+            <List items={audit.recommendedFixes} empty="No recommendations yet." />
+          </SectionShell>
+          <SectionShell title="Readability And Achievement Quality">
+            <List
+              items={[
+                `Readability: ${audit.score.clarity}/100`,
+                `Achievement quality: ${audit.score.bulletStrength}/100`,
+                `Missing metrics risk: ${audit.score.proofAndMetrics < 75 ? "needs attention" : "healthy"}`,
+                `Timeline and formatting risk: ${audit.score.formattingSafety < 85 ? "review formatting" : "safe"}`,
+              ]}
+            />
+          </SectionShell>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImproveTab({
+  resume,
+  workspace,
+  onCommand,
+}: {
+  resume: CareerPathResume | null;
+  workspace: CareerWorkspaceState | null;
+  onCommand: (command: string) => void;
+}) {
+  return (
+    <div className="mx-auto max-w-4xl space-y-4">
+      <SectionShell title="AI Improvement">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Metric label="Weak bullets" value={resume?.audit?.issues.filter((issue) => issue.type.includes("weak")).length ?? 0} />
+          <Metric label="Missing metrics" value={(workspace?.coachNotes ?? []).filter((note) => /impact|metric/i.test(note.title + note.message)).length} />
+          <Metric label="Proof gaps" value={workspace?.careerProfile?.gaps.filter((gap) => /proof|impact/i.test(gap.area)).length ?? 0} />
+        </div>
+        <button
+          type="button"
+          onClick={() => onCommand("Improve my resume")}
+          className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Improve resume
+        </button>
+      </SectionShell>
+      <SectionShell title="Improvement Queue">
+        <List items={[
+          ...(resume?.audit?.recommendedFixes ?? []),
+          ...(workspace?.careerProfile?.weaknesses ?? []).map((item) => item.suggestedFix),
+        ]} empty="No improvement queue yet." />
+      </SectionShell>
     </div>
   );
 }
@@ -646,17 +862,17 @@ function TailorTab({
   );
 }
 
-function ApplicationPackTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+function CoverLetterTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
   const pack = workspace?.applicationPack;
   if (!pack) {
     return (
-      <SectionShell title="Application Pack" description="Generate the complete kit for a job: cover letter, recruiter DM, cold email, LinkedIn note, why-fit answer, interview questions, prep plan, and follow-up.">
+      <SectionShell title="Cover Letter" description="Generate job-specific writing from Career Memory and a job description.">
         <button
           type="button"
-          onClick={() => onCommand("Here is a job description. Prepare everything I need to apply: ")}
+          onClick={() => onCommand("Write a cover letter for this job description: ")}
           className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
-          Create application pack
+          Create cover letter
         </button>
       </SectionShell>
     );
@@ -668,19 +884,42 @@ function ApplicationPackTab({ workspace, onCommand }: { workspace: CareerWorkspa
       <TextBlock title="Cold Email" text={pack.coldEmail} />
       <TextBlock title="LinkedIn Message" text={pack.linkedinMessage} />
       <TextBlock title="Why Fit Answer" text={pack.whyFitAnswer} />
-      <SectionShell title="Interview Questions">
-        <div className="space-y-3">
-          {pack.interviewQuestions.map((item) => (
-            <div key={item.question} className="rounded-md border bg-slate-50 p-3">
-              <p className="font-medium text-slate-950">{item.question}</p>
-              <p className="mt-1 text-xs text-slate-500">{item.whyAsked}</p>
-              <p className="mt-2 text-sm text-slate-700">{item.suggestedAnswer}</p>
-            </div>
-          ))}
+      <TextBlock title="Follow-up Message" text={pack.followUpMessage} />
+    </div>
+  );
+}
+
+function LinkedInTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  const linkedIn = workspace?.linkedInOptimization;
+  if (!linkedIn) {
+    return (
+      <SectionShell title="LinkedIn Optimizer">
+        <button
+          type="button"
+          onClick={() => onCommand("Optimize my LinkedIn profile")}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Generate LinkedIn sections
+        </button>
+      </SectionShell>
+    );
+  }
+  return (
+    <div className="mx-auto max-w-4xl space-y-4">
+      <TextBlock title="Headline" text={linkedIn.headline} />
+      <TextBlock title="About" text={linkedIn.about} />
+      <SectionShell title="Experience Updates">
+        <List items={linkedIn.experienceUpdates} empty="No experience updates yet." />
+      </SectionShell>
+      <SectionShell title="Skills And SEO Keywords">
+        <BadgeCloud items={linkedIn.skills} empty="No skills stored yet." />
+        <div className="mt-4">
+          <BadgeCloud items={linkedIn.keywords} empty="No keywords generated yet." />
         </div>
       </SectionShell>
-      <TextBlock title="Preparation Plan" text={pack.preparationPlan.map((item, index) => `${index + 1}. ${item}`).join("\n")} />
-      <TextBlock title="Follow-up Message" text={pack.followUpMessage} />
+      <SectionShell title="Featured">
+        <List items={linkedIn.featured} empty="No featured items yet." />
+      </SectionShell>
     </div>
   );
 }
@@ -731,31 +970,138 @@ function ApplicationsTab({ workspace, onCommand }: { workspace: CareerWorkspaceS
 }
 
 function MemoryTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  const profile = workspace?.careerProfile;
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <SectionShell title="Career Memory Vault" description="CareerPath AI remembers reusable career proof so you do not rebuild from scratch every time.">
+    <div className="mx-auto max-w-6xl space-y-4">
+      <SectionShell title="Career Memory">
         <MemorySummary workspace={workspace} expanded />
       </SectionShell>
-      <SectionShell title="Career Interview">
-        <List items={(workspace?.careerProfile?.gaps ?? []).slice(0, 5).map((gap) => `${gap.question} (${gap.importance})`)} empty="No major missing details found yet." />
-        <button
-          type="button"
-          onClick={() => onCommand("Use these answers to improve my resume: ")}
-          className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Use answers to improve resume
-        </button>
-      </SectionShell>
-      <SectionShell title="Smart Resume Versions">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {(workspace?.smartVersions ?? []).map((version) => (
-            <div key={version.versionType} className="rounded-md border bg-slate-50 p-3">
-              <h3 className="text-sm font-semibold text-slate-950">{version.title}</h3>
-              <p className="mt-1 text-xs leading-5 text-slate-600">{version.whenToUse}</p>
-              <p className="mt-2 text-xs text-slate-500">Emphasizes: {version.emphasizes.slice(0, 3).join(", ")}</p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionShell title="Personal Profile">
+          <List items={[
+            profile?.personal.fullName ? `Name: ${profile.personal.fullName}` : "",
+            profile?.personal.email ? `Email: ${profile.personal.email}` : "",
+            profile?.personal.phone ? `Phone: ${profile.personal.phone}` : "",
+            profile?.personal.location ? `Location: ${profile.personal.location}` : "",
+            profile?.personal.linkedin ? `LinkedIn: ${profile.personal.linkedin}` : "",
+            profile?.personal.github ? `GitHub: ${profile.personal.github}` : "",
+            profile?.personal.portfolio ? `Portfolio: ${profile.personal.portfolio}` : "",
+            profile?.personal.workAuthorization ? `Work authorization: ${profile.personal.workAuthorization}` : "",
+          ].filter(Boolean)} empty="No personal profile stored yet." />
+        </SectionShell>
+        <SectionShell title="Career Goals">
+          <List items={[
+            profile?.target.dreamRole ? `Dream role: ${profile.target.dreamRole}` : "",
+            profile?.target.targetRoles.length ? `Target roles: ${profile.target.targetRoles.join(", ")}` : "",
+            profile?.target.targetIndustries.length ? `Industries: ${profile.target.targetIndustries.join(", ")}` : "",
+            profile?.target.targetSalary ? `Target salary: ${profile.target.targetSalary}` : "",
+            profile?.target.workPreference ? `Work mode: ${profile.target.workPreference}` : "",
+            profile?.target.relocation ? "Open to relocation" : "",
+          ].filter(Boolean)} empty="No goals stored yet." />
+        </SectionShell>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <SectionShell title="Education">
+          <List items={(profile?.education ?? []).map((item) => [item.degree, item.field, item.institution, item.endDate].filter(Boolean).join(" | "))} empty="No education stored yet." />
+        </SectionShell>
+        <SectionShell title="Experience">
+          <List items={(profile?.experience ?? []).map((item) => [item.title, item.company, item.startDate && item.endDate ? `${item.startDate}-${item.endDate}` : ""].filter(Boolean).join(" | "))} empty="No experience stored yet." />
+        </SectionShell>
+        <SectionShell title="Projects">
+          <List items={(profile?.projects ?? []).map((item) => `${item.name}${item.technologies.length ? ` | ${item.technologies.slice(0, 4).join(", ")}` : ""}`)} empty="No projects stored yet." />
+        </SectionShell>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <SectionShell title="Skills">
+          <BadgeCloud items={(profile?.skills ?? []).map((skill) => skill.name)} empty="No skills stored yet." />
+        </SectionShell>
+        <SectionShell title="Certifications">
+          <List items={(profile?.certifications ?? []).map((item) => [item.name, item.issuer, item.date].filter(Boolean).join(" | "))} empty="No certifications stored yet." />
+        </SectionShell>
+        <SectionShell title="Documents">
+          <List items={(profile?.documents ?? []).map((item) => `${item.name} (${item.type.replaceAll("_", " ")})`)} empty="No documents stored yet." />
+        </SectionShell>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionShell title="Memory Gaps">
+          <List items={(profile?.gaps ?? []).slice(0, 6).map((gap) => `${gap.question} (${gap.importance})`)} empty="No major missing details found yet." />
+          <button
+            type="button"
+            onClick={() => onCommand("Add this to my Career Memory: ")}
+            className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Add memory
+          </button>
+        </SectionShell>
+        <SectionShell title="Smart Resume Versions">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(workspace?.smartVersions ?? []).map((version) => (
+              <div key={version.versionType} className="rounded-md border bg-slate-50 p-3">
+                <h3 className="text-sm font-semibold text-slate-950">{version.title}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">{version.whenToUse}</p>
+                <p className="mt-2 text-xs text-slate-500">Emphasizes: {version.emphasizes.slice(0, 3).join(", ")}</p>
+              </div>
+            ))}
+          </div>
+        </SectionShell>
+      </div>
+    </div>
+  );
+}
+
+function CoachTab({ workspace }: { workspace: CareerWorkspaceState | null }) {
+  const notes = workspace?.coachNotes ?? [];
+  return (
+    <div className="mx-auto max-w-4xl space-y-4">
+      <SectionShell title="AI Career Coach">
+        <div className="space-y-3">
+          {notes.map((note) => (
+            <div key={note.id} className="rounded-md border bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-slate-950">{note.title}</h3>
+                <Badge variant={note.priority === "high" ? "outline" : "secondary"}>{note.priority}</Badge>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{note.message}</p>
+              <p className="mt-2 text-sm font-medium text-slate-900">{note.action}</p>
             </div>
           ))}
+          {!notes.length && <p className="text-sm text-slate-500">No coach notes yet.</p>}
         </div>
+      </SectionShell>
+    </div>
+  );
+}
+
+function AchievementLoggerTab({ workspace, onCommand }: { workspace: CareerWorkspaceState | null; onCommand: (command: string) => void }) {
+  const profile = workspace?.careerProfile;
+  const log = workspace?.achievementLog;
+  const achievements = profile?.achievements ?? [];
+  return (
+    <div className="mx-auto max-w-5xl space-y-4">
+      <SectionShell title="Achievement Logger">
+        <button
+          type="button"
+          onClick={() => onCommand("Log achievement: ")}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Log achievement
+        </button>
+        {log && (
+          <div className="mt-4 rounded-md border bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-950">Latest log</p>
+            <p className="mt-2 text-sm leading-6 text-slate-700">{log.achievement.text}</p>
+            <p className="mt-2 text-sm font-medium text-slate-900">{log.suggestedResumeBullet}</p>
+            <div className="mt-3">
+              <BadgeCloud items={log.linkedSkills} empty="No linked skills yet." />
+            </div>
+          </div>
+        )}
+      </SectionShell>
+      <SectionShell title="Stored Achievements">
+        <List items={achievements.map((item) => `${item.text}${item.context ? ` (${item.context})` : ""}`)} empty="No achievements stored yet." />
+      </SectionShell>
+      <SectionShell title="Suggested Resume Bullets">
+        <List items={workspace?.mining?.strongBullets ?? []} empty="Add achievements or project details to see suggested bullets." />
       </SectionShell>
     </div>
   );
@@ -854,6 +1200,16 @@ function TextBlock({ title, text }: { title: string; text: string }) {
         Copy
       </button>
     </SectionShell>
+  );
+}
+
+function BadgeCloud({ items, empty = "Nothing yet." }: { items: string[]; empty?: string }) {
+  const cleanItems = Array.from(new Set(items.filter(Boolean)));
+  if (!cleanItems.length) return <p className="text-sm text-slate-500">{empty}</p>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {cleanItems.map((item) => <Badge key={item} variant="secondary">{item}</Badge>)}
+    </div>
   );
 }
 

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
-import { auditResume, createResumeRecord, writeResume } from "@/lib/careerpath/agents";
+import { createResumeRecord } from "@/lib/careerpath/agents";
+import { writeResumeAgent, auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/lib/careerpath/db";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { z } from "zod";
@@ -37,8 +38,8 @@ export async function POST(request: Request) {
     const session = await getSession(body.sessionId);
     if (!session) return NextResponse.json({ error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } }, { status: 404 });
 
-    const draft = writeResume(session.profile, session.mode, "");
-    const draftAudit = auditResume(draft, session.targetRole, "");
+    const draft = await writeResumeAgent(session.profile, session.mode, "");
+    const draftAudit = await auditResumeAgent(draft, session.targetRole, "");
     
     const resume = createResumeRecord({
       mode: session.mode,
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       content: draft,
       profile: session.profile,
       title: `${session.targetRole || "CareerPath"} Resume`,
+      audit: draftAudit,
     });
     
     resume.audit = draftAudit;

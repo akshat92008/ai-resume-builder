@@ -16,12 +16,7 @@ function SignupForm() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (typeof window !== "undefined") {
-    console.log("SignupForm Direct Env check:", {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "EXISTS" : "MISSING",
-    });
-  }
+
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

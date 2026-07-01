@@ -19,12 +19,27 @@ export class NvidiaNimProvider implements AIProvider {
     prompt: string;
     schemaDescription?: string;
   }): Promise<T> {
-    const text = await this.generateText({
-      system: `${params.system}\nReturn valid JSON only.${params.schemaDescription ? `\nSchema: ${params.schemaDescription}` : ""}`,
-      prompt: params.prompt,
+    const client = getAiClient();
+    const systemPrompt = `${params.system}\n\nIMPORTANT: Return valid JSON ONLY. Do not include markdown formatting or backticks.\n${params.schemaDescription ? `\nJSON Schema:\n${params.schemaDescription}` : ""}`;
+    
+    const response = await client.chat.completions.create({
+      model: getModel(),
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: params.prompt },
+      ],
     });
+    
+    const text = response.choices[0]?.message?.content || "{}";
     const cleaned = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-    return JSON.parse(cleaned) as T;
+    
+    try {
+      return JSON.parse(cleaned) as T;
+    } catch (e) {
+      console.error("Failed to parse AI JSON response:", cleaned);
+      throw e;
+    }
   }
 
   async generateText(params: { system: string; prompt: string }): Promise<string> {

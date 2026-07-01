@@ -1,17 +1,23 @@
 import type {
   AchievementItem,
+  AchievementLoggerResult,
   AchievementMiningResult,
   ApplicationPack,
   CareerCommandResult,
   CareerContext,
+  CareerCoachNote,
   CareerGap,
+  CareerHealth,
   CareerPathProfile,
   CareerPathResume,
   CareerPathResumeAudit,
   CareerProfile,
+  JobIntelligenceReport,
   JobApplication,
   JobDescription,
   JobSearchInsight,
+  KeywordRanking,
+  LinkedInOptimization,
   ProofLevel,
   ResumeBullet,
   ResumeDocument,
@@ -131,27 +137,46 @@ export function legacyProfileToCareerProfile(
       fullName: personal.name,
       email: personal.email,
       phone: personal.phone,
+      website: personal.portfolio,
       location: personal.location,
       linkedin: personal.linkedin,
       github: personal.github,
       portfolio: personal.portfolio,
+      languages,
     },
     target: {
       targetRoles: unique([target.role].filter(Boolean)),
+      dreamRole: target.role,
+      dreamCompanies: extractDreamCompanies(source.rawNotes || rawInput || ""),
       targetIndustries: unique([target.industry].filter(Boolean)),
       targetLocations: [],
+      preferredCountries: extractPreferredCountries(source.rawNotes || rawInput || ""),
       workPreference: "any",
+      remote: /\bremote\b/i.test(source.rawNotes || rawInput || ""),
+      hybrid: /\bhybrid\b/i.test(source.rawNotes || rawInput || ""),
+      relocation: /\brelocat(e|ion)\b/i.test(source.rawNotes || rawInput || ""),
       experienceLevel: normalizeExperienceLevel(target.experienceLevel),
+    },
+    preferences: {
+      resumeLength: "one_page",
+      writingTone: "professional",
+      targetSeniority: target.experienceLevel,
+      templatePreference: "ats",
+      atsPreference: "balanced",
     },
     education: education.map((item: any) => ({
       id: createId(),
       institution: item.institution || "Education",
       degree: item.degree,
       field: item.field,
+      branch: item.branch || item.field,
       startDate: item.startYear,
       endDate: item.endYear,
       grade: item.score,
       location: item.location,
+      relevantCoursework: extractCoursework(source.rawNotes || rawInput || ""),
+      awards: extractAwards(source.rawNotes || rawInput || ""),
+      activities: extractActivities(source.rawNotes || rawInput || ""),
     })),
     experience: experience.map((item: any) => ({
       id: createId(),
@@ -161,15 +186,28 @@ export function legacyProfileToCareerProfile(
       endDate: item.endDate,
       responsibilities: item.responsibilities,
       achievements: item.achievements.map((achievement: any) => achievementItem(achievement, "strong")),
-      technologies: [],
+      technologies: extractKnownSkills(`${item.responsibilities?.join(" ") || ""} ${item.achievements?.join(" ") || ""}`),
+      projects: extractReferencedProjectNames(item.responsibilities?.join(" ") || ""),
+      metrics: extractMetrics(`${item.responsibilities?.join(" ") || ""} ${item.achievements?.join(" ") || ""}`),
+      leadership: extractLeadershipSignals(`${item.responsibilities?.join(" ") || ""} ${item.achievements?.join(" ") || ""}`),
+      businessImpact: item.achievements || [],
+      documents: [],
       proofLevel: item.achievements.length ? "strong" : "weak",
     })),
     projects: projects.map((item: any) => ({
       id: createId(),
       name: item.name,
       description: item.description,
+      problem: item.problemSolved,
+      solution: item.description,
       technologies: item.techStack,
       links: (item.links || []).map((url: string) => link(url.includes("github") ? "GitHub" : "Project Link", url, url.includes("github") ? "github" : "demo")),
+      github: (item.links || []).find((url: string) => /github/i.test(url)),
+      liveDemo: (item.links || []).find((url: string) => !/github/i.test(url)),
+      challenges: extractChallenges(item.description || item.problemSolved || ""),
+      learnings: extractLearnings(source.rawNotes || rawInput || ""),
+      metrics: extractMetrics(`${item.impact || ""} ${item.description || ""}`),
+      tags: unique([...(item.techStack || []), target.role, target.industry].filter(Boolean)).slice(0, 8),
       achievements: buildProjectAchievements(item),
       status: inferProjectStatus(item.links, item.impact),
       proofLevel: proofFromProject(item.links, item.impact, item.techStack),
@@ -179,6 +217,7 @@ export function legacyProfileToCareerProfile(
         id: createId(),
         name: skillName,
         category: mapSkillCategory(category),
+        subcategory: mapSkillSubcategory(category),
         evidence: evidenceForSkill(skillName, source),
       })),
     ),
@@ -187,9 +226,11 @@ export function legacyProfileToCareerProfile(
       name: item.name,
       issuer: item.issuer,
       date: item.date,
+      expiryDate: item.expiryDate,
       credentialUrl: item.credentialLink,
     })),
     achievements: achievements.map((item: any) => achievementItem(item, "strong")),
+    documents: extractDocuments(source.rawNotes || rawInput || ""),
     links,
     rawInputs: source.rawNotes || rawInput
       ? [{ id: createId(), content: [source.rawNotes, rawInput].filter(Boolean).join("\n\n"), source: "chat", createdAt: now }]
@@ -212,15 +253,27 @@ export function mergeCareerMemory(
   extracted: CareerProfile,
 ): CareerProfile {
   if (!existing) return extracted;
-  return {
+  const merged: CareerProfile = {
     ...existing,
     personal: { ...existing.personal, ...cleanEmpty(extracted.personal) },
     target: {
       ...existing.target,
       targetRoles: unique([...existing.target.targetRoles, ...extracted.target.targetRoles]),
+      dreamRole: extracted.target.dreamRole || existing.target.dreamRole,
+      dreamCompanies: unique([...(existing.target.dreamCompanies || []), ...(extracted.target.dreamCompanies || [])]),
       targetIndustries: unique([...existing.target.targetIndustries, ...extracted.target.targetIndustries]),
       targetLocations: unique([...existing.target.targetLocations, ...extracted.target.targetLocations]),
+      preferredCountries: unique([...(existing.target.preferredCountries || []), ...(extracted.target.preferredCountries || [])]),
+      targetSalary: extracted.target.targetSalary || existing.target.targetSalary,
+      remote: existing.target.remote || extracted.target.remote,
+      hybrid: existing.target.hybrid || extracted.target.hybrid,
+      relocation: existing.target.relocation || extracted.target.relocation,
+      workPreference: extracted.target.workPreference || existing.target.workPreference,
       experienceLevel: extracted.target.experienceLevel || existing.target.experienceLevel,
+    },
+    preferences: {
+      ...existing.preferences,
+      ...cleanEmpty(extracted.preferences || {}),
     },
     education: uniqueBy([...existing.education, ...extracted.education], (item) => `${item.institution}-${item.degree}`.toLowerCase()),
     experience: uniqueBy([...existing.experience, ...extracted.experience], (item) => `${item.company}-${item.title}`.toLowerCase()),
@@ -228,13 +281,15 @@ export function mergeCareerMemory(
     skills: uniqueBy([...existing.skills, ...extracted.skills], (item) => item.name.toLowerCase()),
     certifications: uniqueBy([...existing.certifications, ...extracted.certifications], (item) => item.name.toLowerCase()),
     achievements: uniqueBy([...existing.achievements, ...extracted.achievements], (item) => item.text.toLowerCase()),
+    documents: uniqueBy([...(existing.documents || []), ...(extracted.documents || [])], (item) => `${item.type}-${item.name}-${item.url || ""}`.toLowerCase()),
     links: uniqueBy([...existing.links, ...extracted.links], (item) => item.url.toLowerCase()),
     rawInputs: uniqueBy([...existing.rawInputs, ...extracted.rawInputs], (item) => item.content),
-    gaps: detectCareerGaps(extracted),
-    strengths: detectCareerStrengths(extracted),
-    weaknesses: detectCareerWeaknesses(extracted),
+    gaps: [],
+    strengths: [],
+    weaknesses: [],
     updatedAt: new Date().toISOString(),
   };
+  return refreshCareerProfileInsights(merged);
 }
 
 export function mineAchievements(profile: CareerProfile): AchievementMiningResult {
@@ -322,7 +377,7 @@ export function createResumeDocumentFromResume(
     versionType,
     sections,
     bullets,
-    score: toInterviewScore(resume.audit, resume.tailoring?.matchScore),
+    score: toReadinessScore(resume.audit, resume.tailoring?.matchScore),
     createdAt: resume.createdAt || now,
     updatedAt: resume.updatedAt || now,
   };
@@ -345,6 +400,8 @@ export function extractJobDescription(rawText: string): JobDescription {
   const company = rawText.match(/\bcompany\s*[:\-]\s*([^\n]{2,80})/i)?.[1]?.trim();
   const location = rawText.match(/\blocation\s*[:\-]\s*([^\n]{2,80})/i)?.[1]?.trim();
   const skills = extractKnownSkills(rawText);
+  const salaryClues = rawText.match(/(?:\$|rs\.?|inr|usd|lpa|salary|compensation)[^\n.]{0,80}/gi) ?? [];
+  const niceToHaveSkills = extractNiceToHaveSkills(rawText, skills);
   const responsibilities = rawText
     .split(/\n+/)
     .map((line) => line.replace(/^[-*]\s*/, "").trim())
@@ -366,10 +423,53 @@ export function extractJobDescription(rawText: string): JobDescription {
     rawText,
     extractedSkills: skills,
     responsibilities,
+    hiddenExpectations: extractHiddenExpectations(rawText),
     requiredExperience: rawText.match(/\b\d\+?\s+years?[^\n.]{0,60}/i)?.[0],
     seniority,
-    keywords: unique([...skills, ...extractRoleKeywords(rawText)]).slice(0, 16),
+    salaryClues: unique(salaryClues.map((item) => item.trim())).slice(0, 4),
+    requiredTools: skills.filter((skill) => /\b(tool|tools|stack|must|required|experience with|proficient)\b/i.test(rawText.slice(Math.max(0, rawText.toLowerCase().indexOf(skill.toLowerCase()) - 80), rawText.toLowerCase().indexOf(skill.toLowerCase()) + 120))).slice(0, 10),
+    niceToHaveSkills,
+    industry: inferIndustry(rawText),
+    keywords: unique([...skills, ...niceToHaveSkills, ...extractRoleKeywords(rawText)]).slice(0, 18),
     createdAt: now,
+  };
+}
+
+export function analyzeJobIntelligence(job: JobDescription, profile: CareerProfile): JobIntelligenceReport {
+  const memorySkillNames = profile.skills.map((skill) => skill.name.toLowerCase());
+  const matchedSkills = job.keywords.filter((keyword) => memorySkillNames.includes(keyword.toLowerCase()));
+  const missingSkills = job.keywords.filter((keyword) => !memorySkillNames.includes(keyword.toLowerCase())).slice(0, 8);
+  const hasExperience = profile.experience.length > 0;
+  const missingExperience = [
+    job.requiredExperience && !hasExperience ? job.requiredExperience : "",
+    job.seniority === "senior" && !["senior", "mid"].includes(profile.target.experienceLevel || "") ? "senior-level ownership evidence" : "",
+    job.responsibilities.some((item) => /\blead|mentor|own\b/i.test(item)) && !profile.experience.some((item) => item.leadership?.length) ? "leadership or ownership examples" : "",
+  ].filter(Boolean);
+  const keywordRanking: KeywordRanking[] = job.keywords.map((keyword, index) => ({
+    keyword,
+    importance: index < 4 ? "critical" : index < 8 ? "high" : index < 13 ? "medium" : "low",
+    presentInCareerMemory: memorySkillNames.includes(keyword.toLowerCase()),
+  }));
+  const fitPercentage = clamp(Math.round(
+    35 +
+    (matchedSkills.length / Math.max(1, job.keywords.length)) * 45 +
+    (profile.projects.length ? 8 : 0) +
+    (hasExperience ? 7 : 0) -
+    missingExperience.length * 5,
+  ), 0, 100);
+
+  return {
+    job,
+    fitPercentage,
+    matchedSkills,
+    missingSkills,
+    missingExperience,
+    keywordRanking,
+    hiddenExpectations: job.hiddenExpectations,
+    salaryClues: job.salaryClues,
+    requiredTools: job.requiredTools,
+    niceToHaveSkills: job.niceToHaveSkills,
+    industry: job.industry,
   };
 }
 
@@ -394,27 +494,11 @@ export function generateApplicationPack(
     coldEmail: `Subject: Application for ${role}\n\nHi ${company} team,\n\nI am applying for ${role}. My resume highlights ${assets.join(", ") || "project-based proof"} and role-relevant skills without unsupported claims. I would be grateful for the opportunity to discuss how I can contribute.\n\nBest,\n${name}`,
     linkedinMessage: `Hi, I saw the ${role} role at ${company}. I am interested and have relevant proof from ${assets[0] || "recent project work"}. Could I share my resume?`,
     whyFitAnswer: `I am a fit for ${role} because my resume is built around ${assets.join(", ") || "practical, proof-backed work"} and the skills I can truthfully support: ${profile.skills.map((skill) => skill.name).slice(0, 8).join(", ") || "project execution and learning speed"}.`,
-    interviewQuestions: [
-      {
-        question: `Walk me through your strongest project for ${role}.`,
-        whyAsked: "Recruiters need proof that your project work is real and relevant.",
-        suggestedAnswer: profile.projects[0]
-          ? `I would discuss ${profile.projects[0].name}, the problem it solved, the stack (${profile.projects[0].technologies.join(", ") || "core tools"}), and what I would improve next.`
-          : "Use one concrete project, explain the problem, your role, stack, tradeoffs, and result.",
-      },
-      {
-        question: "What are you still learning for this role?",
-        whyAsked: "This checks honesty and seniority fit.",
-        suggestedAnswer: missingSkills.length
-          ? `I can be direct that I am still building depth in ${missingSkills.slice(0, 3).join(", ")}, while showing how I learn through shipped projects.`
-          : "I would name a specific next skill and connect it to a current project.",
-      },
-    ],
+    interviewQuestions: [],
     missingSkills,
     preparationPlan: [
-      "Review every project bullet and be ready to explain the implementation.",
-      "Prepare a 60-second story for your strongest role-relevant project.",
-      missingSkills.length ? `Study the basics of ${missingSkills.slice(0, 2).join(" and ")} before applying.` : "Practice explaining tradeoffs and debugging decisions.",
+      "Review every resume claim and remove anything you cannot support.",
+      missingSkills.length ? `Decide whether to learn or explicitly leave out ${missingSkills.slice(0, 2).join(" and ")}.` : "Send the tailored resume with the cover letter.",
       "Add GitHub/demo links before sending if available.",
     ],
     followUpMessage: `Hi, I wanted to follow up on my application for ${role}. I remain very interested in ${company} and would be happy to share any additional details about my projects or resume.`,
@@ -486,7 +570,9 @@ export function routeCareerCommand(input: string, context: CareerContext = {}): 
   const wantsTailor = /\b(tailor|job description|match this jd|jd:|requirements|qualifications)\b/.test(text);
   const wantsVersion = /\b(master|fresher|internship|frontend|full stack|ai product|startup|corporate).*\b(resume|version)\b/.test(text);
   const wantsImprove = /\b(improve|stronger|better|ats|polish|rewrite)\b/.test(text);
-  const careerData = /\b(i am|i built|i made|i know|project|certificate|education|college|intern|fresher|student)\b/.test(text) || input.length > 140;
+  const wantsLinkedIn = /\blinkedin\b/.test(text) && /\b(optimi[sz]e|profile|headline|about|featured|seo)\b/.test(text);
+  const wantsAchievementLog = isAchievementLogInput(input);
+  const careerData = /\b(i am|i built|i made|i know|project|certificate|education|college|intern|fresher|student|optimized|improved|shipped|launched|reduced|increased|won|published)\b/.test(text) || input.length > 140;
 
   if (wantsPack) return command("generate_application_pack", false, true, true, false, false, "I will tailor the resume and prepare the full application pack.");
   if (wantsTrack) return command("track_job_application", false, false, false, true, false, "I will save this as a tracked application.");
@@ -494,6 +580,8 @@ export function routeCareerCommand(input: string, context: CareerContext = {}): 
   if (wantsTailor) return command("tailor_resume_to_job", false, true, false, false, false, "I will tailor your resume to this job without adding unsupported keywords.");
   if (wantsVersion) return command("generate_resume_version", true, false, false, false, false, "I will generate a smarter resume version for this use case.");
   if (wantsImprove) return command("improve_resume", false, false, false, false, false, "I will improve the current resume using proof-based edits.");
+  if (wantsLinkedIn) return command("optimize_linkedin", false, false, false, false, false, "I will generate LinkedIn sections from Career Memory.");
+  if (wantsAchievementLog) return command("log_achievement", true, false, false, false, false, "I will save this achievement to career memory and turn it into a stronger bullet.", true);
   if (careerData || !context.resume) return command("build_career_profile", true, false, false, false, false, "I will update your career memory and build a resume from it.");
   return command("general_career_question", false, false, false, false, false, "Ask me to build, tailor, pack, track, or analyze your job search.");
 }
@@ -504,32 +592,248 @@ export function buildCareerWorkspaceState(resume: CareerPathResume | null | unde
       careerProfile: null,
       mining: null,
       smartVersions: [],
+      jobIntelligence: null,
       applicationPack: null,
       applications: [],
       insights: [],
+      linkedInOptimization: null,
+      careerHealth: null,
+      coachNotes: [],
+      achievementLog: null,
       jobDescription: null,
       command: null,
     };
   }
-  const profile = resume.careerProfile || legacyProfileToCareerProfile(resume.profile, resume.userId, rawInput);
+  const profile = refreshCareerProfileInsights(resume.careerProfile || legacyProfileToCareerProfile(resume.profile, resume.userId, rawInput));
   const resumeDocument = resume.resumeDocument || createResumeDocumentFromResume(resume, profile, resume.jobDescription ? "job_specific" : "master");
   const applications = resume.applications || [];
+  const jobDescription = resume.jobDescription ? extractJobDescription(resume.jobDescription) : null;
+  const jobIntelligence = jobDescription ? analyzeJobIntelligence(jobDescription, profile) : null;
+  const insights = resume.jobSearchInsights || analyzeJobSearchPerformance(applications, [resumeDocument]);
+  const mining = mineAchievements(profile);
   return {
     careerProfile: profile,
-    mining: mineAchievements(profile),
+    mining,
     smartVersions: generateSmartResumeVersions(resume, profile),
+    jobIntelligence,
     applicationPack: resume.applicationPack || null,
     applications,
-    insights: resume.jobSearchInsights || analyzeJobSearchPerformance(applications, [resumeDocument]),
-    jobDescription: resume.jobDescription ? extractJobDescription(resume.jobDescription) : null,
+    insights,
+    linkedInOptimization: generateLinkedInOptimization(profile, resume, jobDescription || undefined),
+    careerHealth: buildCareerHealth(profile, resume, applications, insights),
+    coachNotes: generateCareerCoachNotes(profile, resume, jobIntelligence, insights),
+    achievementLog: rawInput && isAchievementLogInput(rawInput) ? previewAchievementLog(profile, rawInput) : null,
+    jobDescription,
     command: null,
   };
+}
+
+export function refreshCareerProfileInsights(profile: CareerProfile): CareerProfile {
+  const next: CareerProfile = {
+    ...profile,
+    preferences: profile.preferences || {
+      resumeLength: "one_page",
+      writingTone: "professional",
+      templatePreference: "ats",
+      atsPreference: "balanced",
+    },
+    documents: profile.documents || [],
+    personal: {
+      ...profile.personal,
+      languages: profile.personal.languages || [],
+    },
+    target: {
+      ...profile.target,
+      dreamCompanies: profile.target.dreamCompanies || [],
+      preferredCountries: profile.target.preferredCountries || [],
+    },
+  };
+  next.gaps = detectCareerGaps(next);
+  next.strengths = detectCareerStrengths(next);
+  next.weaknesses = detectCareerWeaknesses(next);
+  return next;
+}
+
+export function isAchievementLogInput(input: string): boolean {
+  return /\b(log|achievement|accomplished|today|shipped|launched|optimized|improved|reduced|increased|won|published|fixed|delivered)\b/i.test(input) &&
+    /\b(built|made|created|optimized|improved|reduced|increased|won|published|fixed|delivered|launched|shipped|completed)\b/i.test(input);
+}
+
+export function applyAchievementLog(profile: CareerProfile, note: string): { profile: CareerProfile; result: AchievementLoggerResult } {
+  const result = previewAchievementLog(profile, note);
+  const linkedProjectNames = new Set(result.linkedProjectIds);
+  const updatedProjects = profile.projects.map((project) => {
+    if (!linkedProjectNames.has(project.id)) return project;
+    return {
+      ...project,
+      achievements: uniqueBy([...project.achievements, result.achievement], (item) => item.text.toLowerCase()),
+      metrics: unique([...(project.metrics || []), ...extractMetrics(note)]),
+      tags: unique([...(project.tags || []), ...result.linkedSkills]).slice(0, 10),
+    };
+  });
+  const rawInput = { id: createId(), content: note, source: "manual" as const, createdAt: new Date().toISOString() };
+  const updatedProfile = refreshCareerProfileInsights({
+    ...profile,
+    projects: updatedProjects,
+    achievements: uniqueBy([...profile.achievements, result.achievement], (item) => item.text.toLowerCase()),
+    rawInputs: uniqueBy([...profile.rawInputs, rawInput], (item) => item.content),
+    updatedAt: new Date().toISOString(),
+  });
+  return { profile: updatedProfile, result };
+}
+
+export function previewAchievementLog(profile: CareerProfile, note: string): AchievementLoggerResult {
+  const linkedSkills = profile.skills
+    .filter((skill) => new RegExp(`\\b${escapeRegExp(skill.name)}\\b`, "i").test(note))
+    .map((skill) => skill.name)
+    .slice(0, 8);
+  const linkedProjects = profile.projects.filter((project) => new RegExp(`\\b${escapeRegExp(project.name)}\\b`, "i").test(note));
+  const context = linkedProjects[0]?.name || profile.experience.find((item) => new RegExp(`\\b${escapeRegExp(item.company)}\\b`, "i").test(note))?.company;
+  const achievement = {
+    ...achievementItem(stripAchievementPrefix(note), inferProofLevel(note), context),
+    metric: extractMetrics(note)[0],
+    impact: extractImpactPhrase(note),
+  };
+  const suggestedResumeBullet = professionalizeCareerBullet(achievement.text, profile.target.targetRoles[0] || profile.target.dreamRole || "target role");
+
+  return {
+    achievement,
+    suggestedResumeBullet,
+    linkedSkills,
+    linkedProjectIds: linkedProjects.map((project) => project.id),
+    memoryUpdates: [
+      "Saved as a standalone achievement",
+      linkedProjects.length ? `Linked to ${linkedProjects.map((project) => project.name).join(", ")}` : "Ready to link to a project or experience",
+      linkedSkills.length ? `Linked skills: ${linkedSkills.join(", ")}` : "No existing skills matched yet",
+      "Suggested a stronger resume bullet",
+    ],
+  };
+}
+
+export function generateLinkedInOptimization(
+  profile: CareerProfile,
+  resume: CareerPathResume,
+  job?: JobDescription,
+): LinkedInOptimization {
+  const role = job?.title || resume.targetRole || profile.target.targetRoles[0] || "Career Builder";
+  const skills = profile.skills.map((skill) => skill.name);
+  const featured = [
+    ...profile.projects.slice(0, 3).map((project) => `${project.name}${project.liveDemo ? ` - ${project.liveDemo}` : project.github ? ` - ${project.github}` : ""}`),
+    ...profile.certifications.slice(0, 2).map((cert) => cert.name),
+  ].filter(Boolean);
+  const proof = profile.strengths.map((item) => item.title).slice(0, 2).join(" and ");
+  return {
+    headline: `${role} | ${skills.slice(0, 4).join(" | ") || "Project-focused career profile"}`,
+    about: `I am building toward ${role} with a career memory grounded in ${proof || "projects, skills, and measurable achievements"}. My strongest evidence includes ${featured.slice(0, 2).join(", ") || "hands-on work and proof-backed learning"}.`,
+    experienceUpdates: resume.content.experience.flatMap((item) => item.bullets.slice(0, 2)).slice(0, 6),
+    skills: unique([...skills, ...(job?.keywords || [])]).slice(0, 25),
+    featured,
+    keywords: unique([role, ...(job?.keywords || []), ...skills]).slice(0, 20),
+    seoNotes: [
+      "Use the target role in the headline and About section.",
+      "Pin strongest projects, certificates, or portfolio links in Featured.",
+      "Keep skills aligned with evidence already stored in Career Memory.",
+    ],
+  };
+}
+
+export function buildCareerHealth(
+  profile: CareerProfile,
+  resume: CareerPathResume,
+  applications: JobApplication[],
+  insights: JobSearchInsight[],
+): CareerHealth {
+  const memorySignals = [
+    Boolean(profile.personal.email || profile.personal.phone),
+    profile.education.length > 0,
+    profile.experience.length > 0,
+    profile.projects.length > 0,
+    profile.skills.length >= 5,
+    profile.achievements.length > 0,
+    profile.links.length > 0,
+    profile.target.targetRoles.length > 0,
+  ];
+  const memoryCompleteness = Math.round((memorySignals.filter(Boolean).length / memorySignals.length) * 100);
+  const resumeScore = resume.score?.overall || resume.resumeDocument?.score?.overall || 0;
+  const skillGapCount = profile.gaps.filter((gapItem) => /skill|proof|impact|target/i.test(gapItem.area)).length;
+  const recentActivity = [
+    resume.updatedAt ? `Resume updated ${new Date(resume.updatedAt).toLocaleDateString("en-US")}` : "",
+    applications[0] ? `${applications[0].company} application ${applications[0].status.replaceAll("_", " ")}` : "",
+    insights[0]?.title || "",
+  ].filter(Boolean);
+  const latestDocuments = [
+    resume.title,
+    ...(profile.documents || []).slice(0, 4).map((document) => document.name),
+  ].filter(Boolean);
+  return {
+    overall: Math.round((memoryCompleteness + resumeScore + Math.max(0, 100 - skillGapCount * 12)) / 3),
+    memoryCompleteness,
+    resumeScore,
+    applicationCount: applications.length,
+    skillGapCount,
+    recentActivity,
+    latestDocuments,
+  };
+}
+
+export function generateCareerCoachNotes(
+  profile: CareerProfile,
+  resume: CareerPathResume,
+  jobIntelligence: JobIntelligenceReport | null,
+  insights: JobSearchInsight[],
+): CareerCoachNote[] {
+  const notes: CareerCoachNote[] = [];
+  if (jobIntelligence?.missingSkills.length) {
+    notes.push(coachNote(
+      "Missing job keywords",
+      `The job asks for ${jobIntelligence.missingSkills.slice(0, 3).join(", ")} and Career Memory does not prove them yet.`,
+      "Add proof if you truly have it, or leave those keywords out of the tailored resume.",
+      "high",
+    ));
+  }
+  if (profile.weaknesses.some((item) => /Impact/.test(item.title))) {
+    notes.push(coachNote(
+      "Resume lacks quantified impact",
+      "Several achievements still read as activity rather than outcome.",
+      "Log results such as users, time saved, performance improved, or workflow changed.",
+      "high",
+    ));
+  }
+  if (!profile.links.some((item) => item.type === "github" || item.type === "portfolio" || item.type === "demo")) {
+    notes.push(coachNote(
+      "Proof links are thin",
+      "Recruiters get less confidence when projects have no GitHub, demo, portfolio, or certificate link.",
+      "Add at least one proof link to the strongest project.",
+      "medium",
+    ));
+  }
+  if ((resume.score?.overall || 0) >= 80 && profile.gaps.length <= 2) {
+    notes.push(coachNote(
+      "Ready for targeted applications",
+      "Your resume score and memory completeness are strong enough to start applying selectively.",
+      "Tailor the resume for each job and track every application outcome.",
+      "medium",
+    ));
+  }
+  for (const insightItem of insights.slice(0, 2)) {
+    notes.push(coachNote(insightItem.title, insightItem.explanation, insightItem.suggestedAction, insightItem.priority));
+  }
+  if (!notes.length) {
+    notes.push(coachNote(
+      "Build the memory foundation",
+      "CareerPath AI needs a little more career data before it can coach precisely.",
+      "Add one project, one achievement, and your target role.",
+      "low",
+    ));
+  }
+  return uniqueBy(notes, (item) => item.title).slice(0, 6);
 }
 
 function detectCareerGaps(profile: CareerProfile): CareerGap[] {
   const gaps: CareerGap[] = [];
   if (!profile.personal.email && !profile.personal.phone) gaps.push(gap("contact", "What email or phone number should recruiters use?", "high"));
   if (!profile.links.some((item) => item.type === "github" || item.type === "portfolio")) gaps.push(gap("proof_links", "Do you have GitHub, portfolio, certificate, or deployed project links?", "high"));
+  if (!profile.documents.length && !profile.links.some((item) => item.type === "certificate")) gaps.push(gap("documents", "Do you want to attach certificates, transcripts, portfolio PDFs, or reference letters?", "low"));
   if (!profile.education.length && ["student", "fresher", "intern"].includes(profile.target.experienceLevel || "")) gaps.push(gap("education", "What is your education institution, degree/course, and graduation year?", "high"));
   for (const project of profile.projects.slice(0, 3)) {
     if (!project.links.length) gaps.push(gap("project_links", `Do you have a GitHub or live demo link for ${project.name}?`, "high"));
@@ -558,6 +862,14 @@ function detectCareerStrengths(profile: CareerProfile) {
       relatedItems: technicalSkills.map((item) => item.id),
     });
   }
+  if (profile.achievements.length) {
+    strengths.push({
+      id: createId(),
+      title: `${profile.achievements.length} reusable achievement${profile.achievements.length > 1 ? "s" : ""}`,
+      explanation: "Achievements can be reused across resumes, LinkedIn, cover letters, and application answers.",
+      relatedItems: profile.achievements.map((item) => item.id),
+    });
+  }
   return strengths;
 }
 
@@ -582,7 +894,7 @@ function detectCareerWeaknesses(profile: CareerProfile) {
   return weaknesses;
 }
 
-function toInterviewScore(audit?: CareerPathResumeAudit, tailoringScore?: number): ResumeScore {
+function toReadinessScore(audit?: CareerPathResumeAudit, tailoringScore?: number): ResumeScore {
   const score = audit?.score;
   const roleMatch = score?.roleAlignment ?? tailoringScore ?? 65;
   const keywordMatch = score?.keywordCoverage ?? tailoringScore ?? 62;
@@ -599,7 +911,7 @@ function toInterviewScore(audit?: CareerPathResumeAudit, tailoringScore?: number
     readability,
     seniorityFit,
     atsCompatibility,
-    explanation: `Interview Conversion Score: ${overall}/100. Improve it by increasing proof, role alignment, and supported keyword coverage.`,
+    explanation: `Career Readiness Score: ${overall}/100. Improve it by increasing proof, role alignment, and supported keyword coverage.`,
   };
 }
 
@@ -662,6 +974,133 @@ function mapSkillCategory(category: string): "technical" | "soft" | "tool" | "la
   return "domain";
 }
 
+function mapSkillSubcategory(category: string): NonNullable<CareerProfile["skills"][number]["subcategory"]> {
+  if (category === "programming") return "programming";
+  if (category === "frameworks") return "framework";
+  if (category === "databases") return "database";
+  if (category === "aiTools") return "ai";
+  if (category === "softSkills") return "soft";
+  return "tool";
+}
+
+function inferIndustry(text: string) {
+  const lower = text.toLowerCase();
+  if (/\b(ai|llm|machine learning|ml|data)\b/.test(lower)) return "AI / Software";
+  if (/\bfrontend|backend|full[- ]?stack|software|developer|engineer\b/.test(lower)) return "Software";
+  if (/\bfinance|bank|fintech|trading\b/.test(lower)) return "Finance";
+  if (/\bhealth|medical|clinic|hospital\b/.test(lower)) return "Healthcare";
+  if (/\bedtech|education|school|learning\b/.test(lower)) return "Education";
+  if (/\becommerce|retail|marketplace\b/.test(lower)) return "Commerce";
+  return "";
+}
+
+function extractDreamCompanies(text: string) {
+  const match = text.match(/\b(?:dream company|target companies|preferred companies)\s*[:\-]\s*([^\n.]{2,160})/i)?.[1];
+  return match ? splitList(match).slice(0, 8) : [];
+}
+
+function extractPreferredCountries(text: string) {
+  const match = text.match(/\b(?:preferred countries|target countries|countries)\s*[:\-]\s*([^\n.]{2,160})/i)?.[1];
+  return match ? splitList(match).slice(0, 8) : [];
+}
+
+function extractCoursework(text: string) {
+  const match = text.match(/\b(?:coursework|courses)\s*[:\-]\s*([^\n.]{2,180})/i)?.[1];
+  return match ? splitList(match).slice(0, 10) : [];
+}
+
+function extractAwards(text: string) {
+  return (text.match(/\b(?:award|won|winner|ranked|honou?r|scholarship)[^\n.]{2,120}/gi) ?? [])
+    .map(sentenceCase)
+    .slice(0, 6);
+}
+
+function extractActivities(text: string) {
+  const match = text.match(/\b(?:activities|clubs|societies)\s*[:\-]\s*([^\n.]{2,180})/i)?.[1];
+  return match ? splitList(match).slice(0, 8) : [];
+}
+
+function extractReferencedProjectNames(text: string) {
+  return (text.match(/\b(?:project|product|app|website|dashboard)\s+([a-z0-9 &.'-]{3,50})/gi) ?? [])
+    .map((item) => titleCase(item.replace(/\b(project|product|app|website|dashboard)\b/i, "").trim()))
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function extractMetrics(text: string) {
+  return unique(text.match(/\b(?:\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*(?:users|customers|students|testers|hours|days|weeks|months|seconds|minutes|requests|pages|features|projects|dollars|usd|inr|lpa))\b/gi) ?? [])
+    .slice(0, 8);
+}
+
+function extractLeadershipSignals(text: string) {
+  return (text.match(/\b(?:led|mentored|managed|coordinated|owned|trained|organized)[^\n.]{2,120}/gi) ?? [])
+    .map(sentenceCase)
+    .slice(0, 6);
+}
+
+function extractChallenges(text: string) {
+  return (text.match(/\b(?:challenge|blocked|difficult|issue|problem)[^\n.]{2,120}/gi) ?? [])
+    .map(sentenceCase)
+    .slice(0, 4);
+}
+
+function extractLearnings(text: string) {
+  return (text.match(/\b(?:learned|learning|improved my understanding|figured out)[^\n.]{2,120}/gi) ?? [])
+    .map(sentenceCase)
+    .slice(0, 4);
+}
+
+function extractDocuments(text: string): CareerProfile["documents"] {
+  const urls = text.match(/https?:\/\/[^\s)]+/gi) ?? [];
+  return urls
+    .filter((url) => /\.(pdf|docx?|pptx?|xlsx?)(?:$|\?)/i.test(url) || /\b(certificate|transcript|portfolio|resume)\b/i.test(url))
+    .map((url) => ({
+      id: createId(),
+      name: url.split("/").pop()?.replace(/[?#].*$/, "") || "Career Document",
+      type: /certificate/i.test(url) ? "certificate" as const : /transcript/i.test(url) ? "transcript" as const : /portfolio/i.test(url) ? "portfolio" as const : /resume/i.test(url) ? "resume" as const : "pdf" as const,
+      url,
+      createdAt: new Date().toISOString(),
+    }));
+}
+
+function extractNiceToHaveSkills(text: string, requiredSkills: string[]) {
+  const niceSections = (text.match(/(?:nice to have|preferred|bonus|plus)[^\n.]{0,220}/gi) ?? []).join(" ");
+  return extractKnownSkills(niceSections).filter((skill) => !requiredSkills.includes(skill)).slice(0, 8);
+}
+
+function extractHiddenExpectations(text: string) {
+  const expectations = [
+    /\bfast[- ]paced|startup|ambiguous|ownership\b/i.test(text) ? "High ownership in ambiguous environments" : "",
+    /\bcross[- ]functional|stakeholder|collaborate\b/i.test(text) ? "Cross-functional communication" : "",
+    /\bscale|performance|latency|reliability\b/i.test(text) ? "Performance and reliability mindset" : "",
+    /\bmentor|lead|review\b/i.test(text) ? "Leadership beyond individual contribution" : "",
+    /\bcustomer|user|client\b/i.test(text) ? "User or customer empathy" : "",
+  ];
+  return expectations.filter(Boolean);
+}
+
+function stripAchievementPrefix(note: string) {
+  return note
+    .replace(/^\s*(log\s+)?(achievement|accomplishment|today)\s*[:\-]?\s*/i, "")
+    .trim();
+}
+
+function extractImpactPhrase(text: string) {
+  return text.match(/\b(?:reduced|increased|improved|saved|grew|cut|boosted|optimized)[^\n.]{2,140}/i)?.[0];
+}
+
+function professionalizeCareerBullet(text: string, role: string) {
+  const clean = stripAchievementPrefix(text).replace(/\s+/g, " ").trim();
+  const startsWithAction = /^(built|created|developed|designed|implemented|improved|optimized|reduced|increased|launched|shipped|led|delivered|fixed)\b/i.test(clean);
+  const actioned = startsWithAction ? clean : `Delivered ${clean.charAt(0).toLowerCase()}${clean.slice(1)}`;
+  const suffix = /\b(for|using|with|to)\b/i.test(actioned) ? "" : ` for ${role.toLowerCase()} proof`;
+  return sentenceCase(`${actioned}${suffix}`);
+}
+
+function coachNote(title: string, message: string, action: string, priority: CareerCoachNote["priority"]): CareerCoachNote {
+  return { id: createId(), title, message, action, priority };
+}
+
 function section(type: ResumeDocument["sections"][number]["type"], title: string, order: number, content: unknown) {
   return { id: createId(), type, title, order, content };
 }
@@ -706,8 +1145,9 @@ function command(
   shouldTrackApplication: boolean,
   shouldAnalyzeSearch: boolean,
   suggestedResponse: string,
+  shouldLogAchievement = false,
 ): CareerCommandResult {
-  return { intent, shouldGenerateResume, shouldTailor, shouldGenerateApplicationPack, shouldTrackApplication, shouldAnalyzeSearch, suggestedResponse };
+  return { intent, shouldGenerateResume, shouldTailor, shouldGenerateApplicationPack, shouldTrackApplication, shouldAnalyzeSearch, shouldLogAchievement, suggestedResponse };
 }
 
 function normalizeExperienceLevel(value: string | undefined): CareerProfile["target"]["experienceLevel"] {
@@ -729,6 +1169,14 @@ function hasSectionContent(content: unknown) {
 
 function cleanEmpty<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "" && item !== null)) as Partial<T>;
+}
+
+function splitList(value: string) {
+  return unique(value.split(/,|;|\||\band\b/i).map((item) => titleCase(item.trim())).filter(Boolean));
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function addDaysIso(days: number) {

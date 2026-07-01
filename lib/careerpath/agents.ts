@@ -439,9 +439,10 @@ export function createResumeRecord(input: {
   jobDescription?: string;
   version?: number;
   title?: string;
+  audit?: CareerPathResumeAudit;
 }): CareerPathResume {
   const now = new Date().toISOString();
-  const audit = auditResume(input.content, input.targetRole, input.jobDescription);
+  const audit = input.audit || auditResume(input.content, input.targetRole, input.jobDescription);
   return {
     id: createId(),
     userId: USER_ID,

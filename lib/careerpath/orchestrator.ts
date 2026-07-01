@@ -94,7 +94,7 @@ async function callWithValidation<T>(
       const content = completion.choices[0].message.content;
       if (!content) throw new Error(`Empty response from ${agentName}`);
 
-      console.log(`\n\n--- RAW OUTPUT (${agentName}) ---\n`, content, `\n--- END RAW OUTPUT ---\n\n`);
+
 
       // Strip markdown code blocks and extract JSON
       let cleanContent = content.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
@@ -291,7 +291,7 @@ export async function auditResumeAgent(
       {
         role: "system",
         content:
-          "You are a strict resume auditor. Score the resume across various metrics out of 100. Identify missing contact info, weak bullets, unsupported metrics, or poor alignment with the target role. Be honest about the score. This score is guidance, not a guarantee of selection.",
+          "You are a strict resume auditor. Score the resume across various metrics out of 100. Identify missing contact info, weak bullets, unsupported metrics, or poor alignment with the target role. Be honest about the score. This score is guidance, not a guarantee of selection.\n\nCRITICAL: You must explicitly classify issues using these exact `type` strings when applicable:\n- `WEAK_BULLET` — vague bullets without action verbs or specifics\n- `MISSING_METRIC` — bullets that could benefit from quantification\n- `TIMELINE_GAP` — date overlaps, missing dates, or suspicious gaps\n- Use other descriptive strings for other issue types.",
       },
       {
         role: "user",

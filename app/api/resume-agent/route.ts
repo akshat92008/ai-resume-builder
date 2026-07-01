@@ -35,14 +35,18 @@ import {
 } from "@/lib/careerpath/agents";
 import {
   analyzeJobSearchPerformance,
+  applyAchievementLog,
   buildCareerWorkspaceState,
   createJobApplicationFromCommand,
   createResumeDocumentFromResume,
   extractJobDescription,
   generateApplicationPack,
   generateSmartResumeVersions,
+  isAchievementLogInput,
   legacyProfileToCareerProfile,
+  mergeCareerMemory,
   mineAchievements,
+  refreshCareerProfileInsights,
   routeCareerCommand,
 } from "@/lib/careerpath/career-os";
 import { handleResumeMessage } from "@/lib/resume/agent";
@@ -113,6 +117,10 @@ export async function POST(request: Request) {
       intent = "ANALYZE_JOB_SEARCH";
     } else if (command.intent === "generate_resume_version") {
       intent = "GENERATE_RESUME_VERSION";
+    } else if (command.intent === "optimize_linkedin") {
+      intent = "GENERAL_HELP";
+    } else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) {
+      intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
     } else {
       const result = await inferIntentLLM(message, !!currentResume, { userId, resumeId });
       intent = result.intent;
@@ -238,8 +246,20 @@ async function processIntent(
       return handleGenerateOutreach(message, currentResume, userId, metadata);
 
     case "GENERAL_HELP":
+      if (_command && typeof _command === "object" && "intent" in _command && (_command as { intent?: string }).intent === "optimize_linkedin") {
+        const workspace = buildCareerWorkspaceState(currentResume);
+        const linkedIn = workspace.linkedInOptimization;
+        return {
+          assistantMessage: linkedIn
+            ? `LinkedIn optimization is ready.\n\nHeadline: ${linkedIn.headline}\n\nAbout: ${linkedIn.about}\n\nTop skills: ${linkedIn.skills.slice(0, 8).join(", ") || "Add more skills to Career Memory."}`
+            : "Build Career Memory first, then I can generate LinkedIn headline, About, experience updates, skills, Featured items, and SEO keywords.",
+          resume: currentResume,
+          resumeId: currentResume?.id || null,
+          workspace,
+        };
+      }
       return {
-        assistantMessage: `Here's what I can do:\n\n**Core Features**\n• **Build a resume** — Paste your skills, projects, education, experience.\n• **Improve your resume** — Say "improve this" to strengthen your resume.\n• **Tailor to a job** — Paste a job description to tailor your resume.\n• **Add information** — "Add this project: [details]".\n• **Rewrite a section** — "Rewrite my summary".\n• **Download PDF** — Click the Download PDF button.\n\n**Premium Features** ✨\n• **Interview me** — Get STAR follow-up questions to extract hidden value from your experience.\n• **Humanize this** — Strip AI-speak and make your resume sound genuinely human.\n• **Add metrics** — Get safe, verifiable metric suggestions for weak bullets.\n• **Gap analysis** — See your match score vs your target role + projects to close gaps.\n• **Generate 3 versions** — Get Frontend, Full Stack, and AI Product persona resumes.\n• **Show ATS view** — See how a robot parses your resume.\n• **Write cover letter** — Generate outreach pack: cover letter, DM, cold email, LinkedIn message.`,
+        assistantMessage: `CareerPath AI V1 is built around Career Memory.\n\nPaste career notes once, then I can generate resumes, tailor to job descriptions, run ATS audits, improve weak bullets, write cover letters, optimize LinkedIn sections, track applications, coach your next steps, and log new achievements as they happen.`,
         resume: currentResume,
         resumeId: currentResume?.id || null,
         workspace: buildCareerWorkspaceState(currentResume),
@@ -247,7 +267,7 @@ async function processIntent(
 
     default:
       return {
-        assistantMessage: "I'm not sure what you'd like me to do. Try saying something like 'Build my resume', 'Interview me', or 'Gap analysis for Senior SWE'.",
+        assistantMessage: "Tell me what to store or generate: build Career Memory, tailor to a job description, audit the resume, write a cover letter, optimize LinkedIn, track an application, or log a new achievement.",
         resume: currentResume,
         resumeId: currentResume?.id || null,
         workspace: buildCareerWorkspaceState(currentResume),
@@ -411,7 +431,7 @@ async function handleGenerateApplicationPack(
   await saveServerResume(resume);
 
   return {
-    assistantMessage: `Application pack ready for ${job.title || resume.targetRole}. I generated a tailored resume, cover letter, recruiter DM, cold email, LinkedIn message, why-fit answer, interview questions, prep plan, and follow-up message.`,
+    assistantMessage: `Application pack ready for ${job.title || resume.targetRole}. I generated a tailored resume, cover letter, recruiter DM, cold email, LinkedIn message, why-fit answer, and follow-up message.`,
     resume,
     resumeId: resume.id,
     versionCreated: true,
@@ -485,7 +505,11 @@ async function applyBrainToResume(input: {
   versionCreated?: boolean;
 }) {
   let legacyProfile = input.currentResume?.profile || ({} as any);
-  let profile = input.currentResume?.careerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+  const existingCareerProfile = input.currentResume?.careerProfile
+    ? refreshCareerProfileInsights(input.currentResume.careerProfile)
+    : null;
+  let profile = existingCareerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+  let achievementLogResult: ReturnType<typeof applyAchievementLog>["result"] | null = null;
   let assistantMessage = "";
   
   if (input.mode === "build") {
@@ -503,8 +527,16 @@ async function applyBrainToResume(input: {
         workspace: buildCareerWorkspaceState(input.currentResume),
       };
     }
-    assistantMessage = "Created a first resume draft based on your details.";
-    profile = legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+    const extractedCareerProfile = legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+    profile = mergeCareerMemory(existingCareerProfile, extractedCareerProfile);
+    if (isAchievementLogInput(input.message)) {
+      const logged = applyAchievementLog(profile, input.message);
+      profile = logged.profile;
+      achievementLogResult = logged.result;
+    }
+    assistantMessage = input.currentResume
+      ? "Updated Career Memory and refreshed the resume from the latest information."
+      : "Created a first resume draft and saved the details to Career Memory.";
   }
 
   let content: any;
@@ -529,16 +561,12 @@ async function applyBrainToResume(input: {
   }
 
   const beforeState = input.currentResume ? contentToResumeState(input.currentResume.content, { id: input.currentResume.id, targetRole: input.currentResume.targetRole }) : null;
-  console.log("[DEBUG] Before state created");
   const afterState = contentToResumeState(content, { id: input.currentResume?.id || "new", targetRole: input.currentResume?.targetRole });
-  console.log("[DEBUG] After state created");
   
   const validationMode = input.mode === "tailor" ? "TAILOR_TO_JOB" : input.mode === "improve" ? "IMPROVE_EXISTING_RESUME" : "BUILD_FROM_DATA";
   const validated = validateResumeTruthfulness(beforeState, afterState, input.message, { type: validationMode, confidence: 1, reason: "LLM Orchestrator" } as any);
-  console.log("[DEBUG] Truthfulness validated");
   
   content = deriveRenderableResume(validated.cleanedResume);
-  console.log("[DEBUG] Renderable resume derived");
   
   const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
   
@@ -575,6 +603,7 @@ async function applyBrainToResume(input: {
       });
 
   nextResume.userId = input.userId;
+  nextResume.profile = legacyProfile;
   nextResume.careerProfile = profile;
   
   if (tailoringResult) {
@@ -585,7 +614,9 @@ async function applyBrainToResume(input: {
   await saveServerResume(nextResume);
 
   return {
-    assistantMessage,
+    assistantMessage: achievementLogResult
+      ? `${assistantMessage}\n\nLogged achievement: ${achievementLogResult.achievement.text}\nSuggested bullet: ${achievementLogResult.suggestedResumeBullet}`
+      : assistantMessage,
     resume: nextResume,
     resumeId: nextResume.id,
     versionCreated: input.versionCreated,
@@ -598,7 +629,7 @@ function decorateResumeForCareerOS(
   rawInput?: string,
   options?: { versionType?: "master" | "job_specific" },
 ) {
-  const profile = resume.careerProfile || legacyProfileToCareerProfile(resume.profile, resume.userId, rawInput);
+  const profile = refreshCareerProfileInsights(resume.careerProfile || legacyProfileToCareerProfile(resume.profile, resume.userId, rawInput));
   resume.careerProfile = profile;
   resume.resumeDocument = createResumeDocumentFromResume(resume, profile, options?.versionType || (resume.jobDescription ? "job_specific" : "master"));
   resume.jobSearchInsights = resume.jobSearchInsights || analyzeJobSearchPerformance(resume.applications || [], [resume.resumeDocument]);
