@@ -442,7 +442,7 @@ export default function AppWorkspace() {
                 className="min-h-[70px] flex-1 resize-none"
               />
               <Button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || loading}
                 className="self-end"
                 size="sm"
