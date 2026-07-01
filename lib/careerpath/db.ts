@@ -117,9 +117,17 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
 
   if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('application_pack_json')) {
+    if (error.code === 'PGRST204' || error.message?.includes('application_pack_json') || error.message?.includes('career_profile_json')) {
       console.warn("[db/saveServerResume] Schema outdated. Retrying without new columns.");
-      const { application_pack_json, applications_json, job_search_insights_json, ...fallbackPayload } = payload;
+      const { 
+        profile_json,
+        career_profile_json,
+        resume_document_json,
+        application_pack_json, 
+        applications_json, 
+        job_search_insights_json, 
+        ...fallbackPayload 
+      } = payload;
       const { error: fallbackError } = await client.from("resumes").upsert(fallbackPayload, { onConflict: "id" });
       if (fallbackError) {
         console.error("[db/saveServerResume] Error saving resume (fallback):", fallbackError);
