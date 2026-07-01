@@ -59,9 +59,7 @@ const RequestSchema = z.object({
 export async function POST(request: Request) {
   try {
     const auth = await requireAppAccess();
-    if (!auth.user) {
-      return NextResponse.json({ error: { code: "AUTH_REQUIRED", message: "Please log in to use CareerPath AI.", recoverable: true } }, { status: 401 });
-    }
+    if (!auth.ok) return auth.response;
     const userId = auth.user.id;
 
     const json = await request.json().catch(() => ({}));

@@ -169,7 +169,7 @@ export function legacyProfileToCareerProfile(
       name: item.name,
       description: item.description,
       technologies: item.techStack,
-      links: item.links.map((url) => link(url.includes("github") ? "GitHub" : "Project Link", url, url.includes("github") ? "github" : "demo")),
+      links: (item.links || []).map((url: string) => link(url.includes("github") ? "GitHub" : "Project Link", url, url.includes("github") ? "github" : "demo")),
       achievements: buildProjectAchievements(item),
       status: inferProjectStatus(item.links, item.impact),
       proofLevel: proofFromProject(item.links, item.impact, item.techStack),
