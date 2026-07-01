@@ -24,7 +24,7 @@ export async function PUT(req: Request) {
         mode: "build",
         status: "draft",
         version: 1,
-        content: { header: { name: "User", email: "", phone: "", location: "", links: {} } },
+        content: { header: { name: "User", email: "", phone: "", location: "", links: {} } } as unknown as import("@/lib/careerpath/types").CareerPathResumeContent,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
