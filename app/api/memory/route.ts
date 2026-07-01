@@ -35,7 +35,7 @@ export async function PUT(req: Request) {
     resume.careerProfile = {
       ...existingProfile,
       ...updates
-    };
+    } as CareerProfile;
     
     await saveServerResume(resume);
     
