@@ -15,8 +15,13 @@ import {
   Target,
 } from "lucide-react";
 import { Alert, Badge, Button, Tabs, Textarea } from "@/components/ui";
-import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
+import dynamic from "next/dynamic";
+const ResumeDocument = dynamic(() => import("@/components/careerpath/ResumeDocument").then(mod => mod.ResumeDocument), {
+  ssr: false,
+  loading: () => <div className="flex h-[1056px] w-full items-center justify-center bg-white shadow-sm ring-1 ring-slate-200"><Loader2 className="h-8 w-8 animate-spin text-slate-300" /></div>
+});
 import { AchievementPromptModal } from "@/components/careerpath/AchievementPromptModal";
+import { RateLimitAlert } from "@/components/ui/RateLimitAlert";
 import { ScorePanel } from "@/components/careerpath/ScorePanel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CareerPathResume, CareerWorkspaceState, ResumeMessage } from "@/lib/careerpath/types";
@@ -150,6 +155,7 @@ export default function AppWorkspace() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
+  const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
@@ -251,7 +257,13 @@ export default function AppWorkspace() {
         throw new Error(`Server error (${res.status}): ${textResponse.substring(0, 150)}...`);
       }
 
-      if (!res.ok) throw data;
+      if (!res.ok) {
+        if (res.status === 429) {
+          setRateLimitUntil(Date.now() + 30000); // 30 seconds
+          throw new Error("RATE_LIMIT"); // throw generic so it doesn't show in the main alert
+        }
+        throw data;
+      }
 
       const assistantMsg: ChatMsg = {
         id: `assistant_${Date.now()}`,
@@ -274,7 +286,8 @@ export default function AppWorkspace() {
         setCurrentResumeId(data.resumeId);
       }
       if (data.workspace) setWorkspace(data.workspace);
-    } catch (caught) {
+    } catch (caught: any) {
+      if (caught?.message === "RATE_LIMIT") return; // Handled by RateLimitAlert
       setError(getApiError(caught, "Something went wrong. Your data is saved. Try again."));
     } finally {
       setLoading(false);
@@ -567,6 +580,8 @@ export default function AppWorkspace() {
           }}
         />
       )}
+      
+      <RateLimitAlert until={rateLimitUntil} onClear={() => setRateLimitUntil(null)} />
     </div>
   );
 }

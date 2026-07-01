@@ -5,7 +5,9 @@ import { getPublicSupabaseConfig } from "./config";
 const config = getPublicSupabaseConfig();
 export const isServerSupabaseConfigured = Boolean(config);
 
-export async function createServerSupabaseClient() {
+import { cache } from "react";
+
+export const createServerSupabaseClient = cache(async () => {
   if (!isServerSupabaseConfigured) return null;
   
   const cookieStore = await cookies();
@@ -30,4 +32,4 @@ export async function createServerSupabaseClient() {
       },
     },
   );
-}
+});

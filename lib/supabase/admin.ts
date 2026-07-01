@@ -5,11 +5,16 @@ export const isSupabaseAdminConfigured = Boolean(
   getPublicSupabaseConfig() && process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+let adminClientInstance: any = null;
+
 export function createSupabaseAdminClient() {
   if (!isSupabaseAdminConfigured) return null;
+  if (adminClientInstance) return adminClientInstance;
+
   const config = getPublicSupabaseConfig();
   if (!config) return null;
-  return createClient(
+
+  adminClientInstance = createClient(
     config.url,
     process.env.SUPABASE_SERVICE_ROLE_KEY as string,
     {
@@ -19,4 +24,6 @@ export function createSupabaseAdminClient() {
       },
     },
   );
+
+  return adminClientInstance;
 }

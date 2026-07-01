@@ -87,67 +87,92 @@ export async function POST(request: Request) {
       );
     }
 
-    // Load existing resume if provided
-    let currentResume: CareerPathResume | null = null;
-    if (resumeId) {
-      currentResume = await getServerResume(resumeId, userId);
-    }
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const keepAlive = setInterval(() => {
+          controller.enqueue(encoder.encode(" "));
+        }, 5000);
 
-    // Save user message
-    await saveResumeMessage({
-      userId,
-      resumeId: resumeId || null,
-      role: "user",
-      content: message,
+        try {
+          // Load existing resume if provided
+          let currentResume: CareerPathResume | null = null;
+          if (resumeId) {
+            currentResume = await getServerResume(resumeId, userId);
+          }
+
+          // Save user message
+          await saveResumeMessage({
+            userId,
+            resumeId: resumeId || null,
+            role: "user",
+            content: message,
+          });
+
+          const command = routeCareerCommand(message, {
+            profile: currentResume?.careerProfile,
+            resume: currentResume,
+            applications: currentResume?.applications,
+          });
+
+          // Infer intent
+          let intent: AgentIntent;
+          
+          if (command.intent === "generate_application_pack") {
+            intent = "GENERATE_APPLICATION_PACK";
+          } else if (command.intent === "track_job_application") {
+            intent = "TRACK_JOB_APPLICATION";
+          } else if (command.intent === "analyze_job_search") {
+            intent = "ANALYZE_JOB_SEARCH";
+          } else if (command.intent === "generate_resume_version") {
+            intent = "GENERATE_RESUME_VERSION";
+          } else if (command.intent === "optimize_linkedin") {
+            intent = "GENERAL_HELP";
+          } else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) {
+            intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
+          } else {
+            const result = await inferIntentLLM(message, !!currentResume, { userId, resumeId });
+            intent = result.intent;
+          }
+
+          // Process based on intent
+          const result = await processIntent(intent, message, currentResume, userId, resumeId, command);
+
+          // Save assistant message
+          await saveResumeMessage({
+            userId,
+            resumeId: result.resumeId || resumeId || null,
+            role: "assistant",
+            content: result.assistantMessage,
+            intent,
+          });
+
+          controller.enqueue(encoder.encode(JSON.stringify({
+            assistantMessage: result.assistantMessage,
+            intent,
+            resume: result.resume,
+            resumeId: result.resumeId,
+            missingFields: result.missingFields,
+            versionCreated: result.versionCreated,
+            workspace: result.workspace,
+          })));
+        } catch (err) {
+          console.error("[resume-agent] Error in stream:", err);
+          controller.enqueue(encoder.encode(JSON.stringify({
+            error: {
+              code: "AGENT_ERROR",
+              message: `Something went wrong: ${err instanceof Error ? err.message : String(err)}. Please try again.`,
+              recoverable: true,
+            }
+          })));
+        } finally {
+          clearInterval(keepAlive);
+          controller.close();
+        }
+      }
     });
 
-    const command = routeCareerCommand(message, {
-      profile: currentResume?.careerProfile,
-      resume: currentResume,
-      applications: currentResume?.applications,
-    });
-
-    // Infer intent
-    let intent: AgentIntent;
-    
-    if (command.intent === "generate_application_pack") {
-      intent = "GENERATE_APPLICATION_PACK";
-    } else if (command.intent === "track_job_application") {
-      intent = "TRACK_JOB_APPLICATION";
-    } else if (command.intent === "analyze_job_search") {
-      intent = "ANALYZE_JOB_SEARCH";
-    } else if (command.intent === "generate_resume_version") {
-      intent = "GENERATE_RESUME_VERSION";
-    } else if (command.intent === "optimize_linkedin") {
-      intent = "GENERAL_HELP";
-    } else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) {
-      intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
-    } else {
-      const result = await inferIntentLLM(message, !!currentResume, { userId, resumeId });
-      intent = result.intent;
-    }
-
-    // Process based on intent
-    const result = await processIntent(intent, message, currentResume, userId, resumeId, command);
-
-    // Save assistant message
-    await saveResumeMessage({
-      userId,
-      resumeId: result.resumeId || resumeId || null,
-      role: "assistant",
-      content: result.assistantMessage,
-      intent,
-    });
-
-    return NextResponse.json({
-      assistantMessage: result.assistantMessage,
-      intent,
-      resume: result.resume,
-      resumeId: result.resumeId,
-      missingFields: result.missingFields,
-      versionCreated: result.versionCreated,
-      workspace: result.workspace,
-    });
+    return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error("[resume-agent] Error:", err);
     return NextResponse.json(

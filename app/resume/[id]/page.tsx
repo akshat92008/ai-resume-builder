@@ -6,8 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import { Copy, Loader2, Printer, Save, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
+import dynamic from "next/dynamic";
+const ResumeDocument = dynamic(() => import("@/components/careerpath/ResumeDocument").then(mod => mod.ResumeDocument), {
+  ssr: false,
+  loading: () => <div className="flex h-[1056px] w-full items-center justify-center bg-white shadow-sm ring-1 ring-slate-200"><Loader2 className="h-8 w-8 animate-spin text-slate-300" /></div>
+});
 import { ScorePanel } from "@/components/careerpath/ScorePanel";
+import { RateLimitAlert } from "@/components/ui/RateLimitAlert";
 import {
   deleteCareerPathResume,
   duplicateCareerPathResume,
@@ -27,6 +32,7 @@ export default function ResumeDetailPage() {
   const [jobDescription, setJobDescription] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadResume() {
@@ -93,10 +99,15 @@ export default function ResumeDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeId: resume.id }),
       });
+      if (!response.ok && response.status === 429) {
+        setRateLimitUntil(Date.now() + 30000);
+        throw new Error("RATE_LIMIT");
+      }
       const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
       if (!response.ok || !data.resume) throw data;
       updateResume(data.resume, "Improved resume automatically.");
-    } catch (caught) {
+    } catch (caught: any) {
+      if (caught?.message === "RATE_LIMIT") return;
       setError(getApiError(caught, "Unable to improve resume."));
     } finally {
       setWorking(false);
@@ -113,11 +124,25 @@ export default function ResumeDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeId: resume.id, jobDescription }),
       });
-      const data = (await response.json()) as { resume?: CareerPathResume; error?: { message?: string } };
+      if (!response.ok && response.status === 429) {
+        setRateLimitUntil(Date.now() + 30000);
+        throw new Error("RATE_LIMIT");
+      }
+      
+      let data: any;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const textResponse = await response.text();
+        throw new Error(`Server error (${response.status}): ${textResponse.substring(0, 150)}...`);
+      }
+      
       if (!response.ok || !data.resume) throw data;
       const saved = saveCareerPathResume(data.resume);
       router.push(`/resume/${saved.id}`);
-    } catch (caught) {
+    } catch (caught: any) {
+      if (caught?.message === "RATE_LIMIT") return;
       setError(getApiError(caught, "Unable to tailor resume."));
     } finally {
       setWorking(false);
@@ -313,6 +338,7 @@ export default function ResumeDetailPage() {
           </div>
         </section>
       </main>
+      <RateLimitAlert until={rateLimitUntil} onClear={() => setRateLimitUntil(null)} />
     </div>
   );
 }

@@ -52,35 +52,58 @@ export async function POST(request: Request) {
       );
     }
 
-    const session = await getSession(body.sessionId);
-    if (!session) {
-      return NextResponse.json(
-        { error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } },
-        { status: 404 },
-      );
-    }
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const keepAlive = setInterval(() => {
+          controller.enqueue(encoder.encode(" "));
+        }, 5000);
 
-    const userMessage = body.message.trim();
-    session.messages.push({
-      id: createId(),
-      role: "user",
-      content: userMessage,
-      createdAt: new Date().toISOString(),
+        try {
+          const session = await getSession(body.sessionId);
+          if (!session) {
+            controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } })));
+            return;
+          }
+
+          const userMessage = body.message.trim();
+          session.messages.push({
+            id: createId(),
+            role: "user",
+            content: userMessage,
+            createdAt: new Date().toISOString(),
+          });
+
+          const response = await runSessionTurn(session, userMessage, auth.user?.id);
+          await saveSession(response.session);
+
+          if (response.resume) await saveServerResume(response.resume);
+
+          controller.enqueue(encoder.encode(JSON.stringify({
+            sessionId: response.session.id,
+            assistantMessage: response.assistantMessage,
+            state: response.session.currentStep,
+            resumeId: response.resume?.id ?? response.session.resumeId,
+            resume: response.resume,
+            session: response.session,
+          })));
+        } catch (err) {
+          console.error("[builder/message] Error in stream:", err);
+          controller.enqueue(encoder.encode(JSON.stringify({
+            error: {
+              code: "INTERNAL_ERROR",
+              message: "Something went wrong generating your resume. Your data is saved. Try again.",
+              recoverable: true,
+            }
+          })));
+        } finally {
+          clearInterval(keepAlive);
+          controller.close();
+        }
+      }
     });
 
-    const response = await runSessionTurn(session, userMessage, auth.user?.id);
-    await saveSession(response.session);
-
-    if (response.resume) await saveServerResume(response.resume);
-
-    return NextResponse.json({
-      sessionId: response.session.id,
-      assistantMessage: response.assistantMessage,
-      state: response.session.currentStep,
-      resumeId: response.resume?.id ?? response.session.resumeId,
-      resume: response.resume,
-      session: response.session,
-    });
+    return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error("[builder/message] Error:", err);
     return NextResponse.json(

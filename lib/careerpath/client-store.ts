@@ -1,6 +1,6 @@
 "use client";
 
-import type { CareerPathResume } from "./types";
+import { ResumeContentSchema, type CareerPathResume } from "./types";
 
 const RESUME_KEY = "careerpath_resumes";
 
@@ -28,6 +28,14 @@ export function getCareerPathResume(id: string) {
 }
 
 export function saveCareerPathResume(resume: CareerPathResume) {
+  if (resume.content) {
+    const parseResult = ResumeContentSchema.safeParse(resume.content);
+    if (!parseResult.success) {
+      console.error("[StateCorruptionError] Failed to save malformed AI output:", parseResult.error);
+      throw new Error("StateCorruptionError: The generated resume data is malformed and cannot be saved safely.");
+    }
+  }
+
   const now = new Date().toISOString();
   const resumes = getCareerPathResumes();
   const index = resumes.findIndex((item) => item.id === resume.id);
