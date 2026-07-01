@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getLatestResumeForUser, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerProfile } from "@/lib/careerpath/types";
-import { randomUUID } from "crypto";
+export const runtime = "edge";
 
 export async function PUT(req: Request) {
   try {
@@ -17,7 +17,7 @@ export async function PUT(req: Request) {
     // If no resume exists, we should create a basic one to hold the profile
     if (!resume) {
       resume = {
-        id: randomUUID(),
+        id: crypto.randomUUID(),
         userId,
         title: "Career Memory",
         targetRole: "Unknown",

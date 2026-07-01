@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60; // Max allowed for Vercel Hobby plan
+export const runtime = "edge";
 
 
 import { createResumeRecord } from "@/lib/careerpath/agents";

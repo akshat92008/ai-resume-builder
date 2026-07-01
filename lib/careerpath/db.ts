@@ -64,7 +64,7 @@ export async function saveSession(session: BuilderSession): Promise<void> {
   };
 
   const admin = createSupabaseAdminClient();
-  const client = admin || supabase;
+  const client = supabase || admin;
 
   const { error } = await client.from("builder_sessions").upsert(payload, { onConflict: "id" });
   if (error) {
@@ -112,7 +112,7 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   };
 
   const admin = createSupabaseAdminClient();
-  const client = admin || supabase;
+  const client = supabase || admin;
 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
 
@@ -224,13 +224,15 @@ export async function saveResumeMessage(msg: {
   content: string;
   intent?: string;
 }): Promise<void> {
+  const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  if (!admin) {
-    console.error("[db/saveResumeMessage] Admin client not available");
+  const client = supabase || admin;
+  if (!client) {
+    console.error("[db/saveResumeMessage] DB client not available");
     return;
   }
 
-  const { error } = await admin.from("resume_messages").insert({
+  const { error } = await client.from("resume_messages").insert({
     user_id: msg.userId,
     resume_id: msg.resumeId,
     role: msg.role,
@@ -318,13 +320,15 @@ export async function saveResumeVersion(version: {
   resumeJson: unknown;
   reason?: string;
 }): Promise<void> {
+  const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  if (!admin) {
-    console.error("[db/saveResumeVersion] Admin client not available");
+  const client = supabase || admin;
+  if (!client) {
+    console.error("[db/saveResumeVersion] DB client not available");
     return;
   }
 
-  const { error } = await admin.from("resume_versions").insert({
+  const { error } = await client.from("resume_versions").insert({
     user_id: version.userId,
     resume_id: version.resumeId,
     version_name: version.versionName || null,
@@ -354,10 +358,12 @@ export async function saveAgentRun(run: {
   model?: string;
 }): Promise<void> {
   if (!isServerSupabaseConfigured) return;
+  const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  if (!admin) return;
+  const client = supabase || admin;
+  if (!client) return;
 
-  const { error: insertError } = await admin
+  const { error: insertError } = await client
     .from("agent_runs")
     .insert({
       id: crypto.randomUUID(),

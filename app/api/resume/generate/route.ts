@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60; // Max allowed for Vercel Hobby plan
+export const runtime = "edge";
 import { createResumeRecord } from "@/lib/careerpath/agents";
 import { writeResumeAgent, auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/lib/careerpath/db";
@@ -35,36 +35,58 @@ export async function POST(request: Request) {
       );
     }
 
-    const session = await getSession(body.sessionId);
-    if (!session) return NextResponse.json({ error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } }, { status: 404 });
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const keepAlive = setInterval(() => {
+          controller.enqueue(encoder.encode(" "));
+        }, 5000);
 
-    const draft = await writeResumeAgent(session.profile, session.mode, "");
-    const draftAudit = await auditResumeAgent(draft, session.targetRole, "");
-    
-    const resume = createResumeRecord({
-      mode: session.mode,
-      targetRole: session.targetRole,
-      content: draft,
-      profile: session.profile,
-      title: `${session.targetRole || "CareerPath"} Resume`,
-      audit: draftAudit,
+        try {
+          const session = await getSession(body.sessionId);
+          if (!session) {
+            controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "SESSION_NOT_FOUND", message: "Builder session not found.", recoverable: true } })));
+            return;
+          }
+
+          const draft = await writeResumeAgent(session.profile, session.mode, "");
+          const draftAudit = await auditResumeAgent(draft, session.targetRole, "");
+          
+          const resume = createResumeRecord({
+            mode: session.mode,
+            targetRole: session.targetRole,
+            content: draft,
+            profile: session.profile,
+            title: `${session.targetRole || "CareerPath"} Resume`,
+            audit: draftAudit,
+          });
+          
+          resume.audit = draftAudit;
+          resume.score = draftAudit.score;
+
+          session.currentStep = "generated";
+          session.resumeId = resume.id;
+          await saveSession(session);
+          await saveServerResume(resume);
+
+          controller.enqueue(encoder.encode(JSON.stringify({
+            resumeId: resume.id,
+            content: resume.content,
+            score: resume.score,
+            audit: resume.audit,
+            resume,
+          })));
+        } catch (err) {
+          console.error("[builder/generate] Error in stream:", err);
+          controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "GENERATE_FAILED", message: "Unable to generate resume.", recoverable: true } })));
+        } finally {
+          clearInterval(keepAlive);
+          controller.close();
+        }
+      }
     });
-    
-    resume.audit = draftAudit;
-    resume.score = draftAudit.score;
 
-    session.currentStep = "generated";
-    session.resumeId = resume.id;
-    await saveSession(session);
-    await saveServerResume(resume);
-
-    return NextResponse.json({
-      resumeId: resume.id,
-      content: resume.content,
-      score: resume.score,
-      audit: resume.audit,
-      resume,
-    });
+    return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error("[builder/generate] Error:", err);
     return NextResponse.json(

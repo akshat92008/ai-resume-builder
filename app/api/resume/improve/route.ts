@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60; // Max allowed for Vercel Hobby plan
+export const runtime = "edge";
 import { getServerResume, saveServerResume, getSupabaseUser } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
@@ -61,34 +61,51 @@ export async function POST(request: Request) {
       );
     }
 
-    const resume = isServerSupabaseConfigured
-      ? await getServerResume(body.resumeId!)
-      : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId) : null);
-    if (!resume) {
-      return NextResponse.json(
-        { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
-        { status: 404 },
-      );
-    }
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const keepAlive = setInterval(() => {
+          controller.enqueue(encoder.encode(" "));
+        }, 5000);
 
-    const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
-    const brain = await handleResumeMessage({
-      userMessage: "Make it ATS friendly and improve bullets without adding unsupported facts.",
-      currentResume: state,
+        try {
+          const resume = isServerSupabaseConfigured
+            ? await getServerResume(body.resumeId!)
+            : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId) : null);
+          if (!resume) {
+            controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } })));
+            return;
+          }
+
+          const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
+          const brain = await handleResumeMessage({
+            userMessage: "Make it ATS friendly and improve bullets without adding unsupported facts.",
+            currentResume: state,
+          });
+          const content = deriveRenderableResume(brain.resume || state);
+          const audit = auditResume(content, resume.targetRole, resume.jobDescription);
+          const updated: CareerPathResume = {
+            ...resume,
+            content,
+            audit,
+            score: audit.score,
+            status: "final",
+            updatedAt: new Date().toISOString(),
+          };
+          await saveServerResume(updated);
+
+          controller.enqueue(encoder.encode(JSON.stringify({ resumeId: updated.id, content, score: audit.score, audit, resume: updated })));
+        } catch (err) {
+          console.error("[api/resume/improve] Error in stream:", err);
+          controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "IMPROVE_FAILED", message: "Unable to improve resume. Try again.", recoverable: true } })));
+        } finally {
+          clearInterval(keepAlive);
+          controller.close();
+        }
+      }
     });
-    const content = deriveRenderableResume(brain.resume || state);
-    const audit = auditResume(content, resume.targetRole, resume.jobDescription);
-    const updated: CareerPathResume = {
-      ...resume,
-      content,
-      audit,
-      score: audit.score,
-      status: "final",
-      updatedAt: new Date().toISOString(),
-    };
-    await saveServerResume(updated);
 
-    return NextResponse.json({ resumeId: updated.id, content, score: audit.score, audit, resume: updated });
+    return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error("[api/resume/improve] Error:", err);
     return NextResponse.json(
