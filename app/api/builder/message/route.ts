@@ -158,7 +158,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
   const resume = await generateFinalResume(session, "", userId);
   session.currentStep = "generated";
   session.resumeId = resume.id;
-  const assistantMessage = `Your resume is ready. Resume Score: ${resume.score?.overall ?? 0}/100. Top fixes: ${(resume.audit?.recommendedFixes ?? []).slice(0, 3).join(" ")}`;
+  const assistantMessage = `Your resume is ready! Use the "Gap analysis for my target role" or "Show ATS view" buttons to get feedback.`;
   session.messages.push(systemMessage(assistantMessage));
   return { session, assistantMessage, resume };
 }
@@ -180,11 +180,9 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "",
     const tailoring = await tailorResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
     resume.content = tailoring.tailoredResume;
     resume.tailoring = tailoring;
-    resume.audit = await auditResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
-    resume.score = resume.audit.score;
+    // Skip synchronous audit to prevent Vercel timeout
   } else {
-    resume.audit = await auditResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
-    resume.score = resume.audit.score;
+    // Skip synchronous audit to prevent Vercel timeout
   }
 
   return resume;
