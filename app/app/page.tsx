@@ -13,12 +13,25 @@ import {
   Send,
   Sparkles,
   Target,
+  MessageSquare,
+  BarChart3,
+  Users,
+  Monitor,
+  ArrowRightLeft,
+  Mail,
 } from "lucide-react";
 import { Alert, Badge, Button, Tabs, Textarea } from "@/components/ui";
 import { ResumeDocument } from "@/components/careerpath/ResumeDocument";
 import { ScorePanel } from "@/components/careerpath/ScorePanel";
+import { StarInterviewPanel } from "@/components/careerpath/StarInterviewPanel";
+import { ImpactEstimatorPanel } from "@/components/careerpath/ImpactEstimatorPanel";
+import { GapAnalysisPanel } from "@/components/careerpath/GapAnalysisPanel";
+import { MultiPersonaPanel } from "@/components/careerpath/MultiPersonaPanel";
+import { ATSViewPanel } from "@/components/careerpath/ATSViewPanel";
+import { HumanizePanel } from "@/components/careerpath/HumanizePanel";
+import { OutreachPanel } from "@/components/careerpath/OutreachPanel";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { CareerPathResume, CareerWorkspaceState, ResumeMessage } from "@/lib/careerpath/types";
+import type { CareerPathResume, CareerWorkspaceState, ImpactSuggestion, PersonaResume, ResumeMessage } from "@/lib/careerpath/types";
 import { getApiError } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -38,12 +51,17 @@ const WELCOME_MESSAGE: ChatMsg = {
 };
 
 const COMMAND_CHIPS = [
+  // Core
   "Build my resume from messy info",
   "Tailor to a job description",
-  "Create application pack",
-  "Track this application",
-  "Analyze my job search",
-  "Generate frontend resume version",
+  // Premium agentic features
+  "Interview me (STAR)",
+  "Humanize this resume",
+  "Add metrics to my bullets",
+  "Gap analysis for my target role",
+  "Generate 3 persona versions",
+  "Show ATS view",
+  "Write cover letter + outreach",
 ];
 
 const THINKING_PHRASES = [
@@ -53,6 +71,13 @@ const THINKING_PHRASES = [
   "Drafting professional summary...",
   "Refining bullet points...",
   "Optimizing for ATS compatibility...",
+  "Running STAR interview analysis...",
+  "De-AI-ifying your resume...",
+  "Mining impact metrics...",
+  "Mapping skill gaps to target role...",
+  "Generating persona variants...",
+  "Simulating ATS parse...",
+  "Crafting personalized outreach...",
   "Finalizing layout...",
 ];
 
@@ -210,6 +235,14 @@ export default function AppWorkspace() {
       if (data.resume) {
         setCurrentResume(data.resume);
         setCurrentResumeId(data.resumeId || data.resume.id);
+        // Auto-navigate to relevant tab based on what was just generated
+        if (data.resume.starInterview) setActiveTab("interview");
+        else if (data.resume.humanizedResume) setActiveTab("humanize");
+        else if (data.resume.impactEstimates) setActiveTab("impact");
+        else if (data.resume.gapAnalysis) setActiveTab("gaps");
+        else if (data.resume.multiPersona) setActiveTab("personas");
+        else if (data.resume.atsView) setActiveTab("atsview");
+        else if (data.resume.outreachPack) setActiveTab("outreach");
       } else if (data.resumeId) {
         setCurrentResumeId(data.resumeId);
       }
@@ -405,9 +438,16 @@ export default function AppWorkspace() {
               tabs={[
                 { id: "resume", label: "Resume" },
                 { id: "tailor", label: "Tailor" },
-                { id: "pack", label: "Application Pack" },
+                { id: "pack", label: "App Pack" },
                 { id: "applications", label: "Applications" },
                 { id: "memory", label: "Memory" },
+                ...(currentResume?.starInterview ? [{ id: "interview", label: "⭐ Interview" }] : []),
+                ...(currentResume?.humanizedResume ? [{ id: "humanize", label: "✦ Humanize" }] : []),
+                ...(currentResume?.impactEstimates ? [{ id: "impact", label: "📈 Impact" }] : []),
+                ...(currentResume?.gapAnalysis ? [{ id: "gaps", label: "🎯 Gaps" }] : []),
+                ...(currentResume?.multiPersona ? [{ id: "personas", label: "👥 Personas" }] : []),
+                ...(currentResume?.atsView ? [{ id: "atsview", label: "🤖 ATS View" }] : []),
+                ...(currentResume?.outreachPack ? [{ id: "outreach", label: "✉️ Outreach" }] : []),
               ]}
             />
           </div>
@@ -426,6 +466,58 @@ export default function AppWorkspace() {
             )}
             {activeTab === "memory" && (
               <MemoryTab workspace={workspace} onCommand={useCommand} />
+            )}
+            {/* Premium Differentiation Tabs */}
+            {activeTab === "interview" && currentResume?.starInterview && (
+              <div className="mx-auto max-w-2xl">
+                <StarInterviewPanel
+                  result={currentResume.starInterview}
+                  onAnswer={(questionId, answer) => {
+                    useCommand(`I answered interview question ${questionId}: ${answer}`);
+                  }}
+                />
+              </div>
+            )}
+            {activeTab === "humanize" && currentResume?.humanizedResume && (
+              <div className="mx-auto max-w-2xl">
+                <HumanizePanel result={currentResume.humanizedResume} />
+              </div>
+            )}
+            {activeTab === "impact" && currentResume?.impactEstimates && (
+              <div className="mx-auto max-w-2xl">
+                <ImpactEstimatorPanel
+                  result={currentResume.impactEstimates}
+                  onAccept={(suggestion: ImpactSuggestion) => {
+                    useCommand(`Accept this metric improvement for ${suggestion.itemName}: ${suggestion.improvedBullet}`);
+                  }}
+                  onReject={(_id: string) => {}}
+                />
+              </div>
+            )}
+            {activeTab === "gaps" && currentResume?.gapAnalysis && (
+              <div className="mx-auto max-w-2xl">
+                <GapAnalysisPanel result={currentResume.gapAnalysis} />
+              </div>
+            )}
+            {activeTab === "personas" && currentResume?.multiPersona && (
+              <div className="mx-auto max-w-2xl">
+                <MultiPersonaPanel
+                  result={currentResume.multiPersona}
+                  onSavePersona={(_persona: PersonaResume) => {
+                    useCommand(`Save persona resume: ${_persona.persona}`);
+                  }}
+                />
+              </div>
+            )}
+            {activeTab === "atsview" && currentResume?.atsView && (
+              <div className="mx-auto max-w-2xl">
+                <ATSViewPanel result={currentResume.atsView} />
+              </div>
+            )}
+            {activeTab === "outreach" && currentResume?.outreachPack && (
+              <div className="mx-auto max-w-2xl">
+                <OutreachPanel pack={currentResume.outreachPack} />
+              </div>
             )}
           </div>
         </section>

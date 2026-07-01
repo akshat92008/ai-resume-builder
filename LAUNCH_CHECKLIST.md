@@ -1,16 +1,14 @@
 ## Build
 
-```bash
-npm ci
-npm run lint
-npm run typecheck
-npm run build
-```
+- [x] npm ci
+- [x] npm run lint
+- [x] npm run typecheck
+- [x] npm run build
 
 ## Supabase
 
-* apply schema.sql
-* verify anon cannot read private tables
+- [ ] run `supabase db push` to apply the pending 13 migrations to your remote production database
+- [x] verify anon cannot read private tables
 
 ## User flow
 

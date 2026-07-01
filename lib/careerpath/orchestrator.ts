@@ -8,16 +8,31 @@ import {
   ResumeContentSchema,
   ResumeAuditSchema,
   TailoringResultSchema,
+  StarInterviewSchema,
+  HumanizedResumeSchema,
+  ImpactEstimateSchema,
+  GapAnalysisSchema,
+  MultiPersonaSchema,
+  ATSParseSchema,
+  OutreachPackSchema,
 } from "./llm";
 import { detectGaps } from "./agents";
 import { saveAgentRun } from "./db";
 import type {
   CareerPathProfile,
+  CareerProfile,
   BuilderMode,
   GapReport,
   CareerPathResumeContent,
   CareerPathResumeAudit,
   CareerPathTailoringResult,
+  StarInterviewResult,
+  HumanizedResume,
+  ImpactEstimateResult,
+  GapAnalysisResult,
+  MultiPersonaResult,
+  ATSParseResult,
+  OutreachPack,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -463,6 +478,28 @@ export function inferIntentKeyword(
   if (/\b(improve|stronger|better|ats friendly|make it ats|polish|enhance)\b/.test(text)) {
     return { intent: "IMPROVE_RESUME", confidence: 0.8 };
   }
+  // Differentiation feature keywords
+  if (/\b(interview me|ask me questions|what should i say|star questions|tell me about yourself)\b/.test(text)) {
+    return { intent: "STAR_INTERVIEW", confidence: 0.9 };
+  }
+  if (/\b(humanize|sounds like ai|remove ai|de-ai|natural language|ai speak|sounds robotic|too generic)\b/.test(text)) {
+    return { intent: "HUMANIZE_RESUME", confidence: 0.9 };
+  }
+  if (/\b(add metrics|estimate impact|put numbers|quantify|add numbers|impact estimate)\b/.test(text)) {
+    return { intent: "ESTIMATE_IMPACT", confidence: 0.9 };
+  }
+  if (/\b(gap analysis|what am i missing|skill gap|missing skills|how close am i|career gap)\b/.test(text)) {
+    return { intent: "GAP_ANALYSIS", confidence: 0.9 };
+  }
+  if (/\b(multiple versions|3 resumes|different resumes|persona|startup version|ai product version|generate versions)\b/.test(text)) {
+    return { intent: "MULTI_PERSONA", confidence: 0.9 };
+  }
+  if (/\b(ats view|show ats|how does ats|ats parsing|ats simulation|robot view)\b/.test(text)) {
+    return { intent: "VISUALIZE_ATS", confidence: 0.9 };
+  }
+  if (/\b(cover letter|cold email|dm recruiter|networking message|linkedin message|write outreach|apply with message)\b/.test(text)) {
+    return { intent: "GENERATE_OUTREACH", confidence: 0.9 };
+  }
   if (/\b(help|what can you|how do i|what should)\b/.test(text) && text.length < 80) {
     return { intent: "GENERAL_HELP", confidence: 0.7 };
   }
@@ -474,3 +511,331 @@ export function inferIntentKeyword(
   return { intent: "GENERAL_HELP", confidence: 0.5 };
 }
 
+// ---------------------------------------------------------------------------
+// Differentiation Feature Agents
+// ---------------------------------------------------------------------------
+
+/**
+ * STAR Interviewer Agent — scans the profile and resume for vague bullets
+ * and generates targeted follow-up questions to extract hidden value.
+ */
+export async function starInterviewAgent(
+  profile: CareerProfile,
+  resumeContent: CareerPathResumeContent,
+  targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<StarInterviewResult> {
+  return callWithValidation<StarInterviewResult>(
+    "StarInterviewAgent",
+    StarInterviewSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are an expert career coach conducting a STAR interview to extract hidden value from vague career descriptions.
+
+Your job:
+1. Scan the resume and profile for vague bullets (no metrics, no clear outcome, no proof)
+2. Generate 4–6 highly targeted follow-up questions in STAR format (Situation, Task, Action, Result, Metric)
+3. Each question should reference a specific project, role, or bullet point
+4. Questions must be conversational and non-intimidating
+5. Focus on quantitative outcomes: time saved, users helped, performance improvements, revenue impact, or problems solved
+
+Do NOT make up answers. Only extract what the user actually did.
+Return questions that, when answered, would transform a weak bullet into a compelling achievement.`,
+      },
+      {
+        role: "user",
+        content: `Target Role: ${targetRole}\n\nProfile: ${JSON.stringify(profile)}\n\nCurrent Resume: ${JSON.stringify(resumeContent)}`,
+      },
+    ],
+    "starInterview",
+    StarInterviewSchema,
+    () => ({
+      questions: [
+        { id: "q1", question: "What was the measurable outcome of your most impactful project?", context: "Metrics help recruiters trust your claims.", category: "result" as const },
+        { id: "q2", question: "How many users or team members did your work affect?", context: "Scope helps establish seniority.", category: "metric" as const },
+      ],
+      vagueBullets: [],
+      summary: "STAR follow-up questions generated.",
+    }),
+    { ...metadata, inputJson: { targetRole, profileId: profile.id } }
+  );
+}
+
+/**
+ * Anti-BS Humanizer Agent — strips AI-generated clichés and rewrites
+ * bullets to sound genuinely human, punchy, and metric-driven.
+ */
+export async function humanizeResumeAgent(
+  content: CareerPathResumeContent,
+  targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<HumanizedResume> {
+  return callWithValidation<HumanizedResume>(
+    "HumanizeAgent",
+    HumanizedResumeSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are an expert resume editor specializing in de-AI-ifying resumes. Recruiters are tired of AI-generated resumes.
+
+Your job:
+1. Identify and remove ALL AI clichés: "spearheaded", "leveraged", "synergized", "delved into", "dynamic", "passionate", "hardworking", "results-driven", "game-changing", "cutting-edge", "robust", "seamlessly", "orchestrated", "pivotal"
+2. Replace them with direct, punchy, metric-focused language
+3. Rewrite passive voice to active voice
+4. Make sentences shorter and more direct — recruiters read fast
+5. Preserve all factual information — do NOT add fake metrics or claims
+6. Return the full rewritten resume content + a list of every change made
+7. For each change, document the original text, new text, the reason, and the section
+
+Example:
+- BEFORE: "Spearheaded the development of a cutting-edge AI solution that leveraged advanced algorithms"
+- AFTER: "Built an AI resume parser using Python and OpenAI API that reduced manual screening time"`,
+      },
+      {
+        role: "user",
+        content: `Target Role: ${targetRole}\n\nResume to Humanize: ${JSON.stringify(content)}`,
+      },
+    ],
+    "humanizedResume",
+    HumanizedResumeSchema,
+    undefined,
+    { ...metadata, inputJson: { targetRole } }
+  );
+}
+
+/**
+ * Impact Estimator Agent — finds weak bullets without metrics and suggests
+ * safe, industry-standard metric estimates the user can verify and accept.
+ */
+export async function estimateImpactAgent(
+  profile: CareerProfile,
+  content: CareerPathResumeContent,
+  targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<ImpactEstimateResult> {
+  return callWithValidation<ImpactEstimateResult>(
+    "ImpactEstimatorAgent",
+    ImpactEstimateSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are a resume impact estimator. Your job is to help users add safe, verifiable metrics to their resume bullets.
+
+Your process:
+1. Scan every project and experience bullet for missing quantitative proof
+2. For each weak bullet, suggest a CONSERVATIVE, VERIFIABLE metric estimate
+3. Explain your rationale (industry benchmarks, logical inference, typical outcomes)
+4. Rate your confidence: high (user can easily verify), medium (plausible estimate), low (very rough)
+5. Provide a fully rewritten bullet that incorporates the metric
+6. NEVER make up large unrealistic numbers. Conservative is always better than impressive.
+
+Examples of safe estimation:
+- "Made database queries faster" → "Optimized PostgreSQL queries, reducing average load time from ~3s to ~0.8s (verified via browser devtools)"
+- "Helped team members" → "Onboarded 3 junior developers to the codebase during their first week"
+- "Built a chatbot" → "Built a customer support chatbot handling ~50 daily queries, reducing manual response time"
+
+Only suggest metrics the user can plausibly verify or estimate from their own experience.`,
+      },
+      {
+        role: "user",
+        content: `Target Role: ${targetRole}\n\nProfile: ${JSON.stringify(profile)}\n\nResume Content: ${JSON.stringify(content)}`,
+      },
+    ],
+    "impactEstimate",
+    ImpactEstimateSchema,
+    () => ({ suggestions: [], summary: "No vague bullets detected that need metric estimation." }),
+    { ...metadata, inputJson: { targetRole } }
+  );
+}
+
+/**
+ * Strategic Career Gap Analyzer — compares the user's profile against
+ * the target role requirements and produces a detailed gap + action plan.
+ */
+export async function analyzeCareerGapAgent(
+  profile: CareerProfile,
+  targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<GapAnalysisResult> {
+  return callWithValidation<GapAnalysisResult>(
+    "CareerGapAgent",
+    GapAnalysisSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are a strategic career advisor specializing in gap analysis between a candidate's current profile and their target role.
+
+Your job:
+1. Score the candidate's match to the target role on a 0–100 scale
+2. List their genuine strengths relevant to the role
+3. Identify critical and recommended skill/experience gaps
+4. For each gap: provide a concrete weekend project idea that would demonstrate that skill
+5. Suggest 3 specific buildable projects that fill the most critical gaps
+6. Be honest — if they are far from ready, say so with a specific path to close the gap
+7. Consider: skills, proof (projects/links), seniority level, domain knowledge, tools
+
+A score of 70+ means ready to apply. Below 70, focus on building proof first.
+Do not suggest skills they already have. Focus only on genuine gaps.`,
+      },
+      {
+        role: "user",
+        content: `Target Role: ${targetRole}\n\nProfile: ${JSON.stringify(profile)}`,
+      },
+    ],
+    "gapAnalysis",
+    GapAnalysisSchema,
+    undefined,
+    { ...metadata, inputJson: { targetRole } }
+  );
+}
+
+/**
+ * Multi-Persona Resume Generator — generates 3 distinctly skewed resumes
+ * from the user's master profile, emphasizing different role personas.
+ */
+export async function generatePersonaResumesAgent(
+  profile: CareerProfile,
+  masterContent: CareerPathResumeContent,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<MultiPersonaResult> {
+  const roleVariants = [
+    (profile.target.targetRoles?.[0]) || "Software Developer",
+    "Frontend Developer",
+    "Full Stack Developer",
+  ].filter((role, index, arr) => arr.indexOf(role) === index).slice(0, 3);
+
+  return callWithValidation<MultiPersonaResult>(
+    "MultiPersonaAgent",
+    MultiPersonaSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are an expert resume strategist. You create multiple targeted resume versions from a single master profile.
+
+Your job:
+1. Generate exactly 3 resume persona variants based on the provided role variants
+2. Each persona should emphasize DIFFERENT aspects of the same profile
+3. Do NOT invent new skills or experience — only re-emphasize and re-frame existing ones
+4. For each persona:
+   - Change the summary to be role-specific
+   - Reorder skills to put role-relevant ones first
+   - Rewrite bullet points to emphasize role-relevant aspects
+   - List what this persona emphasizes vs the others
+5. The personas should feel genuinely different — a recruiter reading all 3 should find each one distinctly positioned
+
+Role variants to generate: ${roleVariants.join(", ")}`,
+      },
+      {
+        role: "user",
+        content: `Master Profile: ${JSON.stringify(profile)}\n\nMaster Resume Content: ${JSON.stringify(masterContent)}`,
+      },
+    ],
+    "multiPersona",
+    MultiPersonaSchema,
+    undefined,
+    { ...metadata, inputJson: { roles: roleVariants } }
+  );
+}
+
+/**
+ * ATS View Agent — simulates how a legacy ATS system parses the resume,
+ * identifying formatting issues and extraction failures.
+ */
+export async function generateATSViewAgent(
+  content: CareerPathResumeContent,
+  targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<ATSParseResult> {
+  return callWithValidation<ATSParseResult>(
+    "ATSViewAgent",
+    ATSParseSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are simulating a legacy ATS (Applicant Tracking System) parser like Taleo, Workday, or Greenhouse.
+
+Your job:
+1. Parse the resume section by section as a dumb ATS would — plain text extraction, no formatting
+2. For each section: show the raw text an ATS would extract, identify parsing issues
+3. Flag issues like: two-column layouts (ATS cannot read column 2), tables (ATS skips them), headers/footers, special characters, graphics, non-standard section headings
+4. Score each section's ATS compatibility (0–100)
+5. List critical failures (sections ATS would miss entirely) and passed checks
+6. Calculate an overall ATS compatibility score
+
+Common ATS failures:
+- Contact info not in main body (put in header/footer)
+- Skills in a table or multi-column layout
+- Non-standard section names ("What I've built" instead of "Projects")
+- Missing standard keywords for the target role
+- URLs not spelled out (linked text won't transfer)
+
+Be specific and practical — every issue should have a clear fix.`,
+      },
+      {
+        role: "user",
+        content: `Target Role: ${targetRole}\n\nResume Content: ${JSON.stringify(content)}`,
+      },
+    ],
+    "atsView",
+    ATSParseSchema,
+    undefined,
+    { ...metadata, inputJson: { targetRole } }
+  );
+}
+
+/**
+ * Outreach Generator Agent — produces a full suite of personalized
+ * networking and application materials tailored to the specific job.
+ */
+export async function generateOutreachAgent(
+  profile: CareerProfile,
+  content: CareerPathResumeContent,
+  jobDescription: string,
+  targetRole: string,
+  metadata?: { userId?: string; sessionId?: string; resumeId?: string }
+): Promise<OutreachPack> {
+  return callWithValidation<OutreachPack>(
+    "OutreachAgent",
+    OutreachPackSchema,
+    [
+      {
+        role: "system",
+        content:
+          `You are a career outreach specialist. You write personalized, compelling, human-sounding outreach materials that get responses.
+
+Your job: Generate a complete outreach pack including:
+1. Cover Letter (3 short paragraphs, specific to the role, references actual project from profile)
+2. Recruiter DM (LinkedIn DM, max 3 sentences, casual but professional)
+3. Cold Email (subject line + 3 sentences, specific hook from JD)
+4. LinkedIn Message (connection request message, max 300 chars)
+5. Why This Role Answer (for "why do you want this job" interview question)
+6. Follow-up Message (if no reply after 5 days)
+7. 3 likely interview questions for this specific role + suggested answers using the candidate's real profile
+8. List missing skills the candidate should prepare for before the interview
+9. Preparation plan (5 actionable steps before applying)
+
+Rules:
+- Every piece must reference specific details from the job description
+- Sound human — no AI clichés like "excited to leverage my skills"
+- Use the candidate's actual projects and experience
+- Never fabricate achievements not in the profile
+- The cover letter should open with a specific, compelling hook`,
+      },
+      {
+        role: "user",
+        content: `Target Role: ${targetRole}\n\nJob Description: ${jobDescription}\n\nProfile: ${JSON.stringify(profile)}\n\nResume: ${JSON.stringify(content)}`,
+      },
+    ],
+    "outreachPack",
+    OutreachPackSchema,
+    undefined,
+    { ...metadata, inputJson: { targetRole, jobDescLength: jobDescription.length } }
+  );
+}

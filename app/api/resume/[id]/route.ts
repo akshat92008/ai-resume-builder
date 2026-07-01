@@ -21,7 +21,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
     }
     const resume = await getServerResume(id);
-    if (!resume) {
+    if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
         { status: 404 },
@@ -47,7 +47,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
     }
     const resume = await getServerResume(id);
-    if (!resume) {
+    if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
         { status: 404 },
@@ -101,6 +101,13 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     const { id } = await context.params;
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
+    }
+    const resume = await getServerResume(id);
+    if (!resume || resume.userId !== auth.user.id) {
+      return NextResponse.json(
+        { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
+        { status: 404 },
+      );
     }
     await deleteServerResume(id);
     return NextResponse.json({ deleted: true });

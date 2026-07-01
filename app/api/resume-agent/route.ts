@@ -13,7 +13,21 @@ import {
 } from "@/lib/careerpath/db";
 import {
   inferIntentLLM,
+  extractProfileDataAgent,
+  detectGapsAgent,
+  writeResumeAgent,
+  auditResumeAgent,
+  improveResumeAgent,
+  tailorResumeAgent,
+  starInterviewAgent,
+  humanizeResumeAgent,
+  estimateImpactAgent,
+  analyzeCareerGapAgent,
+  generatePersonaResumesAgent,
+  generateATSViewAgent,
+  generateOutreachAgent,
 } from "@/lib/careerpath/orchestrator";
+import { validateResumeTruthfulness } from "@/lib/resume/validator";
 import {
   createResumeRecord,
   auditResume,
@@ -99,10 +113,6 @@ export async function POST(request: Request) {
       intent = "ANALYZE_JOB_SEARCH";
     } else if (command.intent === "generate_resume_version") {
       intent = "GENERATE_RESUME_VERSION";
-    } else if (message.length > 500) {
-      // Fast path: bypass LLM intent inference for massive text blocks
-      const { inferIntentKeyword } = await import("@/lib/careerpath/orchestrator");
-      intent = inferIntentKeyword(message, !!currentResume).intent;
     } else {
       const result = await inferIntentLLM(message, !!currentResume, { userId, resumeId });
       intent = result.intent;
@@ -205,9 +215,31 @@ async function processIntent(
         workspace: buildCareerWorkspaceState(currentResume),
       };
 
+    // Differentiation Features
+    case "STAR_INTERVIEW":
+      return handleStarInterview(currentResume, userId, metadata);
+
+    case "HUMANIZE_RESUME":
+      return handleHumanizeResume(currentResume, userId, metadata);
+
+    case "ESTIMATE_IMPACT":
+      return handleEstimateImpact(currentResume, userId, metadata);
+
+    case "GAP_ANALYSIS":
+      return handleGapAnalysis(message, currentResume, userId, metadata);
+
+    case "MULTI_PERSONA":
+      return handleMultiPersona(currentResume, userId, metadata);
+
+    case "VISUALIZE_ATS":
+      return handleVisualizeATS(currentResume, userId, metadata);
+
+    case "GENERATE_OUTREACH":
+      return handleGenerateOutreach(message, currentResume, userId, metadata);
+
     case "GENERAL_HELP":
       return {
-        assistantMessage: `Here's what I can do:\n\n• **Build a resume** — Paste your skills, projects, education, experience and I'll create an ATS-friendly resume.\n• **Improve your resume** — Say "improve this" or "make it ATS friendly" to strengthen your current resume.\n• **Tailor to a job** — Paste a job description and say "tailor this resume to this job."\n• **Add information** — "Add this project: [details]" or "Add certificate: [name]."\n• **Rewrite a section** — "Rewrite my summary" or "Make project bullets stronger."\n• **Download PDF** — Click the Download PDF button to export.\n\nJust type naturally and I'll figure out what you need.`,
+        assistantMessage: `Here's what I can do:\n\n**Core Features**\n• **Build a resume** — Paste your skills, projects, education, experience.\n• **Improve your resume** — Say "improve this" to strengthen your resume.\n• **Tailor to a job** — Paste a job description to tailor your resume.\n• **Add information** — "Add this project: [details]".\n• **Rewrite a section** — "Rewrite my summary".\n• **Download PDF** — Click the Download PDF button.\n\n**Premium Features** ✨\n• **Interview me** — Get STAR follow-up questions to extract hidden value from your experience.\n• **Humanize this** — Strip AI-speak and make your resume sound genuinely human.\n• **Add metrics** — Get safe, verifiable metric suggestions for weak bullets.\n• **Gap analysis** — See your match score vs your target role + projects to close gaps.\n• **Generate 3 versions** — Get Frontend, Full Stack, and AI Product persona resumes.\n• **Show ATS view** — See how a robot parses your resume.\n• **Write cover letter** — Generate outreach pack: cover letter, DM, cold email, LinkedIn message.`,
         resume: currentResume,
         resumeId: currentResume?.id || null,
         workspace: buildCareerWorkspaceState(currentResume),
@@ -215,7 +247,7 @@ async function processIntent(
 
     default:
       return {
-        assistantMessage: "I'm not sure what you'd like me to do. Try saying something like 'Build my resume' or 'Improve this resume.'",
+        assistantMessage: "I'm not sure what you'd like me to do. Try saying something like 'Build my resume', 'Interview me', or 'Gap analysis for Senior SWE'.",
         resume: currentResume,
         resumeId: currentResume?.id || null,
         workspace: buildCareerWorkspaceState(currentResume),
@@ -452,91 +484,97 @@ async function applyBrainToResume(input: {
   metadata?: { userId: string; resumeId?: string };
   versionCreated?: boolean;
 }) {
-  const currentState = input.currentResume
-    ? contentToResumeState(input.currentResume.content, {
-        id: input.currentResume.id,
-        targetRole: input.currentResume.targetRole,
-      })
-    : null;
-  const brain = await handleResumeMessage({
-    userMessage: input.message,
-    currentResume: currentState,
-    activeResumeId: input.currentResume?.id || null,
-  });
-
-  if (!brain.resume || brain.type === "questions" || (brain.type === "message" && !input.currentResume)) {
-    return {
-      assistantMessage: brain.message,
-      resume: input.currentResume,
-      resumeId: input.currentResume?.id || null,
-      missingFields: brain.resume?.missingFields?.map((item) => item.field),
-      workspace: buildCareerWorkspaceState(input.currentResume),
-    };
+  let legacyProfile = input.currentResume?.profile || ({} as any);
+  let profile = input.currentResume?.careerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+  let assistantMessage = "";
+  
+  if (input.mode === "build") {
+    legacyProfile = await extractProfileDataAgent(input.message, legacyProfile, input.currentResume?.targetRole || "", input.metadata);
+    const gaps = await detectGapsAgent(legacyProfile, input.mode, input.metadata);
+    if (!gaps.readyToGenerate && gaps.questionsToAsk.length > 0) {
+      return {
+        assistantMessage: `I need a few details first:\n\n${gaps.questionsToAsk.map((q, i) => `${i + 1}. ${q.question}`).join('\n')}`,
+        resume: input.currentResume,
+        resumeId: input.currentResume?.id || null,
+        missingFields: gaps.criticalMissing,
+        workspace: buildCareerWorkspaceState(input.currentResume),
+      };
+    }
+    assistantMessage = "Created a first resume draft based on your details.";
+    profile = legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
   }
 
-  const nextResume = await resumeRecordFromBrain(input.currentResume, brain, input);
-  await saveServerResume(nextResume);
+  let content: any;
+  let tailoringResult = null;
+  let missingKeywords: string[] = [];
+  let matchedKeywords: string[] = [];
+  
+  if (input.mode === "tailor" && input.currentResume) {
+    const jobDesc = input.message;
+    tailoringResult = await tailorResumeAgent(input.currentResume.content, input.currentResume.targetRole || "", jobDesc, input.metadata);
+    content = tailoringResult.tailoredResume;
+    missingKeywords = tailoringResult.missingKeywordsNotAdded;
+    matchedKeywords = tailoringResult.matchedKeywords;
+    assistantMessage = `Tailored the resume toward the job. Matched: ${matchedKeywords.join(", ") || "none yet"}. Missing from your resume: ${missingKeywords.join(", ") || "none detected"}. I did not add missing skills without confirmation.`;
+  } else if (input.mode === "improve" && input.currentResume) {
+    const audit = await auditResumeAgent(input.currentResume.content, input.currentResume.targetRole || "", input.currentResume.jobDescription || "", input.metadata);
+    content = await improveResumeAgent(input.currentResume.content, audit, input.currentResume.targetRole || "", input.metadata);
+    assistantMessage = "Improved the wording and formatting while preserving your original details.";
+  } else {
+    content = await writeResumeAgent(legacyProfile, input.mode, input.currentResume?.jobDescription || "", input.metadata);
+    if (!assistantMessage) assistantMessage = "Created a new resume based on your profile.";
+  }
 
-  return {
-    assistantMessage: brain.message,
-    resume: nextResume,
-    resumeId: nextResume.id,
-    versionCreated: input.versionCreated,
-    workspace: buildCareerWorkspaceState(nextResume, input.message),
-  };
-}
-
-async function resumeRecordFromBrain(
-  currentResume: CareerPathResume | null,
-  brain: ResumeBrainResponse,
-  input: {
-    message: string;
-    userId: string;
-    mode: "build" | "improve" | "tailor";
-  },
-): Promise<CareerPathResume> {
-  const state = brain.resume as ResumeState;
-  const content = deriveRenderableResume(state);
-  const targetRole = state.target.role || currentResume?.targetRole || "";
-  const audit = auditResume(content, targetRole, state.target.jobDescription || currentResume?.jobDescription || "");
+  const beforeState = input.currentResume ? contentToResumeState(input.currentResume.content, { id: input.currentResume.id, targetRole: input.currentResume.targetRole }) : null;
+  const afterState = contentToResumeState(content, { id: input.currentResume?.id || "new", targetRole: input.currentResume?.targetRole });
+  
+  const validationMode = input.mode === "tailor" ? "TAILOR_TO_JOB" : input.mode === "improve" ? "IMPROVE_EXISTING_RESUME" : "BUILD_FROM_DATA";
+  const validated = validateResumeTruthfulness(beforeState, afterState, input.message, { type: validationMode, confidence: 1, reason: "LLM Orchestrator" } as any);
+  
+  content = deriveRenderableResume(validated.cleanedResume);
+  
+  const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
+  const audit = await auditResumeAgent(content, targetRole, input.currentResume?.jobDescription || "", input.metadata);
   const now = new Date().toISOString();
 
-  const resume = currentResume
+  const nextResume = input.currentResume
     ? {
-        ...currentResume,
-        title: state.title || currentResume.title,
+        ...input.currentResume,
+        title: validated.cleanedResume.title || input.currentResume.title,
         targetRole,
         mode: input.mode,
         status: "final" as const,
         content,
         score: audit.score,
         audit,
-        jobDescription: state.target.jobDescription || currentResume.jobDescription,
-        version: currentResume.version + (input.mode === "build" ? 0 : 1),
+        jobDescription: validated.cleanedResume.target.jobDescription || input.currentResume.jobDescription,
+        version: input.currentResume.version + (input.mode === "build" ? 0 : 1),
         updatedAt: now,
       }
     : createResumeRecord({
         mode: input.mode,
-        targetRole: targetRole || "Target Role",
+        targetRole,
         content,
-        title: state.title || `${targetRole || "CareerPath"} Resume`,
+        title: validated.cleanedResume.title || `${targetRole || "CareerPath"} Resume`,
       });
 
-  resume.userId = input.userId;
-  resume.audit = audit;
-  resume.score = audit.score;
-  if (brain.matchedKeywords || brain.missingKeywords) {
-    resume.tailoring = {
-      matchScore: audit.score.roleAlignment,
-      matchedKeywords: brain.matchedKeywords || [],
-      safeKeywordsAdded: [],
-      missingKeywordsNotAdded: brain.missingKeywords || [],
-      tailoringSummary: ["Reordered supported resume facts toward the job description without adding unsupported keywords."],
-      tailoredResume: content,
-    };
+  nextResume.userId = input.userId;
+  nextResume.careerProfile = profile;
+  
+  if (tailoringResult) {
+    nextResume.tailoring = tailoringResult;
   }
-  decorateResumeForCareerOS(resume, input.message, { versionType: input.mode === "tailor" ? "job_specific" : "master" });
-  return resume;
+  
+  decorateResumeForCareerOS(nextResume, input.message, { versionType: input.mode === "tailor" ? "job_specific" : "master" });
+  await saveServerResume(nextResume);
+
+  return {
+    assistantMessage,
+    resume: nextResume,
+    resumeId: nextResume.id,
+    versionCreated: input.versionCreated,
+    workspace: buildCareerWorkspaceState(nextResume, input.message),
+  };
 }
 
 function decorateResumeForCareerOS(
@@ -555,4 +593,232 @@ function decorateResumeForCareerOS(
       ...mining.suggestedAchievements.filter((item) => !resume.careerProfile!.achievements.some((existing) => existing.text === item.text)),
     ].slice(0, 12);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Differentiation Feature Handlers
+// ---------------------------------------------------------------------------
+
+async function handleStarInterview(
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a resume first, then I can interview you to extract the hidden value behind your experience and projects.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  const profile = currentResume.careerProfile || legacyProfileToCareerProfile(currentResume.profile, userId);
+  const result = await starInterviewAgent(profile, currentResume.content, currentResume.targetRole, metadata);
+  currentResume.starInterview = result;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  const questionList = result.questions.map((q, i) => `${i + 1}. **${q.question}**\n   _(${q.context})_`).join("\n\n");
+  return {
+    assistantMessage: `${result.summary}\n\nAnswer any of these to strengthen your resume:\n\n${questionList}\n\nJust answer in plain language — I'll extract the key points and update your bullets.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
+}
+
+async function handleHumanizeResume(
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a resume first, then I can strip out AI-speak and make it sound genuinely human.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  await saveResumeVersion({
+    userId,
+    resumeId: currentResume.id,
+    versionName: `Before humanize v${currentResume.version}`,
+    resumeJson: currentResume.content,
+    reason: "Pre-humanize snapshot",
+  });
+
+  const result = await humanizeResumeAgent(currentResume.content, currentResume.targetRole, metadata);
+  currentResume.humanizedResume = result;
+  currentResume.content = result.content;
+  currentResume.version += 1;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  const changeCount = result.changes.length;
+  const clicheList = result.clisheesRemoved.slice(0, 6).join(", ");
+  return {
+    assistantMessage: `Humanized ✓ — made ${changeCount} change${changeCount !== 1 ? "s" : ""}. Removed AI clichés: ${clicheList || "none found"}.\n\n${result.summary}\n\nYour resume now sounds like it was written by a human, not an AI.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    versionCreated: true,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
+}
+
+async function handleEstimateImpact(
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a resume first, then I can analyze your bullets and suggest safe, verifiable metrics.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  const profile = currentResume.careerProfile || legacyProfileToCareerProfile(currentResume.profile, userId);
+  const result = await estimateImpactAgent(profile, currentResume.content, currentResume.targetRole, metadata);
+  currentResume.impactEstimates = result;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  if (!result.suggestions.length) {
+    return {
+      assistantMessage: "Your bullets already have good quantitative proof. No weak metrics detected that need estimation.",
+      resume: currentResume,
+      resumeId: currentResume.id,
+      workspace: buildCareerWorkspaceState(currentResume),
+    };
+  }
+
+  const suggestionList = result.suggestions.slice(0, 4).map((s, i) =>
+    `${i + 1}. **${s.itemName}** (${s.section})\n   Original: _"${s.bulletText.slice(0, 80)}..."_\n   Suggested: "${s.improvedBullet}"\n   Confidence: ${s.confidence} — ${s.rationale}`
+  ).join("\n\n");
+
+  return {
+    assistantMessage: `Found ${result.suggestions.length} bullet${result.suggestions.length !== 1 ? "s" : ""} that could use metrics. Here are conservative estimates you can verify:\n\n${suggestionList}\n\nCheck the **Impact Estimator** tab to accept or reject each suggestion.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
+}
+
+async function handleGapAnalysis(
+  message: string,
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a resume first, then say 'gap analysis for [target role]' to see how close you are and what to build next.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  const profile = currentResume.careerProfile || legacyProfileToCareerProfile(currentResume.profile, userId);
+  const targetRole = message.match(/gap analysis(?:\s+for)?\s+(.{3,80})/i)?.[1]?.trim() || currentResume.targetRole;
+  const result = await analyzeCareerGapAgent(profile, targetRole, metadata);
+  currentResume.gapAnalysis = result;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  const gapList = result.gaps.slice(0, 4).map(g => `• **${g.skill}** (${g.importance}) — ${g.evidence}${g.projectIdea ? `\n  _Project idea: ${g.projectIdea}_` : ""}`).join("\n");
+  const status = result.readyToApply ? "✅ **Ready to apply**" : "🔧 **Focus on building proof first**";
+
+  return {
+    assistantMessage: `**Gap Analysis for ${targetRole}**\n\nMatch score: **${result.matchScore}/100** — ${status}\n\n${result.summary}\n\n**Gaps to address:**\n${gapList}\n\nCheck the **Gap Analysis** tab for the full breakdown and project ideas.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
+}
+
+async function handleMultiPersona(
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a master resume first, then I can generate 3 distinctly positioned versions targeting different roles.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  const profile = currentResume.careerProfile || legacyProfileToCareerProfile(currentResume.profile, userId);
+  const result = await generatePersonaResumesAgent(profile, currentResume.content, metadata);
+  currentResume.multiPersona = result;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  const personaList = result.personas.map(p => `• **${p.persona}** — ${p.whenToUse}`).join("\n");
+  return {
+    assistantMessage: `Generated ${result.personas.length} persona resumes from your master profile.\n\n${personaList}\n\nCheck the **Personas** tab to preview each version and save the ones you want to use.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
+}
+
+async function handleVisualizeATS(
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a resume first, then say 'show ATS view' to see exactly how a robot parses your resume.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  const result = await generateATSViewAgent(currentResume.content, currentResume.targetRole, metadata);
+  currentResume.atsView = result;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  const criticalIssues = result.criticalFailures.length;
+  const statusEmoji = result.overallATSScore >= 85 ? "✅" : result.overallATSScore >= 70 ? "⚠️" : "❌";
+  return {
+    assistantMessage: `**ATS Compatibility: ${result.overallATSScore}/100** ${statusEmoji}\n\n${result.summary}\n\n${criticalIssues > 0 ? `**${criticalIssues} critical issue${criticalIssues !== 1 ? "s" : ""} detected:** ${result.criticalFailures.join("; ")}` : "**No critical ATS failures detected.**"}\n\nCheck the **ATS View** tab to see a full section-by-section parse breakdown.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
+}
+
+async function handleGenerateOutreach(
+  message: string,
+  currentResume: CareerPathResume | null,
+  userId: string,
+  metadata: { userId: string; resumeId?: string },
+) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build a resume first, then paste a job description and say 'write cover letter' or 'write outreach' to generate your full application pack.",
+      resume: null,
+      resumeId: null,
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  const profile = currentResume.careerProfile || legacyProfileToCareerProfile(currentResume.profile, userId);
+  const jobDescription = message.length > 100 ? message : currentResume.jobDescription || "";
+  const result = await generateOutreachAgent(profile, currentResume.content, jobDescription, currentResume.targetRole, metadata);
+  currentResume.outreachPack = result;
+  currentResume.updatedAt = new Date().toISOString();
+  await saveServerResume(currentResume);
+
+  return {
+    assistantMessage: `Outreach pack ready for **${result.jobTitle || currentResume.targetRole}** at **${result.company || "the company"}**.\n\nGenerated: Cover Letter, LinkedIn DM, Cold Email, LinkedIn Message, Why-Fit Answer, Follow-up Message, ${result.interviewQuestions.length} Interview Q&As, and a preparation plan.\n\nCheck the **Outreach** tab to copy each piece individually.`,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
 }

@@ -256,6 +256,14 @@ export type CareerPathResume = {
   version: number;
   createdAt: string;
   updatedAt: string;
+  // Differentiation feature results
+  starInterview?: StarInterviewResult;
+  humanizedResume?: HumanizedResume;
+  impactEstimates?: ImpactEstimateResult;
+  gapAnalysis?: GapAnalysisResult;
+  multiPersona?: MultiPersonaResult;
+  atsView?: ATSParseResult;
+  outreachPack?: OutreachPack;
 };
 
 export type GapQuestion = {
@@ -659,7 +667,15 @@ export type AgentIntent =
   | "REWRITE_SECTION"
   | "ASK_MISSING_INFO"
   | "GENERATE_PDF"
-  | "GENERAL_HELP";
+  | "GENERAL_HELP"
+  // Differentiation features
+  | "STAR_INTERVIEW"
+  | "HUMANIZE_RESUME"
+  | "ESTIMATE_IMPACT"
+  | "GAP_ANALYSIS"
+  | "MULTI_PERSONA"
+  | "VISUALIZE_ATS"
+  | "GENERATE_OUTREACH";
 
 export type ResumeMessage = {
   id: string;
@@ -679,4 +695,125 @@ export type ResumeVersion = {
   resumeJson: CareerPathResumeContent;
   reason?: string;
   createdAt: string;
+};
+
+// ---------------------------------------------------------------------------
+// Differentiation Feature Result Types
+// ---------------------------------------------------------------------------
+
+/** STAR Interviewer — follow-up questions to extract hidden value */
+export type StarInterviewQuestion = {
+  id: string;
+  question: string;
+  context: string; // why this question matters
+  category: "situation" | "task" | "action" | "result" | "metric";
+  targetBullet?: string; // which existing bullet this will improve
+};
+
+export type StarInterviewResult = {
+  questions: StarInterviewQuestion[];
+  vagueBullets: string[]; // bullets that triggered the questions
+  summary: string;
+};
+
+/** Anti-BS Authenticity Engine — humanized resume */
+export type HumanizedChange = {
+  original: string;
+  humanized: string;
+  reason: string; // e.g. "Removed AI cliché: spearheaded"
+  section: string;
+};
+
+export type HumanizedResume = {
+  content: CareerPathResumeContent;
+  changes: HumanizedChange[];
+  clisheesRemoved: string[];
+  summary: string;
+};
+
+/** Quantitative Impact Estimator */
+export type ImpactSuggestion = {
+  id: string;
+  bulletText: string; // original weak bullet
+  suggestedMetric: string; // e.g. "reduced load time by ~40%"
+  confidence: "high" | "medium" | "low";
+  rationale: string; // why this estimate is reasonable
+  improvedBullet: string; // full rewritten bullet
+  section: string;
+  itemName: string;
+};
+
+export type ImpactEstimateResult = {
+  suggestions: ImpactSuggestion[];
+  summary: string;
+};
+
+/** Strategic Career Gap Analyzer */
+export type SkillGap = {
+  skill: string;
+  importance: "critical" | "recommended" | "bonus";
+  category: string;
+  evidence: string; // why this skill matters for the role
+  projectIdea?: string; // weekend project to fill the gap
+  learningResource?: string;
+};
+
+export type GapAnalysisResult = {
+  targetRole: string;
+  matchScore: number; // 0–100
+  strengths: string[];
+  gaps: SkillGap[];
+  weekendProjects: { title: string; description: string; skills: string[] }[];
+  summary: string;
+  readyToApply: boolean;
+};
+
+/** Multi-Persona Resume Generator */
+export type PersonaResume = {
+  persona: string; // e.g. "Frontend Developer"
+  whenToUse: string;
+  emphasis: string[];
+  resume: CareerPathResumeContent;
+  differenceFromMaster: string[];
+};
+
+export type MultiPersonaResult = {
+  personas: PersonaResume[];
+  masterRole: string;
+  summary: string;
+};
+
+/** ATS Visualizer */
+export type ATSSection = {
+  sectionName: string;
+  rawText: string; // what ATS would extract
+  issues: {
+    type: "parse_failure" | "encoding_issue" | "missing_field" | "formatting_risk";
+    description: string;
+    severity: "high" | "medium" | "low";
+  }[];
+  atsScore: number; // 0–100 for this section
+};
+
+export type ATSParseResult = {
+  sections: ATSSection[];
+  overallATSScore: number;
+  criticalFailures: string[];
+  passedChecks: string[];
+  summary: string;
+};
+
+/** Networking / Outreach Generator */
+export type OutreachPack = {
+  coverLetter: string;
+  recruiterDM: string;
+  coldEmail: string;
+  linkedinMessage: string;
+  whyFitAnswer: string;
+  followUpMessage: string;
+  jobTitle: string;
+  company: string;
+  interviewQuestions: { question: string; whyAsked: string; suggestedAnswer: string }[];
+  missingSkillsToPrepare: string[];
+  preparationPlan: string[];
 };

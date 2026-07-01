@@ -32,8 +32,10 @@ export function getAiClient(): OpenAI {
 
 /** Model to use for all CareerPath AI agent calls. */
 export function getModel(fast?: boolean): string {
-  // Use the 8B model by default to prevent Vercel 60s Serverless timeouts.
-  return process.env.NVIDIA_NIM_MODEL || "meta/llama-3.1-8b-instruct";
+  if (fast) {
+    return process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
+  }
+  return process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
 }
 
 export const ProfileSchema = z.object({
@@ -184,4 +186,118 @@ export const TailoringResultSchema = z.object({
   missingKeywordsNotAdded: z.array(z.string()),
   tailoringSummary: z.array(z.string()),
   tailoredResume: ResumeContentSchema,
+});
+
+// ---------------------------------------------------------------------------
+// Differentiation Feature Schemas
+// ---------------------------------------------------------------------------
+
+export const StarInterviewSchema = z.object({
+  questions: z.array(z.object({
+    id: z.string(),
+    question: z.string(),
+    context: z.string(),
+    category: z.enum(["situation", "task", "action", "result", "metric"]),
+    targetBullet: z.string().optional().nullable(),
+  })),
+  vagueBullets: z.array(z.string()),
+  summary: z.string(),
+});
+
+export const HumanizedResumeSchema = z.object({
+  content: ResumeContentSchema,
+  changes: z.array(z.object({
+    original: z.string(),
+    humanized: z.string(),
+    reason: z.string(),
+    section: z.string(),
+  })),
+  clisheesRemoved: z.array(z.string()),
+  summary: z.string(),
+});
+
+export const ImpactEstimateSchema = z.object({
+  suggestions: z.array(z.object({
+    id: z.string(),
+    bulletText: z.string(),
+    suggestedMetric: z.string(),
+    confidence: z.enum(["high", "medium", "low"]),
+    rationale: z.string(),
+    improvedBullet: z.string(),
+    section: z.string(),
+    itemName: z.string(),
+  })),
+  summary: z.string(),
+});
+
+export const GapAnalysisSchema = z.object({
+  targetRole: z.string(),
+  matchScore: z.number().min(0).max(100),
+  strengths: z.array(z.string()),
+  gaps: z.array(z.object({
+    skill: z.string(),
+    importance: z.enum(["critical", "recommended", "bonus"]),
+    category: z.string(),
+    evidence: z.string(),
+    projectIdea: z.string().optional().nullable(),
+    learningResource: z.string().optional().nullable(),
+  })),
+  weekendProjects: z.array(z.object({
+    title: z.string(),
+    description: z.string(),
+    skills: z.array(z.string()),
+  })),
+  summary: z.string(),
+  readyToApply: z.boolean(),
+});
+
+export const PersonaResumeSchema = z.object({
+  persona: z.string(),
+  whenToUse: z.string(),
+  emphasis: z.array(z.string()),
+  resume: ResumeContentSchema,
+  differenceFromMaster: z.array(z.string()),
+});
+
+export const MultiPersonaSchema = z.object({
+  personas: z.array(PersonaResumeSchema),
+  masterRole: z.string(),
+  summary: z.string(),
+});
+
+export const ATSSectionSchema = z.object({
+  sectionName: z.string(),
+  rawText: z.string(),
+  issues: z.array(z.object({
+    type: z.enum(["parse_failure", "encoding_issue", "missing_field", "formatting_risk"]),
+    description: z.string(),
+    severity: z.enum(["high", "medium", "low"]),
+  })),
+  atsScore: z.number().min(0).max(100),
+});
+
+export const ATSParseSchema = z.object({
+  sections: z.array(ATSSectionSchema),
+  overallATSScore: z.number().min(0).max(100),
+  criticalFailures: z.array(z.string()),
+  passedChecks: z.array(z.string()),
+  summary: z.string(),
+});
+
+export const OutreachPackSchema = z.object({
+  coverLetter: z.string(),
+  recruiterDM: z.string(),
+  coldEmail: z.string(),
+  linkedinMessage: z.string(),
+  whyFitAnswer: z.string(),
+  followUpMessage: z.string(),
+  jobTitle: z.string(),
+  company: z.string(),
+  interviewQuestions: z.array(z.object({
+    question: z.string(),
+    whyAsked: z.string(),
+    suggestedAnswer: z.string(),
+  })),
+  missingSkillsToPrepare: z.array(z.string()),
+  preparationPlan: z.array(z.string()),
 });
