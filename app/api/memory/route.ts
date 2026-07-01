@@ -24,7 +24,7 @@ export async function PUT(req: Request) {
         mode: "build",
         status: "draft",
         version: 1,
-        content: { header: { name: "User", email: "", phone: "", location: "" } },
+        content: { header: { name: "User", email: "", phone: "", location: "", links: {} } },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
