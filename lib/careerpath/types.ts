@@ -947,3 +947,21 @@ export type OutreachPack = {
   missingSkillsToPrepare: string[];
   preparationPlan: string[];
 };
+
+export const OutreachPackSchema = z.object({
+  coverLetter: z.string().describe("A compelling 3-4 paragraph cover letter."),
+  recruiterDM: z.string().describe("A short, punchy LinkedIn DM (under 300 chars) for recruiters."),
+  coldEmail: z.string().describe("A cold email template for hiring managers."),
+  linkedinMessage: z.string().describe("A connection request message (max 300 chars)."),
+  whyFitAnswer: z.string().describe("A 2-minute elevator pitch answering 'Why are you a good fit?'"),
+  followUpMessage: z.string().describe("A polite follow-up message to send 1 week after applying."),
+  jobTitle: z.string(),
+  company: z.string(),
+  interviewQuestions: z.array(z.object({
+    question: z.string(),
+    whyAsked: z.string(),
+    suggestedAnswer: z.string(),
+  })).describe("3-5 likely behavioral/technical questions and how to answer them."),
+  missingSkillsToPrepare: z.array(z.string()).describe("Skills missing from the profile that the job requires."),
+  preparationPlan: z.array(z.string()).describe("A step-by-step plan for the days leading up to the interview."),
+});

@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles, Brain, LayoutDashboard } from "lucide-react";
+import { Sparkles, Brain, LayoutDashboard, Briefcase, FileText, LineChart, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Career Health", icon: LayoutDashboard },
   { href: "/app", label: "CareerPath AI", icon: Sparkles },
   { href: "/memory", label: "Career Memory", icon: Brain },
+  { href: "/jobs", label: "Job Tracker", icon: Briefcase },
+  { href: "/cover-letter", label: "Cover Letters", icon: FileText },
+  { href: "/analytics", label: "Analytics", icon: LineChart },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function DashboardSidebar() {
