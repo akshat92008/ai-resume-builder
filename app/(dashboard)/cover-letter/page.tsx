@@ -20,47 +20,18 @@ export default function CoverLetterPage() {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchResumes = async () => {
+    const loadHistory = async () => {
       try {
-        const res = await fetch("/api/memory");
+        const res = await fetch("/api/resumes");
         if (res.ok) {
           const data = await res.json();
-          // Assuming /api/memory returns user's data including resumes. Let's adapt if needed.
-          // Since there isn't a dedicated /api/resumes list route in the snippets I saw,
-          // I will assume the memory route or a simple fetch can get them.
-          // For now, I'll fetch memory and try to extract resumes if they exist there,
-          // or gracefully handle an empty state if I can't fetch them directly.
-          if (data.workspace?.smartVersions) {
-            const mappedResumes = data.workspace.smartVersions.map((sv: any) => ({
-              id: sv.resumeDocumentId,
-              title: sv.title,
-              targetRole: sv.targetRole,
-            }));
-            setResumes(mappedResumes);
-            if (mappedResumes.length > 0) setSelectedResumeId(mappedResumes[0].id);
+          if (data.resumes && data.resumes.length > 0) {
+            setResumes(data.resumes);
+            setSelectedResumeId(data.resumes[0].id);
           }
         }
       } catch (err) {
         console.error("Failed to fetch resumes", err);
-      } finally {
-        setLoadingResumes(false);
-      }
-    };
-    
-    // We actually need to fetch resumes from the DB. I'll make a quick call to /api/builder/history
-    // since /api/memory didn't seem to have a list of all resumes.
-    const loadHistory = async () => {
-      try {
-        const res = await fetch("/api/builder/history");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.history && data.history.length > 0) {
-            setResumes(data.history);
-            setSelectedResumeId(data.history[0].id);
-          }
-        }
-      } catch (err) {
-        console.error(err);
       } finally {
         setLoadingResumes(false);
       }

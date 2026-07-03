@@ -54,6 +54,7 @@ describe("Resume Security & PATCH", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
+    expect(getServerResume).toHaveBeenCalledWith(existingResume.id, "user_1");
     
     // Check saveServerResume was called with preserved fields
     const savedArg = (saveServerResume as any).mock.calls[0][0];
@@ -70,6 +71,7 @@ describe("Resume Security & PATCH", () => {
     expect(savedArg.content.header).toBeDefined();
     // The route explicitly updates the score based on the new audit, not from the payload
     expect(savedArg.score.overall).toBe(85);
+    expect(saveServerResume).toHaveBeenCalledWith(expect.objectContaining({ id: existingResume.id }), "user_1");
   });
 
   it("returns 404 if getServerResume returns null (RLS protection)", async () => {

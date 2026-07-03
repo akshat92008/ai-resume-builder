@@ -47,7 +47,7 @@ export async function handleStarInterview(
   );
   currentResume.starInterview = result;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   const questionList = result.questions
     .map(
@@ -98,7 +98,7 @@ export async function handleHumanizeResume(
   currentResume.content = result.content;
   currentResume.version += 1;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   const changeCount = result.changes.length;
   const clicheList = result.clisheesRemoved
@@ -142,7 +142,7 @@ export async function handleEstimateImpact(
   );
   currentResume.impactEstimates = result;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   if (!result.suggestions.length) {
     return {
@@ -203,7 +203,7 @@ export async function handleGapAnalysis(
   );
   currentResume.gapAnalysis = result;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   const gapList = result.gaps
     .slice(0, 4)
@@ -252,7 +252,7 @@ export async function handleMultiPersona(
   );
   currentResume.multiPersona = result;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   const personaList = result.personas
     .map((p) => `• **${p.persona}** — ${p.whenToUse}`)
@@ -290,7 +290,7 @@ export async function handleVisualizeATS(
   );
   currentResume.atsView = result;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   const criticalIssues = result.criticalFailures.length;
   const statusEmoji =
@@ -342,7 +342,7 @@ export async function handleGenerateOutreach(
   );
   currentResume.outreachPack = result;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   return {
     assistantMessage: `Outreach pack ready for **${result.jobTitle || currentResume.targetRole}** at **${result.company || "the company"}**.\n\nGenerated: Cover Letter, LinkedIn DM, Cold Email, LinkedIn Message, Why-Fit Answer, Follow-up Message, ${result.interviewQuestions.length} Interview Q&As, and a preparation plan.\n\nCheck the **Outreach** tab to copy each piece individually.`,

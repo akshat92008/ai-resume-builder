@@ -20,7 +20,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
     }
-    const resume = await getServerResume(id);
+    const resume = await getServerResume(id, auth.user.id);
     if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
@@ -46,7 +46,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
     }
-    const resume = await getServerResume(id);
+    const resume = await getServerResume(id, auth.user.id);
     if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
@@ -81,7 +81,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const audit = auditResume(updated.content, updated.targetRole, updated.jobDescription);
     updated.audit = audit;
     updated.score = audit.score;
-    await saveServerResume(updated);
+    await saveServerResume(updated, auth.user.id);
 
     return NextResponse.json({ resume: updated });
   } catch (err) {
@@ -102,14 +102,14 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
     }
-    const resume = await getServerResume(id);
+    const resume = await getServerResume(id, auth.user.id);
     if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
         { status: 404 },
       );
     }
-    await deleteServerResume(id);
+    await deleteServerResume(id, auth.user.id);
     return NextResponse.json({ deleted: true });
   } catch (err) {
     console.error("[api/resume/[id]] DELETE Error:", err);

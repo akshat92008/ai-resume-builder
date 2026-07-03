@@ -33,28 +33,34 @@ export async function listJobApplications(userId?: string): Promise<JobApplicati
   return data.map(mapJobApplicationRecord);
 }
 
-export async function getJobApplication(id: string): Promise<JobApplication | null> {
+export async function getJobApplication(id: string, userId?: string): Promise<JobApplication | null> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return null;
+
+  const uid = userId || (await getSupabaseUser())?.id;
+  if (!uid) return null;
 
   const { data, error } = await supabase
     .from("job_applications")
     .select("*")
     .eq("id", id)
+    .eq("user_id", uid)
     .single();
 
   if (error || !data) return null;
   return mapJobApplicationRecord(data);
 }
 
-export async function saveJobApplication(application: JobApplication): Promise<void> {
+export async function saveJobApplication(application: JobApplication, userId?: string): Promise<void> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) throw new Error("Supabase not configured");
 
   const user = await getSupabaseUser();
+  const uid = user?.id || userId;
+  if (!uid) throw new Error("Cannot save job application without an authenticated owner");
   const payload = {
     id: application.id,
-    user_id: user?.id || application.userId || null,
+    user_id: uid,
     company: application.company,
     role: application.role,
     job_url: application.jobUrl,
@@ -86,10 +92,12 @@ export async function saveJobApplication(application: JobApplication): Promise<v
   }
 }
 
-export async function deleteJobApplication(id: string): Promise<void> {
+export async function deleteJobApplication(id: string, userId?: string): Promise<void> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return;
-  await supabase.from("job_applications").delete().eq("id", id);
+  const uid = userId || (await getSupabaseUser())?.id;
+  if (!uid) throw new Error("Cannot delete job application without an authenticated owner");
+  await supabase.from("job_applications").delete().eq("id", id).eq("user_id", uid);
 }
 
 // ---------------------------------------------------------------------------

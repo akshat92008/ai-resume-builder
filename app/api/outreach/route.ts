@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const resume = await getServerResume(resumeId);
+    const resume = await getServerResume(resumeId, auth.user.id);
     if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Resume not found." } },
@@ -59,8 +59,8 @@ export async function POST(request: Request) {
     let role = resume.targetRole || "the position";
     
     if (jobId) {
-      const job = await getJobApplication(jobId);
-      if (job && job.userId === auth.user.id) {
+      const job = await getJobApplication(jobId, auth.user.id);
+      if (job) {
         company = job.company;
         role = job.role;
       }

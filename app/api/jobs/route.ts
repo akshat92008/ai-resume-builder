@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       updatedAt: now,
     };
 
-    await saveJobApplication(newJob);
+    await saveJobApplication(newJob, auth.user.id);
     return NextResponse.json({ job: newJob });
   } catch (error: unknown) {
     logger.error("[api/jobs] Error creating job", { error });

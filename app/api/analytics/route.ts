@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { listJobApplications } from "@/lib/careerpath/db-jobs";
-import { getSupabaseUser } from "@/lib/careerpath/db";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
@@ -21,7 +19,6 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = await createServerSupabaseClient();
     const user = auth.user;
 
     // Fetch jobs

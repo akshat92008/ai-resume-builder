@@ -37,7 +37,7 @@ export async function PUT(req: Request) {
       ...updates
     } as CareerProfile;
     
-    await saveServerResume(resume);
+    await saveServerResume(resume, userId);
     
     return NextResponse.json({ success: true, careerProfile: resume.careerProfile });
   } catch (err) {

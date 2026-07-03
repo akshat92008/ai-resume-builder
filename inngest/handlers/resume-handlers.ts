@@ -464,7 +464,7 @@ export async function applyBrainToResume(input: {
     versionType:
       input.mode === "tailor" ? "job_specific" : "master",
   });
-  await saveServerResume(nextResume);
+  await saveServerResume(nextResume, input.userId);
 
   return {
     assistantMessage: achievementLogResult

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+export const maxDuration = 60;
 import { auditResume, createResumeRecord } from "@/lib/careerpath/agents";
-import { getServerResume, saveServerResume, getSupabaseUser } from "@/lib/careerpath/db";
+import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
@@ -64,74 +64,61 @@ export async function POST(request: Request) {
       );
     }
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        const keepAlive = setInterval(() => {
-          controller.enqueue(encoder.encode(" "));
-        }, 5000);
+    const resume = isServerSupabaseConfigured
+      ? await getServerResume(body.resumeId!, auth.user.id)
+      : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId, auth.user.id) : null);
+    if (!resume) {
+      return NextResponse.json(
+        { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
+        { status: 404 },
+      );
+    }
+    if (!body.jobDescription?.trim()) {
+      return NextResponse.json(
+        { error: { code: "INVALID_INPUT", message: "Job description is required.", recoverable: true } },
+        { status: 400 },
+      );
+    }
 
-        try {
-          const resume = isServerSupabaseConfigured
-            ? await getServerResume(body.resumeId!)
-            : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId) : null);
-          if (!resume) {
-            controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } })));
-            return;
-          }
-          if (!body.jobDescription?.trim()) {
-            controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "INVALID_INPUT", message: "Job description is required.", recoverable: true } })));
-            return;
-          }
-
-          const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
-          const brain = await handleResumeMessage({
-            userMessage: body.jobDescription,
-            currentResume: state,
-          });
-          const tailoredContent = deriveRenderableResume(brain.resume || state);
-          const audit = auditResume(tailoredContent, resume.targetRole, body.jobDescription);
-          const tailored = createResumeRecord({
-            mode: "tailor",
-            targetRole: resume.targetRole,
-            content: tailoredContent,
-            profile: resume.profile,
-            jobDescription: body.jobDescription,
-            version: resume.version + 1,
-            title: `${resume.targetRole} Tailored Resume`,
-          });
-          tailored.tailoring = {
-            matchScore: audit.score.roleAlignment,
-            matchedKeywords: brain.matchedKeywords || [],
-            safeKeywordsAdded: [],
-            missingKeywordsNotAdded: brain.missingKeywords || [],
-            tailoringSummary: ["Reordered supported facts toward the job description without adding missing skills."],
-            tailoredResume: tailoredContent,
-          };
-          tailored.audit = audit;
-          tailored.score = audit.score;
-          await saveServerResume(tailored);
-
-          controller.enqueue(encoder.encode(JSON.stringify({
-            newResumeId: tailored.id,
-            matchScore: tailored.tailoring.matchScore,
-            matchedKeywords: tailored.tailoring.matchedKeywords,
-            missingKeywords: tailored.tailoring.missingKeywordsNotAdded,
-            tailoredContent,
-            tailoring: tailored.tailoring,
-            resume: tailored,
-          })));
-        } catch (err) {
-          logger.error("[api/resume/tailor] Error in stream", { error: err });
-          controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "TAILOR_FAILED", message: "Unable to tailor resume. Try again.", recoverable: true } })));
-        } finally {
-          clearInterval(keepAlive);
-          controller.close();
-        }
-      }
+    const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
+    const brain = await handleResumeMessage({
+      userMessage: body.jobDescription,
+      currentResume: state,
     });
+    const tailoredContent = deriveRenderableResume(brain.resume || state);
+    const audit = auditResume(tailoredContent, resume.targetRole, body.jobDescription);
+    const tailored = createResumeRecord({
+      mode: "tailor",
+      targetRole: resume.targetRole,
+      content: tailoredContent,
+      profile: resume.profile,
+      jobDescription: body.jobDescription,
+      version: resume.version + 1,
+      title: `${resume.targetRole} Tailored Resume`,
+    });
+    tailored.userId = auth.user.id;
+    tailored.careerProfile = resume.careerProfile;
+    tailored.tailoring = {
+      matchScore: audit.score.roleAlignment,
+      matchedKeywords: brain.matchedKeywords || [],
+      safeKeywordsAdded: [],
+      missingKeywordsNotAdded: brain.missingKeywords || [],
+      tailoringSummary: ["Rewrote and reordered supported facts toward the job description without adding missing skills."],
+      tailoredResume: tailoredContent,
+    };
+    tailored.audit = audit;
+    tailored.score = audit.score;
+    await saveServerResume(tailored, auth.user.id);
 
-    return new Response(stream, { headers: { "Content-Type": "application/json" } });
+    return NextResponse.json({
+      newResumeId: tailored.id,
+      matchScore: tailored.tailoring.matchScore,
+      matchedKeywords: tailored.tailoring.matchedKeywords,
+      missingKeywords: tailored.tailoring.missingKeywordsNotAdded,
+      tailoredContent,
+      tailoring: tailored.tailoring,
+      resume: tailored,
+    });
   } catch (err) {
     logger.error("[api/resume/tailor] Error", { error: err });
     return NextResponse.json(

@@ -9,6 +9,24 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/observability/logger";
 import type { BuilderSession, CareerPathResume, ResumeMessage, ResumeVersion } from "./types";
 
+export type ResumeListItem = Pick<
+  CareerPathResume,
+  "id" | "userId" | "title" | "targetRole" | "mode" | "status" | "score" | "version" | "createdAt" | "updatedAt"
+>;
+
+const RESUME_LIST_COLUMNS = [
+  "id",
+  "user_id",
+  "title",
+  "target_role",
+  "mode",
+  "status",
+  "score_json",
+  "version",
+  "created_at",
+  "updated_at",
+].join(",");
+
 // ---------------------------------------------------------------------------
 // Auth helper
 // ---------------------------------------------------------------------------
@@ -51,9 +69,11 @@ export async function saveSession(session: BuilderSession): Promise<void> {
   if (!supabase) throw new Error("Supabase not configured");
 
   const user = await getSupabaseUser();
+  const ownerId = user?.id || session.userId;
+  if (!ownerId) throw new Error("Cannot save session without an authenticated owner");
   const payload = {
     id: session.id,
-    user_id: user?.id || session.userId || null,
+    user_id: ownerId,
     mode: session.mode,
     target_role: session.targetRole,
     current_step: session.currentStep,
@@ -84,14 +104,16 @@ export async function deleteSession(id: string): Promise<void> {
 // Resumes
 // ---------------------------------------------------------------------------
 
-export async function saveServerResume(resume: CareerPathResume): Promise<void> {
+export async function saveServerResume(resume: CareerPathResume, ownerUserId?: string): Promise<void> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) throw new Error("Supabase not configured");
 
   const user = await getSupabaseUser();
+  const ownerId = user?.id || ownerUserId;
+  if (!ownerId) throw new Error("Cannot save resume without an authenticated owner");
   const payload = {
     id: resume.id,
-    user_id: user?.id || resume.userId || null,
+    user_id: ownerId,
     profile_id: null,
     target_role: resume.targetRole,
     mode: resume.mode,
@@ -118,24 +140,6 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
 
   if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('application_pack_json') || error.message?.includes('career_profile_json')) {
-      logger.warn("[db/saveServerResume] Schema outdated. Retrying without new columns.");
-      const { 
-        profile_json,
-        career_profile_json,
-        resume_document_json,
-        application_pack_json, 
-        applications_json, 
-        job_search_insights_json, 
-        ...fallbackPayload 
-      } = payload;
-      const { error: fallbackError } = await client.from("resumes").upsert(fallbackPayload, { onConflict: "id" });
-      if (fallbackError) {
-        logger.error("[db/saveServerResume] Error saving resume (fallback)", { error: fallbackError });
-        throw new Error(`Failed to save resume: ${fallbackError.message}`);
-      }
-      return;
-    }
     logger.error("[db/saveServerResume] Error saving resume to Supabase", { error });
     throw new Error(`Failed to save resume: ${error.message}`);
   }
@@ -145,8 +149,10 @@ export async function getServerResume(id: string, userId?: string): Promise<Care
   const supabase = await createServerSupabaseClient();
   if (!supabase) return null;
 
+  const user = userId ? null : await getSupabaseUser();
+  const ownerId = userId || user?.id;
   let query = supabase.from("resumes").select("*").eq("id", id);
-  if (userId) query = query.eq("user_id", userId);
+  if (ownerId) query = query.eq("user_id", ownerId);
   const { data, error } = await query.single();
   if (error || !data) return null;
 
@@ -171,14 +177,35 @@ export async function listServerResumes(): Promise<CareerPathResume[]> {
   return data.map(mapResumeRow);
 }
 
-export async function deleteServerResume(id: string): Promise<void> {
+export async function listServerResumeSummaries(): Promise<ResumeListItem[]> {
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return;
-  await supabase.from("resumes").delete().eq("id", id);
+  if (!supabase) return [];
+
+  const user = await getSupabaseUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("resumes")
+    .select(RESUME_LIST_COLUMNS)
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(50);
+  if (error || !data) return [];
+
+  return (data as unknown as Record<string, unknown>[]).map(mapResumeListRow);
 }
 
-export async function duplicateServerResume(id: string): Promise<CareerPathResume | null> {
-  const original = await getServerResume(id);
+export async function deleteServerResume(id: string, userId?: string): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return;
+  const user = userId ? null : await getSupabaseUser();
+  const ownerId = userId || user?.id;
+  if (!ownerId) throw new Error("Cannot delete resume without an authenticated owner");
+  await supabase.from("resumes").delete().eq("id", id).eq("user_id", ownerId);
+}
+
+export async function duplicateServerResume(id: string, userId?: string): Promise<CareerPathResume | null> {
+  const original = await getServerResume(id, userId);
   if (!original) return null;
 
   const now = new Date().toISOString();
@@ -191,7 +218,7 @@ export async function duplicateServerResume(id: string): Promise<CareerPathResum
     updatedAt: now,
   };
 
-  await saveServerResume(copy);
+  await saveServerResume(copy, userId || original.userId);
   return copy;
 }
 
@@ -409,6 +436,21 @@ function mapResumeRow(data: Record<string, unknown>): CareerPathResume {
     audit: data.audit_json as CareerPathResume["audit"],
     jobDescription: data.job_description as string | undefined,
     tailoring: data.tailoring_json as CareerPathResume["tailoring"],
+    version: (data.version as number) || 1,
+    createdAt: data.created_at as string,
+    updatedAt: data.updated_at as string,
+  };
+}
+
+function mapResumeListRow(data: Record<string, unknown>): ResumeListItem {
+  return {
+    id: data.id as string,
+    userId: data.user_id as string,
+    title: data.title as string,
+    targetRole: (data.target_role as string) || "",
+    mode: (data.mode as CareerPathResume["mode"]) || "build",
+    status: (data.status as CareerPathResume["status"]) || "draft",
+    score: data.score_json as CareerPathResume["score"],
     version: (data.version as number) || 1,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,

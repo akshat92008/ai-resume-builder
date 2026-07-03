@@ -62,8 +62,8 @@ export async function POST(request: Request) {
     }
 
     const resume = isServerSupabaseConfigured
-      ? await getServerResume(body.resumeId!)
-      : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId) : null);
+      ? await getServerResume(body.resumeId!, auth.user.id)
+      : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId, auth.user.id) : null);
     if (!resume) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const metadata = { userId: auth.user?.id, resumeId: resume.id };
     const audit = await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription, metadata);
     const updated = { ...resume, audit, score: audit.score, updatedAt: new Date().toISOString() };
-    await saveServerResume(updated as CareerPathResume);
+    await saveServerResume(updated as CareerPathResume, auth.user.id);
 
     return NextResponse.json({ score: audit.score, audit, resume: updated });
   } catch (err) {

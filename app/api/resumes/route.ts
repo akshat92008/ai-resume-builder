@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
-import { listServerResumes } from "@/lib/careerpath/db";
+import { listServerResumeSummaries } from "@/lib/careerpath/db";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const resumes = await listServerResumes();
+    const resumes = await listServerResumeSummaries();
     return NextResponse.json({ resumes });
   } catch (err) {
     console.error("[api/resumes] Error:", err);

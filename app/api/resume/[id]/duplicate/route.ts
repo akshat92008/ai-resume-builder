@@ -16,7 +16,7 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     if (!IdSchema.safeParse(id).success) {
       return NextResponse.json({ error: { code: "INVALID_ID", message: "Invalid resume ID.", recoverable: true } }, { status: 400 });
     }
-    const copy = await duplicateServerResume(id);
+    const copy = await duplicateServerResume(id, auth.user.id);
     if (!copy) {
       return NextResponse.json(
         { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },

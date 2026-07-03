@@ -1,16 +1,21 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-});
-
 const ratelimiters = new Map<string, Ratelimit>();
 
 function getRatelimiter(eventType: string, maxLimit: number) {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!redisUrl || !redisToken) {
+    throw new Error("Upstash Redis is not configured");
+  }
+
   const key = `${eventType}_${maxLimit}`;
   if (!ratelimiters.has(key)) {
+    const redis = new Redis({
+      url: redisUrl,
+      token: redisToken,
+    });
     ratelimiters.set(
       key,
       new Ratelimit({

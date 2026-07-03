@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const job = await getJobApplication(id);
+    const job = await getJobApplication(id, auth.user.id);
     if (!job || job.userId !== auth.user.id) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
@@ -34,7 +34,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const job = await getJobApplication(id);
+    const job = await getJobApplication(id, auth.user.id);
     if (!job || job.userId !== auth.user.id) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
@@ -55,7 +55,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       updatedJob.appliedAt = updatedJob.updatedAt;
     }
 
-    await saveJobApplication(updatedJob);
+    await saveJobApplication(updatedJob, auth.user.id);
     return NextResponse.json({ job: updatedJob });
   } catch (error: unknown) {
     logger.error("[api/jobs/[id]] PATCH error", { error, jobId: id });
@@ -72,12 +72,12 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const job = await getJobApplication(id);
+    const job = await getJobApplication(id, auth.user.id);
     if (!job || job.userId !== auth.user.id) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
 
-    await deleteJobApplication(id);
+    await deleteJobApplication(id, auth.user.id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     logger.error("[api/jobs/[id]] DELETE error", { error, jobId: id });

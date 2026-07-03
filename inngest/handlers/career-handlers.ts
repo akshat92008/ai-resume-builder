@@ -85,7 +85,7 @@ export async function handleGenerateApplicationPack(
     resume.applications || [],
     [resume.resumeDocument!],
   );
-  await saveServerResume(resume);
+  await saveServerResume(resume, resume.userId);
 
   return {
     assistantMessage: `Application pack ready for ${job.title || resume.targetRole}. I generated a tailored resume, cover letter, recruiter DM, cold email, LinkedIn message, why-fit answer, and follow-up message.`,
@@ -136,7 +136,7 @@ export async function handleTrackJobApplication(
     [currentResume.resumeDocument!],
   );
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   return {
     assistantMessage: `Tracked ${application.company} — ${application.role} as ${application.status.replaceAll("_", " ")}. Next action: ${application.followUpAt ? "follow up in about 5 days if there is no reply" : "prepare the application pack before applying"}.`,
@@ -171,7 +171,7 @@ export async function handleAnalyzeJobSearch(
   );
   currentResume.jobSearchInsights = insights;
   currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume);
+  await saveServerResume(currentResume, currentResume.userId);
 
   return {
     assistantMessage: insights

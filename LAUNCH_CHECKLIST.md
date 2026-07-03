@@ -7,7 +7,7 @@
 
 ## Supabase
 
-- [ ] run `supabase db push` to apply the pending 13 migrations to your remote production database
+- [ ] run `supabase db push` to apply all pending migrations, including owner hardening, to your remote production database
 - [x] verify anon cannot read private tables
 
 ## User flow
