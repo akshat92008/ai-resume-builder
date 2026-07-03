@@ -13,7 +13,7 @@ if (!env.STRIPE_SECRET_KEY) {
   console.warn("STRIPE_SECRET_KEY is not defined. Stripe integration will fail.");
 }
 
-export const stripe = new Stripe(env.STRIPE_SECRET_KEY || "", {
+export const stripe = new Stripe(env.STRIPE_SECRET_KEY || "sk_test_dummy", {
   apiVersion: "2026-06-24.dahlia", // Adjust to your preferred API version
   appInfo: {
     name: "CareerPath AI",
