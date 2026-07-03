@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui";
 
+import * as Sentry from "@sentry/nextjs";
+
 export default function Error({
   error,
   reset,
@@ -19,10 +21,10 @@ export default function Error({
       stack: error.stack,
     });
 
-    // Future: Report to Sentry client SDK
-    // if (typeof window !== "undefined" && window.Sentry) {
-    //   window.Sentry.captureException(error);
-    // }
+    // Report to Sentry client SDK
+    if (typeof window !== "undefined") {
+      Sentry.captureException(error);
+    }
   }, [error]);
 
   return (

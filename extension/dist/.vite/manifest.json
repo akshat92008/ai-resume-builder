@@ -1,6 +1,6 @@
 {
   "../../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-DEu84JAP.js",
+    "file": "assets/crx-manifest.js-CSo3Mowq.js",
     "name": "crx-manifest.js",
     "src": "../../../../../@crx/manifest",
     "isEntry": true
@@ -14,7 +14,7 @@
     "name": "rolldown-runtime"
   },
   "background.ts": {
-    "file": "assets/background.ts-BjwasyXk.js",
+    "file": "assets/background.ts-qsCalA4a.js",
     "name": "background.ts",
     "src": "background.ts",
     "isEntry": true,
@@ -32,7 +32,7 @@
     ]
   },
   "popup.html": {
-    "file": "assets/popup.html-CAOAVaj4.js",
+    "file": "assets/popup.html-B2SkHV4t.js",
     "name": "popup.html",
     "src": "popup.html",
     "isEntry": true,

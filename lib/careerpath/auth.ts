@@ -6,7 +6,7 @@ import { isServerSupabaseConfigured } from "../supabase/server";
  * Require authenticated user for all app/API access.
  * Supabase is mandatory — no demo fallback.
  */
-export async function requireAppAccess(): Promise<{ ok: false; response: NextResponse } | { ok: true; user: { id: string } }> {
+export async function requireAppAccess(): Promise<{ ok: false; response: NextResponse } | { ok: true; user: { id: string; email?: string } }> {
   if (!isServerSupabaseConfigured) {
     return {
       ok: false,
@@ -35,7 +35,7 @@ export async function requireAppAccess(): Promise<{ ok: false; response: NextRes
     };
   }
 
-  return { ok: true, user: user as { id: string } };
+  return { ok: true, user: user as { id: string; email?: string } };
 }
 
 // Legacy alias

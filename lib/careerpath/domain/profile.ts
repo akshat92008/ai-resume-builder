@@ -52,7 +52,7 @@ export function legacyProfileToCareerProfile(
   const now = new Date().toISOString();
   const source: CareerPathProfile = profile ?? {
     id: createId(),
-    userId: userId || "careerpath-demo-user",
+    userId: userId || "",
     personal: {},
     target: { role: "", industry: "", experienceLevel: "fresher" },
     education: [],

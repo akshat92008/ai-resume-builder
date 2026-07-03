@@ -444,6 +444,7 @@ export async function applyBrainToResume(input: {
         updatedAt: now,
       }
     : createResumeRecord({
+        userId: input.userId,
         mode: input.mode,
         targetRole,
         content,
@@ -452,7 +453,6 @@ export async function applyBrainToResume(input: {
           `${targetRole || "CareerPath"} Resume`,
       });
 
-  nextResume.userId = input.userId;
   nextResume.profile = legacyProfile;
   nextResume.careerProfile = profile;
 

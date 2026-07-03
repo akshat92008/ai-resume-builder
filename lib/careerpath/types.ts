@@ -181,6 +181,7 @@ export const ResumePayloadSchema = z.object({
   id: z.string().optional(),
   title: z.string().optional(),
   targetRole: z.string().optional(),
+  style: z.string().optional(),
   content: ResumeContentSchema.optional().nullable(),
 });
 
@@ -242,6 +243,7 @@ export type CareerPathResume = {
   targetRole: string;
   mode: BuilderMode;
   status: "draft" | "needs_info" | "generated" | "audited" | "final";
+  style?: string;
   content: CareerPathResumeContent;
   profile?: CareerPathProfile;
   careerProfile?: CareerProfile;

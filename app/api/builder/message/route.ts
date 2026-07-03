@@ -172,6 +172,7 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "",
   const draft = await writeResumeAgent(session.profile, session.mode, jobDescription, metadata);
   
   const resume = createResumeRecord({
+    userId: userId || session.userId,
     mode: session.mode,
     targetRole: session.targetRole,
     content: draft,

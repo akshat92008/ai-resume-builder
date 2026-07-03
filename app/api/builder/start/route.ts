@@ -7,6 +7,8 @@ import type { BuilderMode } from "@/lib/careerpath/types";
 import { z } from "zod";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getClientIp } from "@/lib/http/request";
 
 const StartRequestSchema = z.object({
   mode: z.enum(["build", "improve", "tailor"]).optional(),
@@ -19,6 +21,16 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const userId = auth.user.id;
 
+    const ipHash = getClientIp(request);
+    const rateLimit = await checkRateLimit(userId, ipHash, "builder_start", 15);
+    
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
+        { status: 429 },
+      );
+    }
+
     const json = await request.json().catch(() => ({}));
     const parseResult = StartRequestSchema.safeParse(json);
     if (!parseResult.success) {
@@ -30,8 +42,7 @@ export async function POST(request: Request) {
     const body = parseResult.data;
     
     const mode = body.mode ?? "build";
-    const session = createBuilderSession(mode, body.targetRole ?? "");
-    if (userId) session.userId = userId;
+    const session = createBuilderSession(userId, mode, body.targetRole ?? "");
     await saveSession(session);
     const message = session.messages[0]?.content ?? "Paste your details. Messy is fine.";
 

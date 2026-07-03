@@ -88,6 +88,7 @@ export async function POST(request: Request) {
     const tailoredContent = deriveRenderableResume(brain.resume || state);
     const audit = auditResume(tailoredContent, resume.targetRole, body.jobDescription);
     const tailored = createResumeRecord({
+      userId: auth.user.id,
       mode: "tailor",
       targetRole: resume.targetRole,
       content: tailoredContent,
@@ -96,7 +97,6 @@ export async function POST(request: Request) {
       version: resume.version + 1,
       title: `${resume.targetRole} Tailored Resume`,
     });
-    tailored.userId = auth.user.id;
     tailored.careerProfile = resume.careerProfile;
     tailored.tailoring = {
       matchScore: audit.score.roleAlignment,

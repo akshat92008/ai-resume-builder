@@ -13,12 +13,21 @@ describe("CareerPath Agents Utils", () => {
   });
 
   it("should create a builder session with correct initial state", () => {
-    const session = createBuilderSession("build", "Software Engineer");
+    const session = createBuilderSession("test-user-id", "build", "Software Engineer");
     expect(session.id).toBeDefined();
+    expect(session.userId).toBe("test-user-id");
     expect(session.mode).toBe("build");
     expect(session.targetRole).toBe("Software Engineer");
     expect(session.currentStep).toBe("collect_profile");
     expect(session.messages.length).toBe(1);
     expect(session.messages[0].role).toBe("assistant");
+  });
+
+  it("should not contain hardcoded demo user id", () => {
+    const session = createBuilderSession("real-user-123", "build", "Frontend Developer");
+    expect(session.userId).toBe("real-user-123");
+    expect(session.profile.userId).toBe("real-user-123");
+    // Ensure the old hardcoded value is nowhere
+    expect(JSON.stringify(session)).not.toContain("careerpath-demo-user");
   });
 });

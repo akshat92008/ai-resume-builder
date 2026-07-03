@@ -240,7 +240,7 @@ export default function AppWorkspace() {
                 </span>
               </summary>
               <div className="mt-3">
-                <ResumeDocument content={currentResume.content} />
+                <ResumeDocument content={currentResume.content} style={currentResume.style} />
               </div>
             </details>
           </div>

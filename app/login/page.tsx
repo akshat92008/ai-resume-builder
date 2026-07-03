@@ -67,7 +67,12 @@ function LoginForm() {
             <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           <div className="space-y-2">
-            <Label>Password</Label>
+            <div className="flex items-center justify-between">
+              <Label>Password</Label>
+              <Link href="/forgot-password" className="text-sm font-medium text-blue-700 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <Input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           {message && <Alert variant="error">{message}</Alert>}

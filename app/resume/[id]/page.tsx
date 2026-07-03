@@ -243,6 +243,33 @@ export default function ResumeDetailPage() {
           {message && <Alert variant="success">{message}</Alert>}
           {error && <Alert variant="error">{error}</Alert>}
 
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Resume Template</label>
+            <select
+              value={resume.style || "modern"}
+              onChange={async (e) => {
+                const newStyle = e.target.value;
+                setResume((prev) => prev ? { ...prev, style: newStyle } : null);
+                try {
+                  await fetch(`/api/resume/${resume.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ style: newStyle }),
+                  });
+                } catch (err) {
+                  console.error("Failed to update style", err);
+                }
+              }}
+              className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="modern">Modern</option>
+              <option value="professional">Professional</option>
+              <option value="minimal">Minimal</option>
+              <option value="executive">Executive</option>
+              <option value="student">Student</option>
+            </select>
+          </div>
+
           <ScorePanel score={resume.score} audit={resume.audit} />
 
           <Card>
@@ -268,7 +295,10 @@ export default function ResumeDetailPage() {
               {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               Improve Automatically
             </Button>
-            <Button variant="outline" onClick={() => window.print()}>
+            <Button variant="outline" onClick={() => {
+              const url = `/api/pdf?id=${resume.id}`;
+              window.open(url, '_blank');
+            }}>
               <Printer className="mr-2 h-4 w-4" />
               Print / Save as PDF
             </Button>

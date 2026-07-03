@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     const draftAudit = await auditResumeAgent(draft, session.targetRole, "");
 
     const resume = createResumeRecord({
+      userId: auth.user.id,
       mode: session.mode,
       targetRole: session.targetRole,
       content: draft,
@@ -57,13 +58,8 @@ export async function POST(request: Request) {
       audit: draftAudit,
     });
 
-    resume.userId = auth.user.id;
-    resume.audit = draftAudit;
-    resume.score = draftAudit.score;
-
     session.currentStep = "generated";
     session.resumeId = resume.id;
-    session.userId = auth.user.id;
     await saveSession(session);
     await saveServerResume(resume, auth.user.id);
 

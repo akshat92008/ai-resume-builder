@@ -33,6 +33,23 @@ function SettingsContent() {
     }
   };
 
+  const handleManageSubscription = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-portal-session", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        alert(data.error.message);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50/50 overflow-y-auto">
       <div className="flex-none p-6 pb-4 border-b border-slate-200 bg-white sticky top-0 z-10">
@@ -89,10 +106,16 @@ function SettingsContent() {
                     <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Automated Cover Letters</li>
                     <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Priority Support</li>
                   </ul>
-                  <Button onClick={handleUpgrade} disabled={loading} className="w-full sm:w-auto">
-                    {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                    Upgrade to Pro
-                  </Button>
+                  <div className="flex gap-3 flex-col sm:flex-row">
+                    <Button onClick={handleUpgrade} disabled={loading} className="w-full sm:w-auto">
+                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      Upgrade to Pro
+                    </Button>
+                    <Button onClick={handleManageSubscription} disabled={loading} variant="outline" className="w-full sm:w-auto">
+                      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      Manage Subscription
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

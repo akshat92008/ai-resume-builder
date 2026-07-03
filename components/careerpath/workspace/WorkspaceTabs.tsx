@@ -97,7 +97,7 @@ export function ResumeTab({ resume }: { resume: CareerPathResume | null }) {
         </div>
       </div>
       <ProofStrip resume={resume} />
-      <ResumeDocument content={resume.content} />
+      <ResumeDocument content={resume.content} style={resume.style} />
     </div>
   );
 }

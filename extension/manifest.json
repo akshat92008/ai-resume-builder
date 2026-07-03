@@ -10,7 +10,9 @@
   "host_permissions": [
     "https://*.linkedin.com/*",
     "https://*.greenhouse.io/*",
-    "https://*.lever.co/*"
+    "https://*.lever.co/*",
+    "https://app.careeros.ai/*",
+    "http://localhost:3000/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -25,12 +27,12 @@
     }
   },
   "background": {
-    "service_worker": "dist/background.js"
+    "service_worker": "background.ts"
   },
   "content_scripts": [
     {
       "matches": ["https://*.linkedin.com/*", "https://*.greenhouse.io/*", "https://*.lever.co/*"],
-      "js": ["dist/contentScript.js"]
+      "js": ["contentScript.ts"]
     }
   ]
 }
