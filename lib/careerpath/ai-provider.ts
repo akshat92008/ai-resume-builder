@@ -1,4 +1,5 @@
-import { getAiClient, getModel } from "./llm";
+import { getModel } from "./llm";
+import { generateText } from "ai";
 
 export interface AIProvider {
   generateJSON<T>(params: {
@@ -19,19 +20,14 @@ export class NvidiaNimProvider implements AIProvider {
     prompt: string;
     schemaDescription?: string;
   }): Promise<T> {
-    const client = getAiClient();
     const systemPrompt = `${params.system}\n\nIMPORTANT: Return valid JSON ONLY. Do not include markdown formatting or backticks.\n${params.schemaDescription ? `\nJSON Schema:\n${params.schemaDescription}` : ""}`;
     
-    const response = await client.chat.completions.create({
+    const { text } = await generateText({
       model: getModel(),
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: params.prompt },
-      ],
+      system: systemPrompt,
+      prompt: params.prompt,
     });
     
-    const text = response.choices[0]?.message?.content || "{}";
     const cleaned = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
     
     try {
@@ -43,15 +39,12 @@ export class NvidiaNimProvider implements AIProvider {
   }
 
   async generateText(params: { system: string; prompt: string }): Promise<string> {
-    const client = getAiClient();
-    const response = await client.chat.completions.create({
+    const { text } = await generateText({
       model: getModel(),
-      messages: [
-        { role: "system", content: params.system },
-        { role: "user", content: params.prompt },
-      ],
+      system: params.system,
+      prompt: params.prompt,
     });
-    return response.choices[0]?.message?.content || "";
+    return text;
   }
 }
 

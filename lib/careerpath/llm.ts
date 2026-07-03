@@ -1,41 +1,31 @@
-import OpenAI from "openai";
 import { z } from "zod";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { generateObject, LanguageModel } from "ai";
 
-let _aiClient: OpenAI | null = null;
-
-/**
- * Lazy-initialized AI client. Only instantiated at runtime when called,
- * never during build-time module evaluation.
- */
-export function getAiClient(): OpenAI {
-  if (_aiClient) return _aiClient;
-
-  const provider = process.env.AI_PROVIDER || "nvidia";
-
-  if (provider === "nvidia") {
-    const apiKey = process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY;
-    const baseURL = process.env.NVIDIA_NIM_BASE_URL || "https://integrate.api.nvidia.com/v1";
-
-    if (!apiKey) {
-      throw new Error(
-        "NVIDIA_NIM_API_KEY (or NVIDIA_API_KEY) is required for CareerPath AI generation. " +
-        "Set it in your .env.local file."
-      );
-    }
-
-    _aiClient = new OpenAI({ apiKey, baseURL });
-    return _aiClient;
+export function getModel(fast?: boolean): LanguageModel {
+  const nvidia = createOpenAI({
+    baseURL: process.env.NVIDIA_NIM_BASE_URL || "https://integrate.api.nvidia.com/v1",
+    apiKey: process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY || "",
+  });
+  
+  if (fast) {
+    const modelName = process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
+    return nvidia(modelName);
   }
-
-  throw new Error(`Unsupported AI_PROVIDER: ${provider}`);
+  
+  const modelName = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
+  return nvidia(modelName);
 }
 
-/** Model to use for all CareerPath AI agent calls. */
-export function getModel(fast?: boolean): string {
-  if (fast) {
-    return process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
+export function getFallbackModel(fast?: boolean): LanguageModel {
+  if (process.env.ANTHROPIC_API_KEY) {
+    const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    return anthropic(fast ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620");
   }
-  return process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
+  
+  const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
+  return openai(fast ? "gpt-4o-mini" : "gpt-4o");
 }
 
 export const ProfileSchema = z.object({

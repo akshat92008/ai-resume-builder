@@ -1,5 +1,27 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { isServerSupabaseConfigured } from "@/lib/supabase/server";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+});
+
+const ratelimiters = new Map<string, Ratelimit>();
+
+function getRatelimiter(eventType: string, maxLimit: number) {
+  const key = `${eventType}_${maxLimit}`;
+  if (!ratelimiters.has(key)) {
+    ratelimiters.set(
+      key,
+      new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(maxLimit, "24 h"),
+        analytics: true,
+      })
+    );
+  }
+  return ratelimiters.get(key)!;
+}
 
 export async function checkRateLimit(
   userId: string | null,
@@ -7,63 +29,29 @@ export async function checkRateLimit(
   eventType: string,
   maxLimit: number
 ): Promise<{ allowed: boolean; remaining: number; error?: string }> {
-  if (!isServerSupabaseConfigured) {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     return { allowed: true, remaining: maxLimit };
-  }
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    return { allowed: false, remaining: 0, error: "RATE_LIMIT_CONFIG_MISSING" };
   }
 
   const salt = process.env.RATE_LIMIT_SALT || "fallback-production-salt-secure-hash";
   
-  // Use Web Crypto API for Edge compatibility
   const encoder = new TextEncoder();
   const data = encoder.encode(ipHash + salt);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const finalIpHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-  // Count events for the last 24 hours
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  
-  let query = admin
-    .from("usage_events")
-    .select("id", { count: "exact" })
-    .eq("event_type", eventType)
-    .gte("created_at", yesterday);
-    
-  if (userId) {
-    query = query.eq("user_id", userId);
-  } else {
-    query = query.eq("ip_hash", finalIpHash).is("user_id", null);
-  }
+  const identifier = userId || finalIpHash;
+  const ratelimiter = getRatelimiter(eventType, maxLimit);
 
-  const { count, error } = await query;
-  if (error) {
-    console.error("[rate-limit] Error checking rate limit:", error);
+  try {
+    const { success, remaining } = await ratelimiter.limit(identifier);
+    return { allowed: success, remaining };
+  } catch (error) {
+    console.error("[rate-limit] Upstash Redis error:", error);
     if (process.env.NODE_ENV === "production") {
       return { allowed: false, remaining: 0, error: "RATE_LIMIT_CHECK_FAILED" };
     }
-    return { allowed: true, remaining: maxLimit }; // Fail open only in dev
+    return { allowed: true, remaining: maxLimit };
   }
-
-  const currentCount = count || 0;
-  if (currentCount >= maxLimit) {
-    return { allowed: false, remaining: 0 };
-  }
-
-  // Record this usage event
-  const { error: insertError } = await admin.from("usage_events").insert({
-    user_id: userId || null,
-    ip_hash: finalIpHash,
-    event_type: eventType,
-  });
-
-  if (insertError && process.env.NODE_ENV === "production") {
-    return { allowed: false, remaining: 0, error: "RATE_LIMIT_RECORD_FAILED" };
-  }
-
-  return { allowed: true, remaining: maxLimit - currentCount - 1 };
 }

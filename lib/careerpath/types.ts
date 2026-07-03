@@ -671,6 +671,16 @@ export type JobApplication = {
   appliedAt?: string;
   followUpAt?: string;
   notes?: string;
+  stage?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  currency?: string;
+  bonus?: number;
+  equity?: number;
+  benefits?: string[];
+  location?: string;
+  workType?: string;
+  offerDeadline?: string;
   outcome?: {
     gotReply?: boolean;
     gotInterview?: boolean;

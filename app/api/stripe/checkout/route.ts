@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       billing_address_collection: "auto",
-      customer_email: user.email,
+      customer_email: (user as any).email,
       line_items: [
         {
           price: PRO_PRICE_ID,

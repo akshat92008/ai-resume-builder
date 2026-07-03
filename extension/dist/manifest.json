@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "CareerOS Job Clipper",
+  "version": "1.0.0",
+  "description": "Clip jobs and auto-fill applications directly from CareerOS",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "service-worker-loader.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "assets/contentScript.ts-loader-DR8DDk8A.js"
+      ],
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.linkedin.com/*"
+      ],
+      "resources": [
+        "assets/rolldown-runtime-D9-fqq9M.js",
+        "assets/contentScript.ts-Cl8CRzS5.js"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
+}

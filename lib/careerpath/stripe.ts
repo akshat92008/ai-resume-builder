@@ -9,7 +9,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getSupabaseUser } from "./db";
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-12-18.acacia", // Adjust to your preferred API version
+  apiVersion: "2026-06-24.dahlia", // Adjust to your preferred API version
   appInfo: {
     name: "CareerPath AI",
     version: "1.0.0",
