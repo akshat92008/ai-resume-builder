@@ -3,10 +3,12 @@ import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { checkPromptInjection } from "@/lib/careerpath/guardrails";
-import { getServerResume } from "@/lib/careerpath/db";
+import { getServerResume, saveResumeMessage } from "@/lib/careerpath/db";
 import { routeCareerCommand } from "@/lib/careerpath/career-os";
 import { inferIntentLLM } from "@/lib/careerpath/orchestrator";
 import { inngest } from "@/inngest/client";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import type { AgentIntent } from "@/lib/careerpath/types";
 
 export const runtime = "nodejs";
@@ -32,8 +34,7 @@ export async function POST(request: Request) {
     }
     const { message, resumeId } = parseResult.data;
 
-    // Rate limit
-    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const ipHash = getClientIp(request);
     const maxLimit = userId ? 15 : 3; // Stricter quotas
     const rateLimit = await checkRateLimit(userId, ipHash, "resume_agent", maxLimit);
     if (!rateLimit.allowed) {
@@ -84,7 +85,15 @@ export async function POST(request: Request) {
       intent = result.intent;
     }
 
-    // Trigger Inngest background job
+    const queuedAt = new Date().toISOString();
+    await saveResumeMessage({
+      userId,
+      resumeId: resumeId || null,
+      role: "user",
+      content: message,
+      intent,
+    });
+
     const job = await inngest.send({
       name: "resume/process.intent",
       data: {
@@ -99,11 +108,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       jobId: job.ids[0],
-      status: "queued"
+      queuedAt,
+      status: "queued",
+      assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
     });
 
   } catch (err) {
-    console.error("[resume-agent] Error:", err);
+    logger.error("[resume-agent] Error", { error: err });
     return NextResponse.json(
       {
         error: {

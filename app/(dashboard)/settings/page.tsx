@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ArrowLeft, CreditCard, Shield, User, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-export default function SettingsPage() {
+function SettingsContent() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -118,6 +118,22 @@ export default function SettingsPage() {
 
         </div>
       </div>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsFallback />}>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+function SettingsFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50/50">
+      <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
     </div>
   );
 }

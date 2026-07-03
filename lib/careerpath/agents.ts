@@ -12,13 +12,15 @@ import type {
   GapQuestion,
 } from "./types";
 
+export * from "./agents/index";
+
 const USER_ID = "careerpath-demo-user";
 
 const SKILL_BANK = {
-  programming: ["JavaScript", "TypeScript", "Python", "Java", "C++", "C", "HTML", "CSS", "SQL"],
+  programming: ["JavaScript", "TypeScript", "Python", "Java", "C++", "C", "Go", "HTML", "CSS", "SQL"],
   frameworks: ["React", "Next.js", "Node.js", "Express", "Tailwind CSS", "Bootstrap", "Django", "Flask", "Supabase", "Firebase"],
   tools: ["Git", "GitHub", "VS Code", "Figma", "Vercel", "Netlify", "Postman", "Docker"],
-  databases: ["PostgreSQL", "MySQL", "MongoDB", "SQLite", "Supabase"],
+  databases: ["PostgreSQL", "MySQL", "MongoDB", "SQLite", "Supabase", "Redis"],
   aiTools: ["OpenAI", "ChatGPT", "NVIDIA NIM", "LangChain", "Gemini", "Claude"],
   softSkills: ["Communication", "Problem Solving", "Teamwork", "Leadership", "Adaptability"],
 };
@@ -488,13 +490,17 @@ function extractEducation(text: string, profile: CareerPathProfile) {
     : lower.includes("b.tech") || lower.includes("btech")
       ? "B.Tech"
       : lower.includes("b.sc") || lower.includes("bsc")
-        ? "B.Sc"
+      ? "B.Sc"
+      : lower.includes("bs ") || lower.includes("b.s") || lower.includes("bachelor of science")
+        ? "BS"
         : lower.includes("mca")
           ? "MCA"
           : lower.includes("diploma")
             ? "Diploma"
             : "";
-  const institution = text.match(/\b(?:college|school|university|institution)\s*[:\-]?\s*([a-z0-9 &.'-]{3,80})/i)?.[1]?.trim() ?? "";
+  const institution = text.match(/\b(?:college|school|university|institution)\s*[:\-]?\s*([a-z0-9 &.'-]{3,80})/i)?.[1]?.trim()
+    ?? text.match(/\bfrom\s+([a-z0-9 &.'-]{3,80}\s+(?:University|College|School|Institute))\b/i)?.[1]?.trim()
+    ?? "";
   const year = text.match(/\b(20[2-4]\d|19[9]\d)\b/)?.[1] ?? "";
   const score = text.match(/\b(?:cgpa|gpa|percentage|score|marks)\s*[:\-]?\s*([0-9.]+%?|[0-9.]+\/10)/i)?.[1] ?? "";
   if (degree || institution) {
@@ -563,13 +569,17 @@ function extractProjects(text: string, profile: CareerPathProfile) {
 
 function extractExperience(text: string, profile: CareerPathProfile) {
   const internship = text.match(/\b(?:intern|internship)\b/i);
-  const company = text.match(/\b(?:at|company)\s+([a-z0-9 &.'-]{2,60})/i)?.[1]?.trim() ?? "";
+  const role = text.match(/\bas\s+(?:a|an)?\s*([a-z0-9 &.'+-]{2,80}?)(?:\.|,|\n|$)/i)?.[1]?.trim() ?? "";
+  const company = text.match(/\b(?:worked\s+)?at\s+([a-z0-9 &.'-]{2,80}?)(?:\s+from|\s+as|,|\.|\n|$)/i)?.[1]?.trim()
+    ?? text.match(/\bcompany\s*[:\-]?\s*([a-z0-9 &.'-]{2,60})/i)?.[1]?.trim()
+    ?? "";
+  const dates = text.match(/\bfrom\s+([a-z]{3,9}\s+20\d{2}|20\d{2})\s+to\s+([a-z]{3,9}\s+20\d{2}|20\d{2}|present|current)\b/i);
   if (internship || company) {
     upsertProfileItem(profile.experience, {
       company: titleCase(company),
-      role: internship ? "Intern" : "",
-      startDate: "",
-      endDate: "",
+      role: internship ? "Intern" : titleCase(role),
+      startDate: dates?.[1] || "",
+      endDate: dates?.[2] || "",
       responsibilities: extractFeatures(text),
       achievements: extractImpact(text) ? [extractImpact(text)] : [],
     }, (item) => `${item.company}-${item.role}`);

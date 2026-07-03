@@ -8,6 +8,8 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 import { handleResumeMessage } from "@/lib/resume/agent";
 import { deriveRenderableResume } from "@/lib/resume/render";
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const ipHash = getClientIp(request);
     const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_improve", 5);
     
     if (!rateLimit.allowed) {
@@ -96,7 +98,7 @@ export async function POST(request: Request) {
 
           controller.enqueue(encoder.encode(JSON.stringify({ resumeId: updated.id, content, score: audit.score, audit, resume: updated })));
         } catch (err) {
-          console.error("[api/resume/improve] Error in stream:", err);
+          logger.error("[api/resume/improve] Error in stream", { error: err });
           controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "IMPROVE_FAILED", message: "Unable to improve resume. Try again.", recoverable: true } })));
         } finally {
           clearInterval(keepAlive);
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
 
     return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    console.error("[api/resume/improve] Error:", err);
+    logger.error("[api/resume/improve] Error", { error: err });
     return NextResponse.json(
       { error: { code: "IMPROVE_FAILED", message: "Unable to improve resume. Try again.", recoverable: true } },
       { status: 500 },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Plus, MoreHorizontal, Calendar, Building, MapPin, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AddJobModal } from "@/components/careerpath/AddJobModal";
@@ -21,7 +21,14 @@ export default function JobTrackerPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [draggedJob, setDraggedJob] = useState<string | null>(null);
 
-  const fetchJobs = async () => {
+  /**
+   * Track in-flight mutations to prevent concurrent drag-and-drop race conditions.
+   * When a mutation is in-flight, we disable dragging to avoid state corruption
+   * if the first PATCH fails while a second drag is in progress.
+   */
+  const inflightMutationRef = useRef<string | null>(null);
+
+  const fetchJobs = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch("/api/jobs");
@@ -34,16 +41,23 @@ export default function JobTrackerPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchJobs();
-  }, []);
+  }, [fetchJobs]);
 
   const updateJobStatus = async (id: string, newStatus: string) => {
+    // Block concurrent mutations to prevent state corruption
+    if (inflightMutationRef.current) return;
+    inflightMutationRef.current = id;
+
+    // Snapshot current state for safe rollback
+    const snapshot = [...jobs];
+
     // Optimistic update
-    setJobs((prev) => 
-      prev.map((job) => (job.id === id ? { ...job, status: newStatus as any } : job))
+    setJobs((prev) =>
+      prev.map((job) => (job.id === id ? { ...job, status: newStatus as JobApplication["status"] } : job))
     );
 
     try {
@@ -57,12 +71,19 @@ export default function JobTrackerPage() {
       }
     } catch (err) {
       console.error(err);
-      // Revert on failure
-      fetchJobs(); 
+      // Revert to snapshot instead of re-fetching to avoid race conditions
+      setJobs(snapshot);
+    } finally {
+      inflightMutationRef.current = null;
     }
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
+    // Prevent drag if a mutation is in-flight
+    if (inflightMutationRef.current) {
+      e.preventDefault();
+      return;
+    }
     setDraggedJob(id);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -115,8 +136,8 @@ export default function JobTrackerPage() {
           {COLUMNS.map((col) => {
             const colJobs = jobs.filter((j) => j.status === col.id);
             return (
-              <div 
-                key={col.id} 
+              <div
+                key={col.id}
                 className="w-80 flex-shrink-0 flex flex-col h-full max-h-full"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id)}
@@ -127,14 +148,18 @@ export default function JobTrackerPage() {
                     {colJobs.length}
                   </span>
                 </div>
-                
+
                 <div className={`flex-1 overflow-y-auto rounded-xl p-3 ${col.color} border border-slate-200/60 shadow-inner min-h-[150px] flex flex-col gap-3`}>
                   {colJobs.map((job) => (
-                    <div 
-                      key={job.id} 
-                      draggable
+                    <div
+                      key={job.id}
+                      draggable={!inflightMutationRef.current}
                       onDragStart={(e) => handleDragStart(e, job.id)}
-                      className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group"
+                      className={`bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group ${
+                        inflightMutationRef.current
+                          ? "cursor-not-allowed opacity-75"
+                          : "cursor-grab active:cursor-grabbing"
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-medium text-slate-900 line-clamp-1">{job.role}</h4>
@@ -142,26 +167,26 @@ export default function JobTrackerPage() {
                           <MoreHorizontal className="h-4 w-4" />
                         </Link>
                       </div>
-                      
+
                       <div className="flex items-center text-sm text-slate-600 mb-3">
                         <Building className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
                         <span className="line-clamp-1">{job.company}</span>
                       </div>
-                      
+
                       {job.location && (
                         <div className="flex items-center text-xs text-slate-500 mb-2">
                           <MapPin className="h-3 w-3 mr-1.5 flex-shrink-0" />
                           <span className="line-clamp-1">{job.location} {job.workType ? `(${job.workType})` : ''}</span>
                         </div>
                       )}
-                      
+
                       {job.appliedAt && (
                         <div className="flex items-center text-xs text-slate-500">
                           <Calendar className="h-3 w-3 mr-1.5 flex-shrink-0" />
                           <span>Applied {new Date(job.appliedAt).toLocaleDateString()}</span>
                         </div>
                       )}
-                      
+
                       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                         {job.jobUrl ? (
                           <a href={job.jobUrl} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center font-medium">
@@ -170,7 +195,7 @@ export default function JobTrackerPage() {
                         ) : (
                           <span className="text-xs text-slate-400">No URL</span>
                         )}
-                        
+
                         {job.stage && (
                           <span className="text-[10px] uppercase tracking-wider font-semibold bg-indigo-50 text-indigo-700 px-2 py-1 rounded">
                             {job.stage}
@@ -179,7 +204,7 @@ export default function JobTrackerPage() {
                       </div>
                     </div>
                   ))}
-                  
+
                   {colJobs.length === 0 && (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-200 rounded-lg">
                       <p className="text-sm text-slate-400">Drag jobs here</p>
@@ -192,10 +217,10 @@ export default function JobTrackerPage() {
         </div>
       </div>
 
-      <AddJobModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        onAdded={fetchJobs} 
+      <AddJobModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onAdded={fetchJobs}
       />
     </div>
   );

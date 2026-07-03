@@ -3,11 +3,23 @@ import { requireAppAccess } from "@/lib/careerpath/auth";
 import { listJobApplications } from "@/lib/careerpath/db-jobs";
 import { getSupabaseUser } from "@/lib/careerpath/db";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 
 export async function GET(request: Request) {
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
+
+    const ipHash = getClientIp(request);
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "analytics_read", 30);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many requests. Please try again later.", recoverable: true } },
+        { status: 429 },
+      );
+    }
 
     const supabase = await createServerSupabaseClient();
     const user = auth.user;
@@ -74,7 +86,7 @@ export async function GET(request: Request) {
       }
     });
   } catch (error: any) {
-    console.error("[api/analytics] Error fetching analytics:", error);
+    logger.error("[api/analytics] Error fetching analytics", { error });
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to load analytics" } },
       { status: 500 }

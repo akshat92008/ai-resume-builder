@@ -6,6 +6,7 @@
 
 import { createServerSupabaseClient, isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { logger } from "@/lib/observability/logger";
 import type { BuilderSession, CareerPathResume, ResumeMessage, ResumeVersion } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ export async function saveSession(session: BuilderSession): Promise<void> {
 
   const { error } = await client.from("builder_sessions").upsert(payload, { onConflict: "id" });
   if (error) {
-    console.error("[db/saveSession] Error saving session to Supabase:", error);
+    logger.error("[db/saveSession] Error saving session to Supabase", { error });
     throw new Error(`Failed to save session: ${error.message}`);
   }
 }
@@ -118,7 +119,7 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
 
   if (error) {
     if (error.code === 'PGRST204' || error.message?.includes('application_pack_json') || error.message?.includes('career_profile_json')) {
-      console.warn("[db/saveServerResume] Schema outdated. Retrying without new columns.");
+      logger.warn("[db/saveServerResume] Schema outdated. Retrying without new columns.");
       const { 
         profile_json,
         career_profile_json,
@@ -130,12 +131,12 @@ export async function saveServerResume(resume: CareerPathResume): Promise<void> 
       } = payload;
       const { error: fallbackError } = await client.from("resumes").upsert(fallbackPayload, { onConflict: "id" });
       if (fallbackError) {
-        console.error("[db/saveServerResume] Error saving resume (fallback):", fallbackError);
+        logger.error("[db/saveServerResume] Error saving resume (fallback)", { error: fallbackError });
         throw new Error(`Failed to save resume: ${fallbackError.message}`);
       }
       return;
     }
-    console.error("[db/saveServerResume] Error saving resume to Supabase:", error);
+    logger.error("[db/saveServerResume] Error saving resume to Supabase", { error });
     throw new Error(`Failed to save resume: ${error.message}`);
   }
 }
@@ -228,7 +229,7 @@ export async function saveResumeMessage(msg: {
   const admin = createSupabaseAdminClient();
   const client = supabase || admin;
   if (!client) {
-    console.error("[db/saveResumeMessage] DB client not available");
+    logger.error("[db/saveResumeMessage] DB client not available");
     return;
   }
 
@@ -241,7 +242,7 @@ export async function saveResumeMessage(msg: {
   });
 
   if (error) {
-    console.error("[db/saveResumeMessage] Error:", error);
+    logger.error("[db/saveResumeMessage] Error", { error });
   }
 }
 
@@ -291,7 +292,7 @@ export async function getLatestMessagesForUser(
     .limit(200);
 
   if (resumeId) {
-    query = query.eq("resume_id", resumeId);
+    query = query.or(`resume_id.eq.${resumeId},resume_id.is.null`);
   }
 
   const { data, error } = await query;
@@ -324,7 +325,7 @@ export async function saveResumeVersion(version: {
   const admin = createSupabaseAdminClient();
   const client = supabase || admin;
   if (!client) {
-    console.error("[db/saveResumeVersion] DB client not available");
+    logger.error("[db/saveResumeVersion] DB client not available");
     return;
   }
 
@@ -337,7 +338,7 @@ export async function saveResumeVersion(version: {
   });
 
   if (error) {
-    console.error("[db/saveResumeVersion] Error:", error);
+    logger.error("[db/saveResumeVersion] Error", { error });
   }
 }
 
@@ -380,7 +381,7 @@ export async function saveAgentRun(run: {
     });
 
   if (insertError) {
-    console.error("[agent_runs] insert failed", insertError);
+    logger.error("[agent_runs] insert failed", { error: insertError });
   }
 }
 

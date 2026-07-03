@@ -9,6 +9,8 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 import { handleResumeMessage } from "@/lib/resume/agent";
 import { deriveRenderableResume } from "@/lib/resume/render";
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const ipHash = getClientIp(request);
     const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_tailor", 3);
     
     if (!rateLimit.allowed) {
@@ -120,7 +122,7 @@ export async function POST(request: Request) {
             resume: tailored,
           })));
         } catch (err) {
-          console.error("[api/resume/tailor] Error in stream:", err);
+          logger.error("[api/resume/tailor] Error in stream", { error: err });
           controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "TAILOR_FAILED", message: "Unable to tailor resume. Try again.", recoverable: true } })));
         } finally {
           clearInterval(keepAlive);
@@ -131,7 +133,7 @@ export async function POST(request: Request) {
 
     return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    console.error("[api/resume/tailor] Error:", err);
+    logger.error("[api/resume/tailor] Error", { error: err });
     return NextResponse.json(
       { error: { code: "TAILOR_FAILED", message: "Unable to tailor resume. Try again.", recoverable: true } },
       { status: 500 },

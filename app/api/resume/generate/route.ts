@@ -5,6 +5,8 @@ import { createResumeRecord } from "@/lib/careerpath/agents";
 import { writeResumeAgent, auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/lib/careerpath/db";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 
 import { requireAiAccess } from "@/lib/careerpath/auth";
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
     }
     const body = parseResult.data;
 
-    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const ipHash = getClientIp(request);
     const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_generate", 5);
     
     if (!rateLimit.allowed) {
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         const keepAlive = setInterval(() => {
-          controller.enqueue(encoder.encode(" "));
+          controller.enqueue(encoder.encode("\\n"));
         }, 5000);
 
         try {
@@ -77,7 +79,7 @@ export async function POST(request: Request) {
             resume,
           })));
         } catch (err) {
-          console.error("[builder/generate] Error in stream:", err);
+          logger.error("[builder/generate] Error in stream", { error: err });
           controller.enqueue(encoder.encode(JSON.stringify({ error: { code: "GENERATE_FAILED", message: "Unable to generate resume.", recoverable: true } })));
         } finally {
           clearInterval(keepAlive);
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
 
     return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    console.error("[builder/generate] Error:", err);
+    logger.error("[builder/generate] Error", { error: err });
     return NextResponse.json(
       { error: { code: "GENERATE_FAILED", message: "Unable to generate resume.", recoverable: true } },
       { status: 500 },

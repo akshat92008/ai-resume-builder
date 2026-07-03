@@ -4,6 +4,9 @@ import { generateOutreachAgent } from "@/lib/careerpath/orchestrator";
 import { getJobApplication } from "@/lib/careerpath/db-jobs";
 import { getServerResume } from "@/lib/careerpath/db";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
+import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import type { CareerProfile } from "@/lib/careerpath/types";
 
 export const maxDuration = 60; // Allow more time for AI generation
@@ -12,6 +15,15 @@ export async function POST(request: Request) {
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
+
+    const ipHash = getClientIp(request);
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "outreach_generate", 5);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded. Please try again later.", recoverable: true } },
+        { status: 429 },
+      );
+    }
 
     const json = await request.json();
     const { jobId, resumeId, jobDescription } = json;
@@ -65,7 +77,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ outreachPack });
   } catch (error: any) {
-    console.error("[api/outreach] Error generating outreach pack:", error);
+    logger.error("[api/outreach] Error generating outreach pack", { error });
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to generate outreach materials" } },
       { status: 500 }

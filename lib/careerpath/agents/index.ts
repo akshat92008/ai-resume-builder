@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PROMPTS } from "./prompts";
+import { PROMPTS } from "../prompts";
 import { zodResponseFormat } from "openai/helpers/zod";
 import {
   getModel,
@@ -16,10 +16,10 @@ import {
   ATSParseSchema,
   OutreachPackSchema,
   getFallbackModel,
-} from "./llm";
+} from "../llm";
 import { generateObject, generateText } from "ai";
-import { detectGaps } from "./agents";
-import { saveAgentRun } from "./db";
+import { saveAgentRun } from "../db";
+import { logger } from "@/lib/observability/logger";
 import type {
   CareerPathProfile,
   CareerProfile,
@@ -35,7 +35,8 @@ import type {
   MultiPersonaResult,
   ATSParseResult,
   OutreachPack,
-} from "./types";
+  CareerWorkspaceState,
+} from "../types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,7 +79,7 @@ async function callWithValidation<T>(
         agentName,
         status: "completed",
         latencyMs,
-        model: (model as any).modelId || (model as any).id || "unknown",
+        model: getModelName(model),
         sessionId: metadata?.sessionId,
         resumeId: metadata?.resumeId,
         userId: metadata?.userId,
@@ -89,7 +90,7 @@ async function callWithValidation<T>(
       return object as T;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
-      console.warn(`[orchestrator] Agent ${agentName} attempt ${attempt + 1} failed:`, lastError);
+      logger.warn("[orchestrator] Agent attempt failed", { agentName, attempt: attempt + 1, error: lastError });
     }
   }
 
@@ -99,7 +100,7 @@ async function callWithValidation<T>(
     status: "failed",
     error: lastError,
     latencyMs: Date.now() - startMs,
-    model: (modelsToTry[modelsToTry.length - 1] as any).modelId || "unknown",
+    model: getModelName(modelsToTry[modelsToTry.length - 1]),
     sessionId: metadata?.sessionId,
     resumeId: metadata?.resumeId,
     userId: metadata?.userId,
@@ -108,6 +109,47 @@ async function callWithValidation<T>(
 
   if (fallbackFn) return fallbackFn();
   throw new Error(`${agentName} failed after ${modelsToTry.length} attempts: ${lastError}`);
+}
+
+function getModelName(model: unknown) {
+  if (typeof model === "object" && model) {
+    const candidate = model as { modelId?: unknown; id?: unknown };
+    if (typeof candidate.modelId === "string") return candidate.modelId;
+    if (typeof candidate.id === "string") return candidate.id;
+  }
+
+  return "unknown";
+}
+
+function fallbackGapReport(profile: CareerPathProfile): GapReport {
+  const criticalMissing: string[] = [];
+  const questionsToAsk: GapReport["questionsToAsk"] = [];
+
+  if (!profile.target?.role) {
+    criticalMissing.push("target role");
+    questionsToAsk.push({
+      question: "What role are you targeting?",
+      reason: "A target role anchors the resume summary, skills order, and project framing.",
+      priority: "critical",
+    });
+  }
+
+  if (!profile.education.length && !profile.projects.length && !profile.experience.length) {
+    criticalMissing.push("career evidence");
+    questionsToAsk.push({
+      question: "Can you share one project, education entry, internship, job, or achievement?",
+      reason: "The resume needs at least one evidence section before generation.",
+      priority: "critical",
+    });
+  }
+
+  return {
+    readyToGenerate: criticalMissing.length === 0,
+    criticalMissing,
+    recommendedMissing: [],
+    resumeRisk: criticalMissing.length ? ["Insufficient evidence to generate a truthful resume."] : [],
+    questionsToAsk,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +210,7 @@ export async function detectGapsAgent(
     ],
     "gapReport",
     GapReportSchema,
-    () => detectGaps(profile, mode),
+    () => fallbackGapReport(profile),
     { ...metadata, fast: true, inputJson: { profile, mode } }
   );
 }
@@ -319,7 +361,7 @@ export async function inferIntentLLM(
   message: string,
   hasExistingResume: boolean,
   metadata?: { userId?: string; resumeId?: string }
-): Promise<{ intent: import("./types").AgentIntent; confidence: number }> {
+): Promise<{ intent: import("../types").AgentIntent; confidence: number }> {
   try {
     const result = await callWithValidation<z.infer<typeof IntentSchema>>(
       "IntentInferenceAgent",
@@ -349,7 +391,7 @@ export async function inferIntentLLM(
 export function inferIntentKeyword(
   message: string,
   hasExistingResume: boolean
-): { intent: import("./types").AgentIntent; confidence: number } {
+): { intent: import("../types").AgentIntent; confidence: number } {
   const text = message.toLowerCase();
 
   // If the message is long (e.g. pasting career details or job description),
@@ -631,7 +673,7 @@ export async function generateOutreachAgent(
  */
 export async function answerCareerQuestionAgent(
   question: string,
-  workspace: any,
+  workspace: CareerWorkspaceState,
   metadata?: { userId?: string; sessionId?: string; resumeId?: string; fast?: boolean }
 ): Promise<string> {
   const startMs = Date.now();
@@ -649,7 +691,7 @@ export async function answerCareerQuestionAgent(
       agentName: "answerCareerQuestionAgent",
       status: "completed",
       latencyMs,
-      model: (model as any).modelId || "unknown",
+      model: getModelName(model),
       sessionId: metadata?.sessionId,
       resumeId: metadata?.resumeId,
       userId: metadata?.userId,
@@ -667,7 +709,7 @@ export async function answerCareerQuestionAgent(
       status: "failed",
       error: errorMsg,
       latencyMs,
-      model: (model as any).modelId || "unknown",
+      model: getModelName(model),
       sessionId: metadata?.sessionId,
       resumeId: metadata?.resumeId,
       userId: metadata?.userId,

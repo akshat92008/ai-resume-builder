@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { listJobApplications, saveJobApplication } from "@/lib/careerpath/db-jobs";
 import { createId } from "@/lib/careerpath/domain/utils";
+import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import type { JobApplication } from "@/lib/careerpath/types";
 
 export async function GET(request: Request) {
@@ -11,10 +14,10 @@ export async function GET(request: Request) {
 
     const jobs = await listJobApplications(auth.user.id);
     return NextResponse.json({ jobs });
-  } catch (error: any) {
-    console.error("[api/jobs] Error listing jobs:", error);
+  } catch (error: unknown) {
+    logger.error("[api/jobs] Error listing jobs", { error });
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to load jobs" } },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to load jobs" } },
       { status: 500 }
     );
   }
@@ -24,6 +27,15 @@ export async function POST(request: Request) {
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
+
+    const ipHash = getClientIp(request);
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "jobs_create", 20);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many requests. Please try again later.", recoverable: true } },
+        { status: 429 },
+      );
+    }
 
     const json = await request.json();
     const { company, role, jobUrl, notes, status = "saved" } = json;
@@ -51,10 +63,10 @@ export async function POST(request: Request) {
 
     await saveJobApplication(newJob);
     return NextResponse.json({ job: newJob });
-  } catch (error: any) {
-    console.error("[api/jobs] Error creating job:", error);
+  } catch (error: unknown) {
+    logger.error("[api/jobs] Error creating job", { error });
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to save job" } },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to save job" } },
       { status: 500 }
     );
   }

@@ -1,33 +1,40 @@
 import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getJobApplication, saveJobApplication, deleteJobApplication } from "@/lib/careerpath/db-jobs";
+import { logger } from "@/lib/observability/logger";
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+export async function GET(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const job = await getJobApplication(params.id);
+    const job = await getJobApplication(id);
     if (!job || job.userId !== auth.user.id) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
 
     return NextResponse.json({ job });
-  } catch (error: any) {
-    console.error(`[api/jobs/${params.id}] GET error:`, error);
+  } catch (error: unknown) {
+    logger.error("[api/jobs/[id]] GET error", { error, jobId: id });
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to load job" } },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to load job" } },
       { status: 500 }
     );
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const job = await getJobApplication(params.id);
+    const job = await getJobApplication(id);
     if (!job || job.userId !== auth.user.id) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
@@ -50,31 +57,32 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     await saveJobApplication(updatedJob);
     return NextResponse.json({ job: updatedJob });
-  } catch (error: any) {
-    console.error(`[api/jobs/${params.id}] PATCH error:`, error);
+  } catch (error: unknown) {
+    logger.error("[api/jobs/[id]] PATCH error", { error, jobId: id });
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to update job" } },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to update job" } },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const job = await getJobApplication(params.id);
+    const job = await getJobApplication(id);
     if (!job || job.userId !== auth.user.id) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
 
-    await deleteJobApplication(params.id);
+    await deleteJobApplication(id);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error(`[api/jobs/${params.id}] DELETE error:`, error);
+  } catch (error: unknown) {
+    logger.error("[api/jobs/[id]] DELETE error", { error, jobId: id });
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to delete job" } },
+      { error: { code: "INTERNAL_ERROR", message: "Failed to delete job" } },
       { status: 500 }
     );
   }

@@ -12,8 +12,17 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service
-    console.error("Error boundary caught:", error);
+    // Report to structured logger (server-side) and console (client-side)
+    console.error("[ErrorBoundary]", {
+      message: error.message,
+      digest: error.digest,
+      stack: error.stack,
+    });
+
+    // Future: Report to Sentry client SDK
+    // if (typeof window !== "undefined" && window.Sentry) {
+    //   window.Sentry.captureException(error);
+    // }
   }, [error]);
 
   return (
@@ -23,6 +32,11 @@ export default function Error({
       <p className="mb-6 max-w-md text-slate-600">
         We encountered an error while loading this content.
       </p>
+      {error.digest && (
+        <p className="mb-4 text-xs text-slate-400 font-mono">
+          Error ID: {error.digest}
+        </p>
+      )}
       <Button onClick={() => reset()}>Try again</Button>
     </div>
   );

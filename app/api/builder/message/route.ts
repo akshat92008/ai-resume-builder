@@ -8,6 +8,8 @@ import { getSession, saveServerResume, saveSession, getSupabaseUser } from "@/li
 import type { BuilderSession, CareerPathResume } from "@/lib/careerpath/types";
 import { createId } from "@/lib/careerpath/agents";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 import {
   inferIntentAgent,
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
     }
     const body = parseResult.data;
 
-    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const ipHash = getClientIp(request);
     const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "builder_message", 15);
     
     if (!rateLimit.allowed) {
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
             session: response.session,
           })));
         } catch (err) {
-          console.error("[builder/message] Error in stream:", err);
+          logger.error("[builder/message] Error in stream", { error: err });
           controller.enqueue(encoder.encode(JSON.stringify({
             error: {
               code: "INTERNAL_ERROR",
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
 
     return new Response(stream, { headers: { "Content-Type": "application/json" } });
   } catch (err) {
-    console.error("[builder/message] Error:", err);
+    logger.error("[builder/message] Error", { error: err });
     return NextResponse.json(
       {
         error: {

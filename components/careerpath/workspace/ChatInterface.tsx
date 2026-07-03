@@ -4,6 +4,7 @@ import { Alert, Textarea, Button } from "@/components/ui";
 import { motion, AnimatePresence } from "motion/react";
 import { useWorkspaceStore } from "@/lib/store/workspace";
 import { getApiError } from "@/lib/utils";
+import type { CareerPathResume, CareerWorkspaceState, ResumeMessage } from "@/lib/careerpath/types";
 
 const COMMAND_CHIPS = [
   "Build Career Memory from messy info",
@@ -106,6 +107,38 @@ function formatMessageText(text: string) {
   });
 }
 
+type AgentResponse = {
+  status?: "queued";
+  jobId?: string;
+  queuedAt?: string;
+  assistantMessage?: string;
+  resume?: CareerPathResume | null;
+  resumeId?: string | null;
+  workspace?: CareerWorkspaceState | null;
+};
+
+type AgentStatusResponse = {
+  done?: boolean;
+  latestAssistant?: ResumeMessage | null;
+  resume?: CareerPathResume | null;
+  resumeId?: string | null;
+  workspace?: CareerWorkspaceState | null;
+};
+
+function isAgentResponse(value: unknown): value is AgentResponse {
+  return typeof value === "object" && value !== null;
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const textResponse = await response.text();
+  throw new Error(`Server error (${response.status}): ${textResponse.substring(0, 150)}...`);
+}
+
 export function ChatInterface() {
   const {
     messages,
@@ -130,6 +163,63 @@ export function ChatInterface() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  function applyAgentPayload(data: AgentResponse | AgentStatusResponse) {
+    if (data.resume) {
+      setCurrentResume(data.resume);
+      setCurrentResumeId(data.resumeId || data.resume.id);
+      if (data.workspace?.achievementLog) setActiveTab("achievements");
+      else if (data.workspace?.applicationPack) setActiveTab("cover");
+      else if (data.workspace?.jobIntelligence) setActiveTab("job");
+      else if (data.resume.tailoring) setActiveTab("tailor");
+      else setActiveTab("dashboard");
+    } else if (data.resumeId) {
+      setCurrentResumeId(data.resumeId);
+    }
+    if (data.workspace) setWorkspace(data.workspace);
+  }
+
+  async function pollQueuedAgent(queuedAt: string, resumeId?: string | null) {
+    const params = new URLSearchParams({ after: queuedAt });
+    if (resumeId) params.set("resumeId", resumeId);
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, attempt < 4 ? 1500 : 3000));
+      const response = await fetch(`/api/resume-agent/status?${params.toString()}`);
+      const data = await readJsonResponse(response);
+      if (!response.ok) throw data;
+      if (!isAgentResponse(data)) continue;
+
+      const status = data as AgentStatusResponse;
+      applyAgentPayload(status);
+
+      const latestAssistant = status.latestAssistant;
+      if (status.done && latestAssistant) {
+        setMessages((prev) => prev.some((msg) => msg.id === latestAssistant.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: latestAssistant.id,
+                role: "assistant",
+                content: latestAssistant.content,
+                createdAt: latestAssistant.createdAt,
+              },
+            ]);
+        return;
+      }
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `assistant_pending_${Date.now()}`,
+        role: "assistant",
+        content: "I’m still working in the background. Refresh the workspace in a moment to pick up the completed result.",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+  }
 
   async function sendMessage(overrideText?: string) {
     const content = (overrideText || input).trim();
@@ -156,21 +246,25 @@ export function ChatInterface() {
         }),
       });
 
-      let data: any;
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const textResponse = await res.text();
-        throw new Error(`Server error (${res.status}): ${textResponse.substring(0, 150)}...`);
-      }
+      const json = await readJsonResponse(res);
 
       if (!res.ok) {
         if (res.status === 429) {
           setRateLimitUntil(Date.now() + 30000);
           throw new Error("RATE_LIMIT");
         }
-        throw data;
+        throw json;
+      }
+
+      if (!isAgentResponse(json)) {
+        throw new Error("Unexpected agent response.");
+      }
+
+      const data = json;
+
+      if (data.status === "queued" && data.queuedAt) {
+        await pollQueuedAgent(data.queuedAt, data.resumeId || currentResumeId);
+        return;
       }
 
       const assistantMsg = {
@@ -181,20 +275,9 @@ export function ChatInterface() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
 
-      if (data.resume) {
-        setCurrentResume(data.resume);
-        setCurrentResumeId(data.resumeId || data.resume.id);
-        if (data.workspace?.achievementLog) setActiveTab("achievements");
-        else if (data.workspace?.applicationPack) setActiveTab("cover");
-        else if (data.workspace?.jobIntelligence) setActiveTab("job");
-        else if (data.resume.tailoring) setActiveTab("tailor");
-        else setActiveTab("dashboard");
-      } else if (data.resumeId) {
-        setCurrentResumeId(data.resumeId);
-      }
-      if (data.workspace) setWorkspace(data.workspace);
-    } catch (caught: any) {
-      if (caught?.message === "RATE_LIMIT") return;
+      applyAgentPayload(data);
+    } catch (caught: unknown) {
+      if (caught instanceof Error && caught.message === "RATE_LIMIT") return;
       setError(getApiError(caught, "Something went wrong. Your data is saved. Try again."));
     } finally {
       setLoading(false);

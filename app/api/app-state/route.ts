@@ -4,6 +4,7 @@ export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getLatestResumeForUser, getLatestMessagesForUser } from "@/lib/careerpath/db";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
+import { logger } from "@/lib/observability/logger";
 
 /**
  * GET /api/app-state
@@ -30,7 +31,7 @@ export async function GET() {
       workspace: buildCareerWorkspaceState(resume),
     });
   } catch (err) {
-    console.error("[app-state] Error:", err);
+    logger.error("[app-state] Error", { error: err });
     return NextResponse.json(
       { error: { code: "STATE_LOAD_FAILED", message: "Unable to load workspace state.", recoverable: true } },
       { status: 500 },

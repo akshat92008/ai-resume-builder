@@ -9,6 +9,8 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
+import { getClientIp } from "@/lib/http/request";
+import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 
 const AuditRequestSchema = z.object({
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const ipHash = request.headers.get("x-forwarded-for") || "unknown";
+    const ipHash = getClientIp(request);
     const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_audit", 10);
     
     if (!rateLimit.allowed) {
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ score: audit.score, audit, resume: updated });
   } catch (err) {
-    console.error("[api/resume/audit] Error:", err);
+    logger.error("[api/resume/audit] Error", { error: err });
     return NextResponse.json(
       { error: { code: "AUDIT_FAILED", message: "Unable to audit resume. Try again.", recoverable: true } },
       { status: 500 },

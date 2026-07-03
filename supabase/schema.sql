@@ -86,8 +86,8 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    trim(trailing '-' from lower(regexp_replace(coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), '[^a-zA-Z0-9]+', '-', 'g'))) || '-' || substr(replace(new.id::text, '-', ''), 1, 6),
-    upper(substr(replace(new.id::text, '-', ''), 1, 8))
+    trim(trailing '-' from lower(regexp_replace(coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), '[^a-zA-Z0-9]+', '-', 'g'))) || '-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 12),
+    upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8))
   )
   on conflict (id) do nothing;
   return new;
