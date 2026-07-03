@@ -295,10 +295,7 @@ export default function ResumeDetailPage() {
               {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               Improve Automatically
             </Button>
-            <Button variant="outline" onClick={() => {
-              const url = `/api/pdf?id=${resume.id}`;
-              window.open(url, '_blank');
-            }}>
+            <Button variant="outline" onClick={() => window.print()}>
               <Printer className="mr-2 h-4 w-4" />
               Print / Save as PDF
             </Button>
