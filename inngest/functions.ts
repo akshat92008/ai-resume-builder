@@ -67,7 +67,7 @@ export const processResumeIntent = (inngest as any).createFunction(
     triggers: [{ event: "resume/process.intent" }],
     concurrency: {
       limit: 1,
-      key: "event.data.resumeId ?? event.data.userId",
+      key: "event.data.userId",
     },
   },
   async ({
