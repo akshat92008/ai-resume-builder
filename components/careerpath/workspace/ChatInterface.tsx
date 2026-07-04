@@ -48,32 +48,53 @@ function ThinkingAnimation() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className="flex items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900 shadow-sm border border-blue-100"
+      className="relative flex flex-col gap-2 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50/50 p-4 shadow-sm border border-blue-100 overflow-hidden"
     >
-      <div className="relative flex h-6 w-6 items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-        >
-          <Sparkles className="h-5 w-5 text-blue-500" />
-        </motion.div>
-      </div>
-      <div className="flex flex-col overflow-hidden w-full relative h-[38px] justify-center">
-        <span className="font-semibold text-[13px] leading-tight text-blue-700">CareerPath AI is working</span>
-        <div className="relative h-[16px] w-full overflow-hidden mt-0.5">
-          <AnimatePresence mode="popLayout">
-            <motion.span
-              key={index}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className="absolute left-0 text-[12px] text-blue-600/80 whitespace-nowrap"
-            >
-              {THINKING_PHRASES[index]}
-            </motion.span>
-          </AnimatePresence>
+      {/* Animated gradient background sweep */}
+      <motion.div
+        animate={{ x: ["-100%", "100%"] }}
+        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent z-0 pointer-events-none"
+      />
+      
+      <div className="relative z-10 flex items-center gap-3">
+        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100/80 shadow-inner">
+          <motion.div
+            animate={{ rotate: 360, scale: [1, 1.15, 1] }}
+            transition={{ 
+              rotate: { duration: 4, repeat: Infinity, ease: "linear" }, 
+              scale: { duration: 2, repeat: Infinity, ease: "easeInOut" } 
+            }}
+          >
+            <Sparkles className="h-4 w-4 text-blue-600" />
+          </motion.div>
         </div>
+        <div className="flex flex-col overflow-hidden w-full relative h-[38px] justify-center">
+          <span className="font-semibold text-[13px] leading-tight text-blue-800">CareerPath AI is orchestrating...</span>
+          <div className="relative h-[16px] w-full overflow-hidden mt-0.5">
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={index}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute left-0 text-[12px] font-medium text-blue-600/80 whitespace-nowrap"
+              >
+                {THINKING_PHRASES[index]}
+              </motion.span>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+      
+      {/* Indeterminate pulsing progress bar */}
+      <div className="relative z-10 h-1 w-full overflow-hidden rounded-full bg-blue-100/50 mt-1">
+        <motion.div
+          animate={{ x: ["-100%", "200%"] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          className="h-full w-1/2 rounded-full bg-gradient-to-r from-blue-400 to-indigo-500 opacity-80"
+        />
       </div>
     </motion.div>
   );
@@ -183,7 +204,7 @@ export function ChatInterface() {
     const params = new URLSearchParams({ after: queuedAt });
     if (resumeId) params.set("resumeId", resumeId);
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, attempt < 4 ? 1500 : 3000));
       const response = await fetch(`/api/resume-agent/status?${params.toString()}`);
       const data = await readJsonResponse(response);

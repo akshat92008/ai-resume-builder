@@ -14,4 +14,8 @@ type Events = {
   };
 };
 
-export const inngest = new Inngest({ id: "careeros", schemas: { events: {} as Events } });
+export const inngest = new Inngest({
+  id: "careeros",
+  schemas: { events: {} as Events },
+  eventKey: process.env.INNGEST_EVENT_KEY || "local",
+});
