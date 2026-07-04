@@ -17,7 +17,7 @@ import {
   OutreachPackSchema,
   getFallbackModel,
 } from "../llm";
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, type LanguageModel } from "ai";
 import { saveAgentRun } from "../db";
 import { logger } from "@/lib/observability/logger";
 import type {
