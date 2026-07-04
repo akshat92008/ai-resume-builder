@@ -67,10 +67,14 @@ async function callWithValidation<T>(
   for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
     const model = modelsToTry[attempt];
     try {
+      const systemMessage = messages.find(m => m.role === "system")?.content;
+      const chatMessages = messages.filter(m => m.role !== "system");
+
       const { object } = await generateObject({
         model,
         schema: schema,
-        messages: messages,
+        system: systemMessage,
+        messages: chatMessages as any,
         temperature: 0.2,
       });
       
