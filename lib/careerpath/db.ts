@@ -85,7 +85,7 @@ export async function saveSession(session: BuilderSession): Promise<void> {
   };
 
   const admin = createSupabaseAdminClient();
-  const client = supabase || admin;
+  const client = user ? supabase : admin;
 
   const { error } = await client.from("builder_sessions").upsert(payload, { onConflict: "id" });
   if (error) {
@@ -136,7 +136,7 @@ export async function saveServerResume(resume: CareerPathResume, ownerUserId?: s
   };
 
   const admin = createSupabaseAdminClient();
-  const client = supabase || admin;
+  const client = user ? supabase : admin;
 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
 
@@ -255,7 +255,7 @@ export async function saveResumeMessage(msg: {
 }): Promise<void> {
   const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  const client = supabase || admin;
+  const client = admin; // Internal background save, bypass RLS
   if (!client) {
     logger.error("[db/saveResumeMessage] DB client not available");
     return;
@@ -351,7 +351,7 @@ export async function saveResumeVersion(version: {
 }): Promise<void> {
   const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  const client = supabase || admin;
+  const client = admin; // Internal background save, bypass RLS
   if (!client) {
     logger.error("[db/saveResumeVersion] DB client not available");
     return;
@@ -389,7 +389,7 @@ export async function saveAgentRun(run: {
   if (!isServerSupabaseConfigured) return;
   const supabase = await createServerSupabaseClient();
   const admin = createSupabaseAdminClient();
-  const client = supabase || admin;
+  const client = admin; // Internal background save, bypass RLS
   if (!client) return;
 
   const { error: insertError } = await client
