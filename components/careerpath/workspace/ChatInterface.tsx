@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Loader2, Send, Sparkles } from "lucide-react";
+import { Loader2, Send, Sparkles, Paperclip } from "lucide-react";
 import { Alert, Textarea, Button } from "@/components/ui";
 import { motion, AnimatePresence } from "motion/react";
 import { useWorkspaceStore } from "@/lib/store/workspace";
@@ -176,10 +176,46 @@ export function ChatInterface() {
     setActiveTab,
     setWorkspace,
     currentResumeId,
+    setShowAchievementModal,
   } = useWorkspaceStore();
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setError("Only PDF files are supported");
+      return;
+    }
+    
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch("/api/extract-pdf", {
+        method: "POST",
+        body: formData,
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to extract PDF");
+      
+      const text = input.trim() ? input + "\n\n" : "";
+      setInput(text + `[Extracted from ${file.name}]:\n${data.text}`);
+      textareaRef.current?.focus();
+    } catch (err: any) {
+      setError(err.message || "Failed to upload file");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -314,6 +350,10 @@ export function ChatInterface() {
   }
 
   function useCommand(command: string) {
+    if (command.startsWith("Log achievement")) {
+      setShowAchievementModal(true);
+      return;
+    }
     setInput(command);
     textareaRef.current?.focus();
   }
@@ -367,7 +407,25 @@ export function ChatInterface() {
       )}
 
       <div className="border-t bg-white p-4">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-end">
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || uploading}
+            title="Upload PDF (e.g. Certificate, Job Description, old Resume)"
+            className="mb-0 shrink-0 self-end"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </Button>
           <Textarea
             ref={textareaRef}
             rows={2}

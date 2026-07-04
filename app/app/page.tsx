@@ -117,6 +117,10 @@ export default function AppWorkspace() {
   }
 
   function useCommand(command: string) {
+    if (command.startsWith("Log achievement")) {
+      setShowAchievementModal(true);
+      return;
+    }
     setInput(command);
   }
 
