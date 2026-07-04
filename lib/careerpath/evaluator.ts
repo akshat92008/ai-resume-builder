@@ -166,6 +166,9 @@ export function auditResume(content: CareerPathResumeContent, targetRole: string
     onePageFit: clampScore(94 - Math.max(0, wordCount - 520) / 8),
     formattingSafety: 96,
     truthfulness: clampScore(hasUnsupportedMetrics ? 72 : 96),
+    impactScore: clampScore(60 + projectBulletCount * 2),
+    readability: clampScore(80 - (wordCount > 600 ? 10 : 0)),
+    leadership: 70,
     overall: 0,
   };
   score.overall = Math.round(
@@ -174,6 +177,10 @@ export function auditResume(content: CareerPathResumeContent, targetRole: string
 
   return {
     score,
+    topStrengths: ["Awaiting AI analysis"],
+    weaknesses: ["Awaiting AI analysis"],
+    probabilityOfInterview: "Medium",
+    recruiterComments: "Awaiting AI analysis.",
     issues,
     recommendedFixes: buildRecommendedFixes(issues, content),
     summary: `Resume Score: ${score.overall}/100. Treat this as practical guidance, not a hiring guarantee.`,

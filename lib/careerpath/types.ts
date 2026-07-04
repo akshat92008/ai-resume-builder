@@ -219,6 +219,9 @@ export type CareerPathResumeScore = {
   onePageFit: number;
   formattingSafety: number;
   truthfulness: number;
+  impactScore: number;
+  readability: number;
+  leadership: number;
 };
 
 export type CareerPathAuditIssue = {
@@ -230,6 +233,10 @@ export type CareerPathAuditIssue = {
 
 export type CareerPathResumeAudit = {
   score: CareerPathResumeScore;
+  topStrengths: string[];
+  weaknesses: string[];
+  probabilityOfInterview: "Low" | "Medium" | "High";
+  recruiterComments: string;
   issues: CareerPathAuditIssue[];
   recommendedFixes: string[];
   summary: string;

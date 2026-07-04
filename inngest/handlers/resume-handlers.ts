@@ -400,7 +400,14 @@ export async function applyBrainToResume(input: {
             onePageFit: 100,
             formattingSafety: 100,
             truthfulness: 100,
+            impactScore: 85,
+            readability: 90,
+            leadership: 80,
           },
+          topStrengths: [],
+          weaknesses: [],
+          probabilityOfInterview: "Medium" as const,
+          recruiterComments: "Initial draft generated.",
           issues: [
             {
               type: "INFO",
