@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
-// @ts-expect-error pdf-parse has no default export
-import pdfParse from "pdf-parse";
+// Polyfills for pdf-parse / pdfjs-dist in Next.js build environment
+if (typeof global !== 'undefined') {
+  if (typeof global.DOMMatrix === 'undefined') {
+    (global as any).DOMMatrix = class DOMMatrix {};
+  }
+  if (typeof global.Path2D === 'undefined') {
+    (global as any).Path2D = class Path2D {};
+  }
+  if (typeof global.ImageData === 'undefined') {
+    (global as any).ImageData = class ImageData {};
+  }
+}
+
+const pdfParse = require("pdf-parse");
 
 export async function POST(req: Request) {
   try {
