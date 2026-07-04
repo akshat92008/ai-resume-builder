@@ -11,21 +11,25 @@ export function getModel(fast?: boolean): LanguageModel {
   
   if (fast) {
     const modelName = process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
-    return nvidia(modelName);
+    return nvidia.chat(modelName);
   }
   
   const modelName = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
-  return nvidia(modelName);
+  return nvidia.chat(modelName);
 }
 
-export function getFallbackModel(fast?: boolean): LanguageModel {
+export function getFallbackModel(fast?: boolean): LanguageModel | undefined {
   if (process.env.ANTHROPIC_API_KEY) {
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     return anthropic(fast ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620");
   }
   
-  const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
-  return openai(fast ? "gpt-4o-mini" : "gpt-4o");
+  if (process.env.OPENAI_API_KEY) {
+    const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    return openai(fast ? "gpt-4o-mini" : "gpt-4o");
+  }
+  
+  return undefined;
 }
 
 export const ProfileSchema = z.object({

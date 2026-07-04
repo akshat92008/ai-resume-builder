@@ -61,8 +61,10 @@ async function callWithValidation<T>(
   const inputJson = metadata?.inputJson ?? messages;
   let lastError: string | undefined;
   
-  // Try primary model first, fallback to secondary
-  const modelsToTry = [getModel(metadata?.fast), getFallbackModel(metadata?.fast)];
+  // Try primary model first, fallback to secondary if configured
+  const modelsToTry: LanguageModel[] = [getModel(metadata?.fast)];
+  const fallback = getFallbackModel(metadata?.fast);
+  if (fallback) modelsToTry.push(fallback);
   
   for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
     const model = modelsToTry[attempt];
@@ -92,8 +94,13 @@ async function callWithValidation<T>(
       }).catch(() => {}); // fire-and-forget
       
       return object as T;
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
+    } catch (err: any) {
+      console.error("NVIDIA NIM ERROR FULL:", err);
+      if (err instanceof Error) {
+        lastError = err.message;
+      } else {
+        lastError = typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err);
+      }
       logger.warn("[orchestrator] Agent attempt failed", { agentName, attempt: attempt + 1, error: lastError });
     }
   }
