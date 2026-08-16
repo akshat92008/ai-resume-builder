@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
-import { stripe } from "@/lib/careerpath/stripe";
+import { getStripeClient } from "@/lib/careerpath/stripe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp } from "@/lib/http/request";
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const stripe = getStripeClient();
     const session = await stripe.checkout.sessions.create({
       ...(subscription?.stripe_customer_id
         ? { customer: subscription.stripe_customer_id }

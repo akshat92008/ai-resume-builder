@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { stripe } from "@/lib/careerpath/stripe";
+import { getStripeClient } from "@/lib/careerpath/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { stripePeriodEndIso, stripeSubscriptionStatusToPlan } from "@/lib/careerpath/stripe-state";
 import { logger } from "@/lib/observability/logger";
@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   if (!signature) return NextResponse.json({ error: "Missing Stripe signature." }, { status: 400 });
 
   const body = await req.text();
+  const stripe = getStripeClient();
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
@@ -69,15 +70,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    // A non-2xx response is deliberate: Stripe should retry events that could not be
-    // persisted, instead of silently drifting subscription state.
     logger.error("[api/stripe/webhook] Event processing failed", { error, eventId: event.id, eventType: event.type });
     return NextResponse.json({ error: "Webhook processing failed." }, { status: 500 });
   }
 }
 
 async function applySubscriptionEvent(
-  supabase: ReturnType<typeof createSupabaseAdminClient> extends infer T ? Exclude<T, null> : never,
+  supabase: Exclude<ReturnType<typeof createSupabaseAdminClient>, null>,
   input: {
     event: Stripe.Event;
     userId: string | null;
