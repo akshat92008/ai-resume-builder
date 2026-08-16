@@ -17,14 +17,28 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      # Temporary remediation step for this audit branch. The generated lockfile is
+      # uploaded and will be committed, then this step will be removed so main stays
+      # deterministic under npm ci.
+      - name: Generate security-patched lockfile
+        run: npm audit fix --package-lock-only
+
+      - name: Upload remediated lockfile
+        uses: actions/upload-artifact@v7
+        with:
+          name: remediated-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Install dependencies from remediated lockfile
         run: npm ci
 
       - name: Audit production dependencies
