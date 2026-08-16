@@ -4,9 +4,13 @@ export function stripeSubscriptionStatusToPlan(status: string): BillingPlan {
   return status === "active" || status === "trialing" ? "pro" : "free";
 }
 
-export function stripePeriodEndIso(subscription: { current_period_end?: number | null }): string | null {
-  const periodEnd = subscription.current_period_end;
-  return typeof periodEnd === "number" && Number.isFinite(periodEnd)
-    ? new Date(periodEnd * 1000).toISOString()
-    : null;
+export function stripePeriodEndIso(subscription: {
+  items?: { data?: Array<{ current_period_end?: number | null }> };
+}): string | null {
+  const periodEnds = (subscription.items?.data || [])
+    .map((item) => item.current_period_end)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  if (!periodEnds.length) return null;
+  return new Date(Math.min(...periodEnds) * 1000).toISOString();
 }

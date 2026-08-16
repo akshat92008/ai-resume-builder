@@ -32,21 +32,14 @@ describe("production configuration", () => {
   });
 
   it("fails closed for mock AI and weak rate-limit salt", () => {
-    const result = validateProductionConfiguration({
-      ...validProductionEnv,
-      AI_PROVIDER: "mock",
-      RATE_LIMIT_SALT: "short",
-    });
+    const result = validateProductionConfiguration({ ...validProductionEnv, AI_PROVIDER: "mock", RATE_LIMIT_SALT: "short" });
     expect(result.ready).toBe(false);
     expect(result.invalidKeys).toContain("AI_PROVIDER");
     expect(result.invalidKeys).toContain("RATE_LIMIT_SALT");
   });
 
   it("rejects partially configured billing", () => {
-    const result = validateProductionConfiguration({
-      ...validProductionEnv,
-      STRIPE_SECRET_KEY: "sk_test_example",
-    });
+    const result = validateProductionConfiguration({ ...validProductionEnv, STRIPE_SECRET_KEY: "sk_test_example" });
     expect(result.ready).toBe(false);
     expect(result.billing).toBe("partial");
   });
@@ -71,9 +64,12 @@ describe("Stripe state mapping", () => {
     expect(stripeSubscriptionStatusToPlan("canceled")).toBe("free");
   });
 
-  it("converts valid period timestamps and preserves missing values", () => {
-    expect(stripePeriodEndIso({ current_period_end: 1_700_000_000 })).toBe("2023-11-14T22:13:20.000Z");
-    expect(stripePeriodEndIso({ current_period_end: null })).toBeNull();
+  it("uses the earliest current subscription-item period end", () => {
+    expect(stripePeriodEndIso({ items: { data: [
+      { current_period_end: 1_700_000_100 },
+      { current_period_end: 1_700_000_000 },
+    ] } })).toBe("2023-11-14T22:13:20.000Z");
+    expect(stripePeriodEndIso({ items: { data: [] } })).toBeNull();
   });
 });
 

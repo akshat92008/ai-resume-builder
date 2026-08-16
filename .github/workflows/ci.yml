@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,31 +21,37 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
-      # Temporary remediation step for this audit branch. The generated lockfile is
-      # uploaded and will be committed, then this step will be removed so main stays
-      # deterministic under npm ci.
+      # One-time audit-branch remediation. This generated lock is committed below;
+      # the final main workflow removes this mutation and returns to read-only CI.
       - name: Generate security-patched lockfile
         run: npm audit fix --package-lock-only
-
-      - name: Upload remediated lockfile
-        uses: actions/upload-artifact@v7
-        with:
-          name: remediated-package-lock
-          path: package-lock.json
-          if-no-files-found: error
-          retention-days: 1
 
       - name: Install dependencies from remediated lockfile
         run: npm ci
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit remediated lockfile to audit branch
+        if: github.event_name == 'pull_request' && github.head_ref == 'agent/production-audit'
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Lockfile already clean"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: remediate production dependency vulnerabilities"
+          git push origin HEAD:${{ github.head_ref }}
 
       - name: Lint
         run: npm run lint
