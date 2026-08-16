@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getJobApplication, saveJobApplication, deleteJobApplication } from "@/lib/careerpath/db-jobs";
 import { logger } from "@/lib/observability/logger";
+import { UpdateJobApplicationSchema } from "@/lib/careerpath/job-validation";
+import type { JobApplication } from "@/lib/careerpath/types";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -39,10 +41,20 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
     }
 
-    const updates = await request.json();
-    
-    // Create updated job object, merging new fields
-    const updatedJob = {
+    const json = await request.json().catch(() => ({}));
+    const parsed = UpdateJobApplicationSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "One or more job fields are invalid." } },
+        { status: 400 },
+      );
+    }
+    const updates = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [key, value ?? undefined]),
+    ) as Partial<JobApplication>;
+
+    // Create updated job object, merging only validated editable fields.
+    const updatedJob: JobApplication = {
       ...job,
       ...updates,
       id: job.id, // Prevent ID tampering

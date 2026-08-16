@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { getLatestMessagesForUser, getLatestResumeForUser, getServerResume } from "@/lib/careerpath/db";
+import { listJobApplications } from "@/lib/careerpath/db-jobs";
 import { logger } from "@/lib/observability/logger";
 
 const StatusQuerySchema = z.object({
@@ -30,14 +31,12 @@ export async function GET(request: Request) {
 
     const userId = auth.user.id;
     const requestedResumeId = parseResult.data.resumeId;
-    const resume = requestedResumeId
-      ? await getServerResume(requestedResumeId, userId)
-      : await getLatestResumeForUser(userId);
+    const resume = requestedResumeId ? await getServerResume(requestedResumeId, userId) : await getLatestResumeForUser(userId);
+    const applications = await listJobApplications(userId);
+    if (resume) resume.applications = applications;
     const messages = await getLatestMessagesForUser(userId, resume?.id || requestedResumeId);
     const afterMs = parseResult.data.after ? Date.parse(parseResult.data.after) - 1000 : 0;
-    const latestAssistant = [...messages]
-      .reverse()
-      .find((message) => message.role === "assistant" && Date.parse(message.createdAt) > afterMs);
+    const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant" && Date.parse(message.createdAt) > afterMs);
 
     return NextResponse.json({
       done: Boolean(latestAssistant),

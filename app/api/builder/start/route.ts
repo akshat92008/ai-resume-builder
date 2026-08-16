@@ -6,8 +6,8 @@ import { saveSession } from "@/lib/careerpath/db";
 import type { BuilderMode } from "@/lib/careerpath/types";
 import { z } from "zod";
 import { requireAiAccess } from "@/lib/careerpath/auth";
-import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { getClientIp } from "@/lib/http/request";
 
 const StartRequestSchema = z.object({
@@ -22,7 +22,8 @@ export async function POST(request: Request) {
     const userId = auth.user.id;
 
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(userId, ipHash, "builder_start", 15);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(userId, ipHash, "builder_start", entitlements.aiActionsPerDay);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(

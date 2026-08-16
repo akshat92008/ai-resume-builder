@@ -6,6 +6,7 @@ import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
@@ -55,7 +56,8 @@ export async function POST(request: Request) {
     }
 
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_tailor", 3);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_tailor", entitlements.tailoringPerDay);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -81,10 +83,7 @@ export async function POST(request: Request) {
     }
 
     const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
-    const brain = await handleResumeMessage({
-      userMessage: body.jobDescription,
-      currentResume: state,
-    });
+    const brain = await handleResumeMessage({ userMessage: body.jobDescription, currentResume: state });
     const tailoredContent = deriveRenderableResume(brain.resume || state);
     const audit = auditResume(tailoredContent, resume.targetRole, body.jobDescription);
     const tailored = createResumeRecord({
@@ -110,15 +109,7 @@ export async function POST(request: Request) {
     tailored.score = audit.score;
     await saveServerResume(tailored, auth.user.id);
 
-    return NextResponse.json({
-      newResumeId: tailored.id,
-      matchScore: tailored.tailoring.matchScore,
-      matchedKeywords: tailored.tailoring.matchedKeywords,
-      missingKeywords: tailored.tailoring.missingKeywordsNotAdded,
-      tailoredContent,
-      tailoring: tailored.tailoring,
-      resume: tailored,
-    });
+    return NextResponse.json({ newResumeId: tailored.id, matchScore: tailored.tailoring.matchScore, matchedKeywords: tailored.tailoring.matchedKeywords, missingKeywords: tailored.tailoring.missingKeywordsNotAdded, tailoredContent, tailoring: tailored.tailoring, resume: tailored });
   } catch (err) {
     logger.error("[api/resume/tailor] Error", { error: err });
     return NextResponse.json(

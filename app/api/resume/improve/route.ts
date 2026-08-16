@@ -5,6 +5,7 @@ import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
@@ -54,7 +55,8 @@ export async function POST(request: Request) {
     }
 
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_improve", 5);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_improve", entitlements.aiActionsPerDay);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(

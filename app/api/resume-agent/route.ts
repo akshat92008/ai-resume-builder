@@ -9,6 +9,7 @@ import { inferIntentLLM } from "@/lib/careerpath/orchestrator";
 import { inngest } from "@/inngest/client";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import type { AgentIntent } from "@/lib/careerpath/types";
 
 export const runtime = "nodejs";
@@ -35,8 +36,8 @@ export async function POST(request: Request) {
     const { message, resumeId } = parseResult.data;
 
     const ipHash = getClientIp(request);
-    const maxLimit = userId ? 15 : 3; // Stricter quotas
-    const rateLimit = await checkRateLimit(userId, ipHash, "resume_agent", maxLimit);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(userId, ipHash, "resume_agent", entitlements.aiActionsPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "You've reached the usage limit. Please wait and try again.", recoverable: true } },
@@ -44,7 +45,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Guardrails
     const safetyCheck = await checkPromptInjection(message);
     if (!safetyCheck.isSafe) {
       return NextResponse.json(
@@ -53,11 +53,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Load existing resume if provided
     let currentResume = null;
-    if (resumeId) {
-      currentResume = await getServerResume(resumeId, userId);
-    }
+    if (resumeId) currentResume = await getServerResume(resumeId, userId);
 
     const command = routeCareerCommand(message, {
       profile: currentResume?.careerProfile,
@@ -65,45 +62,21 @@ export async function POST(request: Request) {
       applications: currentResume?.applications,
     });
 
-    // Infer intent
     let intent: AgentIntent;
-    
-    if (command.intent === "generate_application_pack") {
-      intent = "GENERATE_APPLICATION_PACK";
-    } else if (command.intent === "track_job_application") {
-      intent = "TRACK_JOB_APPLICATION";
-    } else if (command.intent === "analyze_job_search") {
-      intent = "ANALYZE_JOB_SEARCH";
-    } else if (command.intent === "generate_resume_version") {
-      intent = "GENERATE_RESUME_VERSION";
-    } else if (command.intent === "optimize_linkedin") {
-      intent = "GENERAL_HELP";
-    } else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) {
-      intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
-    } else {
-      const result = await inferIntentLLM(message, !!currentResume, { userId, resumeId });
-      intent = result.intent;
-    }
+    if (command.intent === "generate_application_pack") intent = "GENERATE_APPLICATION_PACK";
+    else if (command.intent === "track_job_application") intent = "TRACK_JOB_APPLICATION";
+    else if (command.intent === "analyze_job_search") intent = "ANALYZE_JOB_SEARCH";
+    else if (command.intent === "generate_resume_version") intent = "GENERATE_RESUME_VERSION";
+    else if (command.intent === "optimize_linkedin") intent = "GENERAL_HELP";
+    else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
+    else intent = (await inferIntentLLM(message, !!currentResume, { userId, resumeId })).intent;
 
     const queuedAt = new Date().toISOString();
-    await saveResumeMessage({
-      userId,
-      resumeId: resumeId || null,
-      role: "user",
-      content: message,
-      intent,
-    });
+    await saveResumeMessage({ userId, resumeId: resumeId || null, role: "user", content: message, intent });
 
     const job = await inngest.send({
       name: "resume/process.intent",
-      data: {
-        intent,
-        message,
-        currentResume,
-        userId,
-        resumeId,
-        command,
-      }
+      data: { intent, message, currentResume, userId, resumeId, command }
     });
 
     return NextResponse.json({
@@ -112,17 +85,10 @@ export async function POST(request: Request) {
       status: "queued",
       assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
     });
-
   } catch (err) {
     logger.error("[resume-agent] Error", { error: err });
     return NextResponse.json(
-      {
-        error: {
-          code: "AGENT_ERROR",
-          message: `Something went wrong: ${err instanceof Error ? err.message : String(err)}. Please try again.`,
-          recoverable: true,
-        },
-      },
+      { error: { code: "AGENT_ERROR", message: `Something went wrong: ${err instanceof Error ? err.message : String(err)}. Please try again.`, recoverable: true } },
       { status: 500 },
     );
   }

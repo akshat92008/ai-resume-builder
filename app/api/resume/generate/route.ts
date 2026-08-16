@@ -5,6 +5,7 @@ import { createResumeRecord } from "@/lib/careerpath/agents";
 import { writeResumeAgent, auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
     const body = parseResult.data;
 
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_generate", 5);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_generate", entitlements.aiActionsPerDay);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(
