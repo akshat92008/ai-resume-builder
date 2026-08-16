@@ -5,7 +5,7 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { checkPromptInjection } from "@/lib/careerpath/guardrails";
 import { getServerResume, saveResumeMessage } from "@/lib/careerpath/db";
 import { routeCareerCommand } from "@/lib/careerpath/career-os";
-import { inferIntentLLM } from "@/lib/careerpath/orchestrator";
+import { inferIntentLLM } from "@/lib/careerpath/intent-router";
 import { inngest } from "@/inngest/client";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
@@ -69,14 +69,23 @@ export async function POST(request: Request) {
     else if (command.intent === "generate_resume_version") intent = "GENERATE_RESUME_VERSION";
     else if (command.intent === "optimize_linkedin") intent = "GENERAL_HELP";
     else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
-    else intent = (await inferIntentLLM(message, !!currentResume, { userId, resumeId })).intent;
+    else {
+      intent = (
+        await inferIntentLLM(
+          message,
+          Boolean(currentResume),
+          { commandIntent: command.intent },
+          { userId, resumeId },
+        )
+      ).intent;
+    }
 
     const queuedAt = new Date().toISOString();
     await saveResumeMessage({ userId, resumeId: resumeId || null, role: "user", content: message, intent });
 
     const job = await inngest.send({
       name: "resume/process.intent",
-      data: { intent, message, currentResume, userId, resumeId, command }
+      data: { intent, message, currentResume, userId, resumeId, command },
     });
 
     return NextResponse.json({
