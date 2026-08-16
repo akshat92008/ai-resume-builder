@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getLatestResumeForUser, getLatestMessagesForUser } from "@/lib/careerpath/db";
+import { listJobApplications } from "@/lib/careerpath/db-jobs";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { logger } from "@/lib/observability/logger";
 
@@ -20,6 +21,8 @@ export async function GET() {
     const userId = auth.user.id;
 
     const resume = await getLatestResumeForUser(userId);
+    const applications = await listJobApplications(userId);
+    if (resume) resume.applications = applications;
     const messages = resume
       ? await getLatestMessagesForUser(userId, resume.id)
       : [];

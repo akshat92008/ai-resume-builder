@@ -5,6 +5,7 @@ import { getJobApplication } from "@/lib/careerpath/db-jobs";
 import { getServerResume } from "@/lib/careerpath/db";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import type { CareerProfile } from "@/lib/careerpath/types";
@@ -17,7 +18,8 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
 
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "outreach_generate", 5);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "outreach_generate", entitlements.outreachPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded. Please try again later.", recoverable: true } },
@@ -35,7 +37,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Get the resume content and profile
     if (!resumeId) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "Resume ID is required." } },
@@ -54,7 +55,6 @@ export async function POST(request: Request) {
     const profile: CareerProfile = resume.careerProfile || legacyProfileToCareerProfile(resume.profile, auth.user.id);
     const content = typeof resume.content === "string" ? JSON.parse(resume.content) : resume.content;
 
-    // 2. Extract company and role from job tracker if available
     let company = "the company";
     let role = resume.targetRole || "the position";
     
@@ -66,7 +66,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Generate the Outreach Pack
     const outreachPack = await generateOutreachAgent(
       profile,
       content,

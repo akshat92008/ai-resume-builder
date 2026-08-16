@@ -8,6 +8,7 @@ import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
 import type { BuilderSession, CareerPathResume } from "@/lib/careerpath/types";
 import { createId } from "@/lib/careerpath/agents";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
     const body = parseResult.data;
 
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "builder_message", 15);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "builder_message", entitlements.aiActionsPerDay);
     
     if (!rateLimit.allowed) {
       return NextResponse.json(

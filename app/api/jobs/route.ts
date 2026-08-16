@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import type { JobApplication } from "@/lib/careerpath/types";
+import { CreateJobApplicationSchema } from "@/lib/careerpath/job-validation";
 
 export async function GET(request: Request) {
   try {
@@ -37,15 +38,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const json = await request.json();
-    const { company, role, jobUrl, notes, status = "saved" } = json;
-
-    if (!company || !role) {
+    const json = await request.json().catch(() => ({}));
+    const parsed = CreateJobApplicationSchema.safeParse(json);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Company and role are required." } },
-        { status: 400 }
+        { error: { code: "VALIDATION_ERROR", message: "Provide a valid company, role, and job details." } },
+        { status: 400 },
       );
     }
+    const { company, role, jobUrl, notes, status } = parsed.data;
 
     const now = new Date().toISOString();
     const newJob: JobApplication = {

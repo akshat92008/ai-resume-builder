@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileText, FolderOpen, Gauge, Loader2, LogOut, Plus, Target } from "lucide-react";
 import { Button, Tabs } from "@/components/ui";
@@ -12,6 +12,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useWorkspaceStore } from "@/lib/store/workspace";
 import { ChatInterface } from "@/components/careerpath/workspace/ChatInterface";
 import { MemorySummary, NextActions } from "@/components/careerpath/workspace/UIHelpers";
+import { PowerToolsTab } from "@/components/careerpath/PowerToolsTab";
 import {
   DashboardTab,
   ResumeTab,
@@ -34,30 +35,12 @@ const ResumeDocument = dynamic(() => import("@/components/careerpath/ResumeDocum
 
 export default function AppWorkspace() {
   const router = useRouter();
-  const {
-    currentResume,
-    workspace,
-    activeTab,
-    initialLoading,
-    rateLimitUntil,
-    showAchievementModal,
-    setActiveTab,
-    setCurrentResume,
-    setCurrentResumeId,
-    setWorkspace,
-    setMessages,
-    setInitialLoading,
-    setRateLimitUntil,
-    setShowAchievementModal,
-    startNewResume,
-    setInput,
-  } = useWorkspaceStore();
+  const { currentResume, workspace, activeTab, initialLoading, rateLimitUntil, showAchievementModal, setActiveTab, setCurrentResume, setCurrentResumeId, setWorkspace, setMessages, setInitialLoading, setRateLimitUntil, setShowAchievementModal, startNewResume, setInput } = useWorkspaceStore();
 
   useEffect(() => {
     const lastPrompt = localStorage.getItem("last_achievement_prompt");
     const now = Date.now();
     const threeDays = 3 * 24 * 60 * 60 * 1000;
-    
     if (!lastPrompt || (now - parseInt(lastPrompt, 10)) > threeDays) {
       const timer = setTimeout(() => setShowAchievementModal(true), 1500);
       return () => clearTimeout(timer);
@@ -70,129 +53,41 @@ export default function AppWorkspace() {
         const res = await fetch("/api/app-state");
         if (!res.ok) throw new Error("Failed to load");
         const data = await res.json();
-
-        if (data.resume) {
-          setCurrentResume(data.resume);
-          setCurrentResumeId(data.resumeId || data.resume.id);
-        }
+        if (data.resume) { setCurrentResume(data.resume); setCurrentResumeId(data.resumeId || data.resume.id); }
         if (data.workspace) setWorkspace(data.workspace);
-
         if (data.messages && data.messages.length > 0) {
-          const restored = data.messages
-            .filter((m: any) => m.role === "user" || m.role === "assistant")
-            .map((m: any) => ({
-              id: m.id,
-              role: m.role as "user" | "assistant",
-              content: m.content,
-              createdAt: m.createdAt,
-            }));
-          if (restored.length > 0) {
-            setMessages(restored);
-          }
+          const restored = data.messages.filter((m: any) => m.role === "user" || m.role === "assistant").map((m: any) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content, createdAt: m.createdAt }));
+          if (restored.length > 0) setMessages(restored);
         }
       } catch {
-        // First visit — show welcome message
-      } finally {
-        setInitialLoading(false);
-      }
+        // First visit — show welcome message.
+      } finally { setInitialLoading(false); }
     }
     loadAppState();
   }, [setCurrentResume, setCurrentResumeId, setWorkspace, setMessages, setInitialLoading]);
 
-  function handleCloseAchievementModal() {
-    localStorage.setItem("last_achievement_prompt", Date.now().toString());
-    setShowAchievementModal(false);
-  }
+  function handleCloseAchievementModal() { localStorage.setItem("last_achievement_prompt", Date.now().toString()); setShowAchievementModal(false); }
+  async function handleLogout() { const supabase = getSupabaseBrowserClient(); if (supabase) await supabase.auth.signOut(); router.push("/login"); }
+  function handleDownloadPdf() { window.print(); }
+  function useCommand(command: string) { if (command.startsWith("Log achievement")) { setShowAchievementModal(true); return; } setInput(command); }
 
-  async function handleLogout() {
-    const supabase = getSupabaseBrowserClient();
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    router.push("/login");
-  }
-
-  function handleDownloadPdf() {
-    window.print();
-  }
-
-  function useCommand(command: string) {
-    if (command.startsWith("Log achievement")) {
-      setShowAchievementModal(true);
-      return;
-    }
-    setInput(command);
-  }
-
-  if (initialLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="flex items-center gap-3 text-slate-500">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Loading workspace...
-        </div>
-      </div>
-    );
-  }
+  if (initialLoading) return <div className="flex min-h-screen items-center justify-center bg-slate-50"><div className="flex items-center gap-3 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Loading workspace...</div></div>;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
-      {/* Top bar */}
       <header className="site-header no-print sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b bg-white px-4 shadow-sm sm:px-6">
+        <div className="flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 text-xs font-bold text-white">C</div><span className="font-display text-base font-bold tracking-tight text-slate-950">CareerPath AI</span></div>
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 text-xs font-bold text-white">
-            C
-          </div>
-          <span className="font-display text-base font-bold tracking-tight text-slate-950">
-            CareerPath AI
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={startNewResume} className="hidden sm:flex">
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New Memory
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")} className="hidden sm:flex">
-            <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-            Saved Work
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={!currentResume}>
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Download PDF</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="mr-1.5 h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Logout</span>
-          </Button>
+          <Button variant="outline" size="sm" onClick={startNewResume} className="hidden sm:flex"><Plus className="mr-1.5 h-3.5 w-3.5" />New Memory</Button>
+          <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")} className="hidden sm:flex"><FolderOpen className="mr-1.5 h-3.5 w-3.5" />Saved Work</Button>
+          <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={!currentResume}><Download className="mr-1.5 h-3.5 w-3.5" /><span className="hidden sm:inline">Download PDF</span></Button>
+          <Button variant="outline" size="sm" onClick={handleLogout}><LogOut className="mr-1.5 h-3.5 w-3.5" /><span className="hidden sm:inline">Logout</span></Button>
         </div>
       </header>
-
       <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)_320px] xl:grid-cols-[430px_minmax(0,1fr)_360px]">
-        {/* Chat Sidebar */}
         <ChatInterface />
-
-        {/* Center Workspace */}
         <section className="min-h-0 overflow-y-auto bg-slate-100 print:block print:bg-white print:p-0 print:overflow-visible">
-          <div className="no-print border-b bg-white px-4">
-            <Tabs
-              active={activeTab}
-              onChange={setActiveTab}
-              tabs={[
-                { id: "dashboard", label: "Dashboard" },
-                { id: "memory", label: "Memory" },
-                { id: "resume", label: "Resume" },
-                { id: "job", label: "Job Intel" },
-                { id: "tailor", label: "Tailor" },
-                { id: "audit", label: "ATS Audit" },
-                { id: "improve", label: "Improve" },
-                { id: "cover", label: "Cover Letter" },
-                { id: "linkedin", label: "LinkedIn" },
-                { id: "applications", label: "Applications" },
-                { id: "coach", label: "Coach" },
-                { id: "achievements", label: "Achievements" },
-              ]}
-            />
-          </div>
+          <div className="no-print border-b bg-white px-4"><Tabs active={activeTab} onChange={setActiveTab} tabs={[{ id: "dashboard", label: "Dashboard" }, { id: "memory", label: "Memory" }, { id: "resume", label: "Resume" }, { id: "job", label: "Job Intel" }, { id: "tailor", label: "Tailor" }, { id: "audit", label: "ATS Audit" }, { id: "improve", label: "Improve" }, { id: "cover", label: "Cover Letter" }, { id: "linkedin", label: "LinkedIn" }, { id: "applications", label: "Applications" }, { id: "coach", label: "Coach" }, { id: "achievements", label: "Achievements" }, { id: "power", label: "Power Tools" }]} /></div>
           <div className="p-4 sm:p-6 print:p-0">
             {activeTab === "dashboard" && <DashboardTab workspace={workspace} resume={currentResume} onCommand={useCommand} />}
             {activeTab === "memory" && <MemoryTab workspace={workspace} onCommand={useCommand} />}
@@ -206,66 +101,13 @@ export default function AppWorkspace() {
             {activeTab === "applications" && <ApplicationsTab workspace={workspace} onCommand={useCommand} />}
             {activeTab === "coach" && <CoachTab workspace={workspace} />}
             {activeTab === "achievements" && <AchievementLoggerTab workspace={workspace} onCommand={useCommand} />}
+            {activeTab === "power" && <PowerToolsTab resume={currentResume} onCommand={useCommand} />}
           </div>
         </section>
-
-        {/* Right Info Sidebar */}
-        <aside className="no-print hidden min-h-0 overflow-y-auto border-l bg-white p-4 lg:block">
-          <div className="space-y-4">
-            {currentResume?.score && (
-              <ScorePanel score={currentResume.score} audit={currentResume.audit} />
-            )}
-            <section className="rounded-lg border bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Target className="h-4 w-4 text-blue-600" />
-                <h2 className="text-sm font-semibold text-slate-950">Career Memory</h2>
-              </div>
-              <MemorySummary workspace={workspace} />
-            </section>
-            <section className="rounded-lg border bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Gauge className="h-4 w-4 text-blue-600" />
-                <h2 className="text-sm font-semibold text-slate-950">Next Actions</h2>
-              </div>
-              <NextActions workspace={workspace} />
-            </section>
-          </div>
-        </aside>
-
-        {/* Mobile Resume Preview Modal Handle */}
-        {currentResume && (
-          <div className="border-t p-4 lg:hidden print:hidden">
-            <details className="group">
-              <summary className="no-print flex cursor-pointer items-center gap-2 rounded-lg bg-white p-3 text-sm font-medium text-slate-700 shadow-sm">
-                <FileText className="h-4 w-4 text-blue-600" />
-                View Resume Preview
-                <span className="ml-auto text-xs text-slate-400">
-                  Score: {currentResume.score?.overall ?? "-"} /100
-                </span>
-              </summary>
-              <div className="mt-3">
-                <ResumeDocument content={currentResume.content} style={currentResume.style} />
-              </div>
-            </details>
-          </div>
-        )}
+        <aside className="no-print hidden min-h-0 overflow-y-auto border-l bg-white p-4 lg:block"><div className="space-y-4">{currentResume?.score && <ScorePanel score={currentResume.score} audit={currentResume.audit} />}<section className="rounded-lg border bg-white p-4"><div className="mb-3 flex items-center gap-2"><Target className="h-4 w-4 text-blue-600" /><h2 className="text-sm font-semibold text-slate-950">Career Memory</h2></div><MemorySummary workspace={workspace} /></section><section className="rounded-lg border bg-white p-4"><div className="mb-3 flex items-center gap-2"><Gauge className="h-4 w-4 text-blue-600" /><h2 className="text-sm font-semibold text-slate-950">Next Actions</h2></div><NextActions workspace={workspace} /></section></div></aside>
+        {currentResume && <div className="border-t p-4 lg:hidden print:hidden"><details className="group"><summary className="no-print flex cursor-pointer items-center gap-2 rounded-lg bg-white p-3 text-sm font-medium text-slate-700 shadow-sm"><FileText className="h-4 w-4 text-blue-600" />View Resume Preview<span className="ml-auto text-xs text-slate-400">Score: {currentResume.score?.overall ?? "-"} /100</span></summary><div className="mt-3"><ResumeDocument content={currentResume.content} style={currentResume.style} /></div></details></div>}
       </main>
-      
-      {showAchievementModal && (
-        <AchievementPromptModal
-          onClose={handleCloseAchievementModal}
-          onLogAchievement={async (text) => {
-            handleCloseAchievementModal();
-            // We can't directly await sendMessage here without exposing it.
-            // But we can set the input and trigger the chat send by putting it in a small wrapper or just trusting ChatInterface.
-            // Since sendMessage is inside ChatInterface, let's just append to messages directly? 
-            // Actually, we'll set the input and let the user click Send, or we can move sendMessage to the store.
-            // Let's just set the input.
-            setInput(text);
-          }}
-        />
-      )}
-      
+      {showAchievementModal && <AchievementPromptModal onClose={handleCloseAchievementModal} onLogAchievement={async (text) => { handleCloseAchievementModal(); setInput(text); }} />}
       <RateLimitAlert until={rateLimitUntil} onClear={() => setRateLimitUntil(null)} />
     </div>
   );

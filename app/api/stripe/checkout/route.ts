@@ -2,32 +2,30 @@ import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { stripe } from "@/lib/careerpath/stripe";
 
-const PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID || "price_dummy";
+const PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 
 export async function POST(request: Request) {
   try {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
+    if (!process.env.STRIPE_SECRET_KEY || !PRO_PRICE_ID || !process.env.NEXT_PUBLIC_APP_URL) {
+      return NextResponse.json(
+        { error: { code: "BILLING_NOT_CONFIGURED", message: "Billing is not configured for this deployment." } },
+        { status: 503 },
+      );
+    }
+
     const user = auth.user;
-    
-    // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       billing_address_collection: "auto",
       customer_email: (user as any).email,
-      line_items: [
-        {
-          price: PRO_PRICE_ID,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: PRO_PRICE_ID, quantity: 1 }],
       mode: "subscription",
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?canceled=true`,
-      metadata: {
-        userId: user.id,
-      },
+      metadata: { userId: user.id },
     });
 
     return NextResponse.json({ url: session.url });
