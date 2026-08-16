@@ -22,10 +22,6 @@ import type {
 } from "../types";
 import { achievementItem, bullet, createId, gap, section, sentenceCase, unique, uniqueBy } from "./utils";
 
-// ---------------------------------------------------------------------------
-// Version Guidance
-// ---------------------------------------------------------------------------
-
 const VERSION_GUIDANCE: Record<ResumeVersionType, Omit<SmartResumeVersion, "versionType">> = {
   master: {
     title: "Master Resume",
@@ -92,10 +88,6 @@ const VERSION_GUIDANCE: Record<ResumeVersionType, Omit<SmartResumeVersion, "vers
   },
 };
 
-// ---------------------------------------------------------------------------
-// Resume Document Creation
-// ---------------------------------------------------------------------------
-
 export function createResumeDocumentFromResume(
   resume: CareerPathResume,
   profile: CareerProfile,
@@ -144,24 +136,12 @@ export function createResumeDocumentFromResume(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Smart Resume Versions
-// ---------------------------------------------------------------------------
-
 export function generateSmartResumeVersions(resume: CareerPathResume, profile: CareerProfile): SmartResumeVersion[] {
   const missing = profile.gaps.filter((item) => item.status === "open").map((item) => item.area).slice(0, 4);
   return (Object.entries(VERSION_GUIDANCE) as [ResumeVersionType, Omit<SmartResumeVersion, "versionType">][])
-    .map(([versionType, item]) => ({
-      versionType,
-      ...item,
-      missing: missing.length ? missing : item.missing,
-    }))
+    .map(([versionType, item]) => ({ versionType, ...item, missing: missing.length ? missing : item.missing }))
     .filter((item) => item.versionType !== "job_specific" || Boolean(resume.jobDescription));
 }
-
-// ---------------------------------------------------------------------------
-// Achievement Mining
-// ---------------------------------------------------------------------------
 
 export function mineAchievements(profile: CareerProfile): AchievementMiningResult {
   const suggestedAchievements: AchievementItem[] = [];
@@ -180,7 +160,6 @@ export function mineAchievements(profile: CareerProfile): AchievementMiningResul
       weakBullets.push(bulletText);
       questions.push(gap("project_proof", `What tech stack, deployed link, GitHub link, or user result can prove ${project.name}?`, "high"));
     }
-
     if (!project.links.length) questions.push(gap("project_link", `Do you have a GitHub or live demo link for ${project.name}?`, "high"));
     if (!project.achievements.some((item) => item.impact || item.metric)) {
       questions.push(gap("project_impact", `What changed because of ${project.name}: users, time saved, workflow improved, or problem solved?`, "medium"));
@@ -206,19 +185,21 @@ export function mineAchievements(profile: CareerProfile): AchievementMiningResul
   };
 }
 
-// ---------------------------------------------------------------------------
-// Score Helpers
-// ---------------------------------------------------------------------------
-
-export function toReadinessScore(audit?: CareerPathResumeAudit, tailoringScore?: number): ResumeScore {
+/**
+ * No audit means no score. A role/tailoring percentage by itself is not a
+ * substitute for a completed resume audit and must never be dressed up as a
+ * Career Readiness Score.
+ */
+export function toReadinessScore(audit?: CareerPathResumeAudit, tailoringScore?: number): ResumeScore | undefined {
   const score = audit?.score;
-  const roleMatch = score?.roleAlignment ?? tailoringScore ?? 65;
-  const keywordMatch = score?.keywordCoverage ?? tailoringScore ?? 62;
-  const proofStrength = score?.proofAndMetrics ?? 58;
-  const readability = score?.clarity ?? 72;
-  const seniorityFit = score?.onePageFit ?? 74;
-  const atsCompatibility = score?.atsCompatibility ?? 88;
-  const overall = score?.overall ?? Math.round((roleMatch + keywordMatch + proofStrength + readability + seniorityFit + atsCompatibility) / 6);
+  if (!score) return undefined;
+  const roleMatch = score.roleAlignment ?? tailoringScore ?? score.overall;
+  const keywordMatch = score.keywordCoverage ?? tailoringScore ?? score.overall;
+  const proofStrength = score.proofAndMetrics;
+  const readability = score.clarity;
+  const seniorityFit = score.onePageFit;
+  const atsCompatibility = score.atsCompatibility;
+  const overall = score.overall;
   return {
     overall,
     roleMatch,
@@ -227,7 +208,7 @@ export function toReadinessScore(audit?: CareerPathResumeAudit, tailoringScore?:
     readability,
     seniorityFit,
     atsCompatibility,
-    explanation: `Career Readiness Score: ${overall}/100. Improve it by increasing proof, role alignment, and supported keyword coverage.`,
+    explanation: `Career Readiness Score: ${overall}/100 from the completed resume audit. Improve it by increasing proof, role alignment, and supported keyword coverage.`,
   };
 }
 
@@ -238,10 +219,6 @@ export function inferProofLevel(text: string, link?: string | null): ProofLevel 
   if (/\b(best|amazing|expert|world-class|guaranteed)\b/i.test(text)) return "risky";
   return "weak";
 }
-
-// ---------------------------------------------------------------------------
-// Helpers (Private)
-// ---------------------------------------------------------------------------
 
 function hasSectionContent(content: unknown) {
   if (Array.isArray(content)) return content.length > 0;
