@@ -2,6 +2,9 @@ import type { JobApplication } from "@/lib/careerpath/types";
 import type { CareerLoopAnalyticsData, CareerLoopJobApplication, ConversionCohort, ConversionIntelligence, JobSource } from "./types";
 
 const APPLIED_STATUSES = new Set(["applied", "follow_up_needed", "interview", "rejected", "offer", "ghosted"]);
+const MIN_LEARNING_SAMPLE = 20;
+const MIN_COHORT_SAMPLE = 8;
+const HIGH_CONFIDENCE_COHORT_SAMPLE = 20;
 
 export function inferJobSource(jobUrl?: string | null): JobSource {
   if (!jobUrl) return "other";
@@ -26,6 +29,17 @@ function isOffer(job: JobApplication) {
 
 function pct(numerator: number, denominator: number) {
   return denominator > 0 ? Math.round((numerator / denominator) * 1000) / 10 : 0;
+}
+
+/** 95% Wilson score interval for a binomial proportion. */
+function wilson(successes: number, total: number) {
+  if (total <= 0) return { low: 0, high: 1 };
+  const z = 1.96;
+  const p = successes / total;
+  const denominator = 1 + (z * z) / total;
+  const center = (p + (z * z) / (2 * total)) / denominator;
+  const margin = (z * Math.sqrt((p * (1 - p)) / total + (z * z) / (4 * total * total))) / denominator;
+  return { low: Math.max(0, center - margin), high: Math.min(1, center + margin) };
 }
 
 function cohortFromJobs(key: string, label: string, jobs: CareerLoopJobApplication[]): ConversionCohort {
@@ -85,7 +99,6 @@ export function buildConversionIntelligence(input: JobApplication[]): Conversion
   });
 
   const recommendations: ConversionIntelligence["recommendations"] = [];
-  const MIN_LEARNING_SAMPLE = 8;
   if (applied.length < MIN_LEARNING_SAMPLE) {
     recommendations.push({
       title: "Build the learning loop",
@@ -95,41 +108,61 @@ export function buildConversionIntelligence(input: JobApplication[]): Conversion
     });
   }
 
-  const comparable = (cohorts: ConversionCohort[]) => cohorts.filter((cohort) => cohort.applications >= 3);
+  const comparable = (cohorts: ConversionCohort[]) => cohorts.filter((cohort) => cohort.applications >= MIN_COHORT_SAMPLE);
   const compareDimension = (cohorts: ConversionCohort[], title: string, actionPrefix: string) => {
     const eligible = comparable(cohorts).sort((a, b) => b.interviewRate - a.interviewRate);
     if (eligible.length < 2) return;
     const best = eligible[0];
     const worst = eligible[eligible.length - 1];
-    if (best.interviewRate - worst.interviewRate < 5) return;
+    const rateGap = best.interviewRate - worst.interviewRate;
+    if (rateGap < 10) return;
+
+    const bestInterval = wilson(best.interviews, best.applications);
+    const worstInterval = wilson(worst.interviews, worst.applications);
+    const intervalsSeparated = bestInterval.low > worstInterval.high;
+    const minimumSample = Math.min(best.applications, worst.applications);
+
+    // Do not label noisy small-cohort differences as high confidence. Even
+    // when the observed percentages look dramatic, uncertainty remains wide.
+    const confidence: "low" | "medium" | "high" =
+      minimumSample >= HIGH_CONFIDENCE_COHORT_SAMPLE && intervalsSeparated
+        ? "high"
+        : minimumSample >= MIN_COHORT_SAMPLE
+          ? "medium"
+          : "low";
+
     recommendations.push({
       title,
-      explanation: `${best.label} has a ${best.interviewRate}% recorded interview rate (${best.interviews}/${best.applications}) versus ${worst.label} at ${worst.interviewRate}% (${worst.interviews}/${worst.applications}). This is correlation, not proof of causation.`,
-      action: `${actionPrefix} ${best.label} while continuing to track outcomes before making a permanent strategy change.`,
-      confidence: Math.min(best.applications, worst.applications) >= 6 ? "high" : "medium",
+      explanation: `${best.label} has a ${best.interviewRate}% recorded interview rate (${best.interviews}/${best.applications}) versus ${worst.label} at ${worst.interviewRate}% (${worst.interviews}/${worst.applications}). This is observational correlation, not proof that the segment caused the difference.`,
+      action: `${actionPrefix} ${best.label} as a limited experiment while continuing to track outcomes before making a permanent strategy change.`,
+      confidence,
     });
   };
 
-  compareDimension(byRole, "Your target roles are converting differently", "Test focusing more applications on");
-  compareDimension(bySource, "Application source matters for your search", "Test prioritizing");
-  compareDimension(byResume, "One resume version is outperforming another", "Use more of");
-  compareDimension(byFit, "Higher-fit applications are producing different outcomes", "Prioritize");
+  // Segment optimization only begins after there is enough overall history to
+  // avoid turning early random outcomes into product recommendations.
+  if (applied.length >= MIN_LEARNING_SAMPLE) {
+    compareDimension(byRole, "Your target roles may be converting differently", "Test focusing more applications on");
+    compareDimension(bySource, "Application source may matter for your search", "Test prioritizing");
+    compareDimension(byResume, "One resume version may be outperforming another", "Use more of");
+    compareDimension(byFit, "Higher-fit applications may be producing different outcomes", "Prioritize");
+  }
 
   const scoredJobs = applied.filter((job) => typeof job.fitScore === "number");
   const lowFitCount = scoredJobs.filter((job) => (job.fitScore || 0) < 55).length;
-  if (scoredJobs.length >= 5 && lowFitCount / scoredJobs.length >= 0.4) {
+  if (scoredJobs.length >= 12 && lowFitCount / scoredJobs.length >= 0.4) {
     recommendations.push({
-      title: "Too much effort is going into low-fit roles",
+      title: "A large share of effort is going into low-fit roles",
       explanation: `${lowFitCount} of ${scoredJobs.length} scored applications were below 55% fit when submitted.`,
-      action: "Use Apply/Skip before tailoring and redirect time toward stronger evidence-backed opportunities.",
-      confidence: "medium",
+      action: "Test Apply/Skip before tailoring and redirect some time toward stronger evidence-backed opportunities.",
+      confidence: scoredJobs.length >= 25 ? "high" : "medium",
     });
   }
 
   if (!recommendations.length) {
     recommendations.push({
       title: "Keep collecting clean outcome data",
-      explanation: "No segment has enough separation yet to justify a strategy change.",
+      explanation: "No segment has enough reliable separation yet to justify a strategy change.",
       action: "Continue targeted applications and update statuses consistently so CareerLoop can learn from your real outcomes.",
       confidence: "low",
     });
@@ -150,8 +183,8 @@ export function buildConversionIntelligence(input: JobApplication[]): Conversion
       minimumApplications: MIN_LEARNING_SAMPLE,
       applicationsNeeded: Math.max(0, MIN_LEARNING_SAMPLE - applied.length),
       message: applied.length >= MIN_LEARNING_SAMPLE
-        ? "CareerLoop has enough baseline outcomes to start comparing segments. Treat recommendations as experiments, not causal conclusions."
-        : `Track ${Math.max(0, MIN_LEARNING_SAMPLE - applied.length)} more outcome-bearing applications to unlock stronger strategy comparisons.`,
+        ? `CareerLoop has enough baseline outcomes to begin cautious segment experiments. Cohorts still need at least ${MIN_COHORT_SAMPLE} observations each, and recommendations remain observational rather than causal.`
+        : `Track ${Math.max(0, MIN_LEARNING_SAMPLE - applied.length)} more outcome-bearing applications to unlock strategy comparisons.`,
     },
   };
 }
