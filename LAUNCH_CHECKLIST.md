@@ -9,18 +9,19 @@
 - [ ] `npm run build`
 - [ ] GitHub Actions CI green on the release PR
 
-> Local dependency installation can be unavailable in restricted sandboxes. GitHub Actions is the authoritative release gate for this branch. Do not mark the release ready until CI is green.
+> GitHub Actions is the authoritative automated release gate. Do not mark the release ready until CI is green.
 
 ## Database
 
 - [ ] Apply every pending file in `supabase/migrations/` to production
 - [ ] Confirm `resumes.differentiation_json` exists
-- [ ] Confirm `job_applications.career_resume_id` and `resume_version` exist
+- [ ] Confirm `job_applications.career_resume_id`, `resume_version`, `source`, `fit_score`, and `fit_recommendation` exist
 - [ ] Verify RLS denies cross-user reads and writes
 - [ ] Verify `SUPABASE_SERVICE_ROLE_KEY` is server-only
 
 ## Infrastructure
 
+- [ ] Node.js 22+ in local/CI/production runtime
 - [ ] `/api/health` returns HTTP 200 and `status: ready`
 - [ ] Inngest production app is connected and processing `resume/process.intent`
 - [ ] Upstash Redis and `RATE_LIMIT_SALT` configured
@@ -35,7 +36,7 @@
 - [ ] Settings shows actual plan after webhook
 - [ ] Billing portal opens for Pro user
 
-## Critical user flows
+## Critical CareerOS flows
 
 - [ ] Sign up → login → logout → password reset
 - [ ] Upload valid PDF; reject invalid/oversized files
@@ -51,6 +52,18 @@
 - [ ] Duplicate/delete resume
 - [ ] Print/Save PDF in Chrome and Safari
 - [ ] Chrome extension clip flow against supported sites
+
+## Critical CareerLoop flows
+
+- [ ] Career Twin renders evidence coverage and provenance from Career Memory
+- [ ] Apply / Skip works with a pasted JD
+- [ ] Apply / Skip safely handles a public job URL and rejects localhost/private URLs
+- [ ] Missing requirements show as missing rather than being added as fake experience
+- [ ] Saving an analyzed opportunity persists resume ID/version, source, fit score, and recommendation
+- [ ] Tracking an application from chat persists the same attribution fields
+- [ ] Updating status to interview/rejected/offer changes Conversion Intelligence
+- [ ] Conversion Intelligence compares role/source/resume/fit cohorts only after meaningful samples
+- [ ] Strategy recommendations explicitly describe observed correlation rather than causation
 
 ## Launch decision
 
