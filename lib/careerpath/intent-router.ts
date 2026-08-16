@@ -90,11 +90,6 @@ export async function inferIntentLLM(
       model: process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct",
       inputJson: { messageLength: message.length, hasResume },
       outputJson: result.object,
-      inputTokens: result.usage?.inputTokens,
-      outputTokens: result.usage?.outputTokens,
-      totalTokens: result.usage?.totalTokens,
-      provider: "nvidia",
-      attempts: 1,
     });
 
     return result.object;
@@ -110,8 +105,6 @@ export async function inferIntentLLM(
       inputJson: { messageLength: message.length, hasResume },
       outputJson: fallback,
       error: error instanceof Error ? error.message : "Intent classification failed",
-      provider: "nvidia",
-      attempts: 1,
     });
     return fallback;
   }
