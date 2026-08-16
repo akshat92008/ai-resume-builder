@@ -13,11 +13,7 @@ import {
   tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
 import { validateResumeTruthfulness } from "@/lib/resume/validator";
-import {
-  createResumeRecord,
-  auditResume,
-  tailorResume,
-} from "@/lib/careerpath/agents";
+import { createResumeRecord } from "@/lib/careerpath/agents";
 import {
   applyAchievementLog,
   buildCareerWorkspaceState,
@@ -386,48 +382,16 @@ export async function applyBrainToResume(input: {
     profile.target?.targetRoles?.[0] ||
     "Target Role";
 
-  const audit =
-    input.mode === "build"
-      ? {
-          score: {
-            overall: 85,
-            atsCompatibility: 90,
-            roleAlignment: 80,
-            keywordCoverage: 80,
-            bulletStrength: 85,
-            clarity: 90,
-            proofAndMetrics: 70,
-            onePageFit: 100,
-            formattingSafety: 100,
-            truthfulness: 100,
-            impactScore: 85,
-            readability: 90,
-            leadership: 80,
-          },
-          topStrengths: [],
-          weaknesses: [],
-          probabilityOfInterview: "Medium" as const,
-          recruiterComments: "Initial draft generated.",
-          issues: [
-            {
-              type: "INFO",
-              section: "general",
-              message:
-                "Initial draft generated. Click 'Improve' to refine and score.",
-              severity: "low" as const,
-            },
-          ],
-          recommendedFixes: [
-            "Review the generated draft and add any missing details.",
-          ],
-          summary: "Initial draft generated.",
-        }
-      : await auditResumeAgent(
-          content,
-          targetRole,
-          input.currentResume?.jobDescription || "",
-          input.metadata,
-        );
+  // A score shown to users must come from a real audit of the exact cleaned
+  // resume content. Never manufacture an initial score to make the UI look
+  // complete. If this audit fails, the whole generation attempt remains
+  // retryable and no misleading score is persisted.
+  const audit = await auditResumeAgent(
+    content,
+    targetRole,
+    input.currentResume?.jobDescription || "",
+    input.metadata,
+  );
 
   const now = new Date().toISOString();
 
@@ -455,6 +419,7 @@ export async function applyBrainToResume(input: {
         mode: input.mode,
         targetRole,
         content,
+        audit,
         title:
           validated.cleanedResume.title ||
           `${targetRole || "CareerPath"} Resume`,
