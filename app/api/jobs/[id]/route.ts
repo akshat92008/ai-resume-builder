@@ -3,6 +3,7 @@ import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getJobApplication, saveJobApplication, deleteJobApplication } from "@/lib/careerpath/db-jobs";
 import { logger } from "@/lib/observability/logger";
 import { UpdateJobApplicationSchema } from "@/lib/careerpath/job-validation";
+import type { JobApplication } from "@/lib/careerpath/types";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -48,10 +49,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         { status: 400 },
       );
     }
-    const updates = parsed.data;
+    const updates = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [key, value ?? undefined]),
+    ) as Partial<JobApplication>;
 
     // Create updated job object, merging only validated editable fields.
-    const updatedJob = {
+    const updatedJob: JobApplication = {
       ...job,
       ...updates,
       id: job.id, // Prevent ID tampering
