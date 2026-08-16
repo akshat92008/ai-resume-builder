@@ -23,6 +23,7 @@ import {
   mergeCareerMemory,
   refreshCareerProfileInsights,
 } from "@/lib/careerpath/career-os";
+import { enforceResumeClaimProvenance } from "@/lib/careerloop/provenance";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
 import { saveServerResume, saveResumeVersion } from "@/lib/careerpath/db";
@@ -34,27 +35,13 @@ import type {
   GapReport,
 } from "@/lib/careerpath/types";
 
-// ---------------------------------------------------------------------------
-// CREATE / BUILD
-// ---------------------------------------------------------------------------
-
 export async function handleCreateResume(
   message: string,
   userId: string,
   metadata: { userId: string; resumeId?: string },
 ) {
-  return applyBrainToResume({
-    message,
-    currentResume: null,
-    userId,
-    mode: "build",
-    metadata,
-  });
+  return applyBrainToResume({ message, currentResume: null, userId, mode: "build", metadata });
 }
-
-// ---------------------------------------------------------------------------
-// IMPROVE
-// ---------------------------------------------------------------------------
 
 export async function handleImproveResume(
   message: string,
@@ -62,16 +49,7 @@ export async function handleImproveResume(
   userId: string,
   metadata: { userId: string; resumeId?: string },
 ) {
-  if (!currentResume) {
-    return applyBrainToResume({
-      message,
-      currentResume: null,
-      userId,
-      mode: "improve",
-      metadata,
-    });
-  }
-
+  if (!currentResume) return applyBrainToResume({ message, currentResume: null, userId, mode: "improve", metadata });
   await saveResumeVersion({
     userId,
     resumeId: currentResume.id,
@@ -79,20 +57,8 @@ export async function handleImproveResume(
     resumeJson: currentResume.content,
     reason: "Pre-improvement snapshot",
   });
-
-  return applyBrainToResume({
-    message,
-    currentResume,
-    userId,
-    mode: "improve",
-    metadata,
-    versionCreated: true,
-  });
+  return applyBrainToResume({ message, currentResume, userId, mode: "improve", metadata, versionCreated: true });
 }
-
-// ---------------------------------------------------------------------------
-// TAILOR TO JOB
-// ---------------------------------------------------------------------------
 
 export async function handleTailorToJob(
   message: string,
@@ -100,16 +66,7 @@ export async function handleTailorToJob(
   userId: string,
   metadata: { userId: string; resumeId?: string },
 ) {
-  if (!currentResume) {
-    return applyBrainToResume({
-      message,
-      currentResume: null,
-      userId,
-      mode: "tailor",
-      metadata,
-    });
-  }
-
+  if (!currentResume) return applyBrainToResume({ message, currentResume: null, userId, mode: "tailor", metadata });
   await saveResumeVersion({
     userId,
     resumeId: currentResume.id,
@@ -117,20 +74,8 @@ export async function handleTailorToJob(
     resumeJson: currentResume.content,
     reason: "Pre-tailoring snapshot",
   });
-
-  return applyBrainToResume({
-    message,
-    currentResume,
-    userId,
-    mode: "tailor",
-    metadata,
-    versionCreated: true,
-  });
+  return applyBrainToResume({ message, currentResume, userId, mode: "tailor", metadata, versionCreated: true });
 }
-
-// ---------------------------------------------------------------------------
-// ADD INFORMATION
-// ---------------------------------------------------------------------------
 
 export async function handleAddInformation(
   message: string,
@@ -138,27 +83,8 @@ export async function handleAddInformation(
   userId: string,
   metadata: { userId: string; resumeId?: string },
 ) {
-  if (!currentResume) {
-    return applyBrainToResume({
-      message,
-      currentResume: null,
-      userId,
-      mode: "build",
-      metadata,
-    });
-  }
-  return applyBrainToResume({
-    message,
-    currentResume,
-    userId,
-    mode: "build",
-    metadata,
-  });
+  return applyBrainToResume({ message, currentResume, userId, mode: "build", metadata });
 }
-
-// ---------------------------------------------------------------------------
-// REWRITE SECTION
-// ---------------------------------------------------------------------------
 
 export async function handleRewriteSection(
   message: string,
@@ -168,34 +94,18 @@ export async function handleRewriteSection(
 ) {
   if (!currentResume) {
     return {
-      assistantMessage:
-        "I don't have a resume to edit. Build one first by sharing your career details.",
+      assistantMessage: "I don't have a resume to edit. Build one first by sharing your career details.",
       resume: null,
       resumeId: null,
     };
   }
-
-  return applyBrainToResume({
-    message,
-    currentResume,
-    userId,
-    mode: "improve",
-    metadata,
-  });
+  return applyBrainToResume({ message, currentResume, userId, mode: "improve", metadata });
 }
 
-// ---------------------------------------------------------------------------
-// GENERATE RESUME VERSION (Smart Versions)
-// ---------------------------------------------------------------------------
-
-export async function handleGenerateResumeVersion(
-  message: string,
-  currentResume: CareerPathResume | null,
-) {
+export async function handleGenerateResumeVersion(message: string, currentResume: CareerPathResume | null) {
   if (!currentResume) {
     return {
-      assistantMessage:
-        "Build a resume first, then I can generate master, fresher, internship, frontend, full stack, AI product, startup, corporate, and job-specific versions.",
+      assistantMessage: "Build a resume first, then I can generate master, fresher, internship, frontend, full stack, AI product, startup, corporate, and job-specific versions.",
       resume: null,
       resumeId: null,
       missingFields: ["resume"],
@@ -204,16 +114,8 @@ export async function handleGenerateResumeVersion(
   }
 
   decorateResumeForCareerOS(currentResume, message);
-  const versions = generateSmartResumeVersions(
-    currentResume,
-    currentResume.careerProfile!,
-  );
-  const requested =
-    versions.find((version) =>
-      message
-        .toLowerCase()
-        .includes(version.versionType.replace("_", " ")),
-    ) || versions[0];
+  const versions = generateSmartResumeVersions(currentResume, currentResume.careerProfile!);
+  const requested = versions.find((version) => message.toLowerCase().includes(version.versionType.replace("_", " "))) || versions[0];
   return {
     assistantMessage: `${requested.title} is ready as a smart version strategy.\n\nUse it when: ${requested.whenToUse}\n\nEmphasizes: ${requested.emphasizes.join(", ")}.\nReduces: ${requested.reduces.join(", ")}.\nMissing: ${(requested.missing.length ? requested.missing : ["nothing critical"]).join(", ")}.`,
     resume: currentResume,
@@ -221,10 +123,6 @@ export async function handleGenerateResumeVersion(
     workspace: buildCareerWorkspaceState(currentResume, message),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Core LLM pipeline: applyBrainToResume
-// ---------------------------------------------------------------------------
 
 export async function applyBrainToResume(input: {
   message: string;
@@ -234,22 +132,12 @@ export async function applyBrainToResume(input: {
   metadata?: { userId: string; resumeId?: string };
   versionCreated?: boolean;
 }) {
-  let legacyProfile: CareerPathProfile =
-    input.currentResume?.profile ||
-    emptyCareerPathProfile(input.userId);
+  let legacyProfile: CareerPathProfile = input.currentResume?.profile || emptyCareerPathProfile(input.userId);
   const existingCareerProfile = input.currentResume?.careerProfile
     ? refreshCareerProfileInsights(input.currentResume.careerProfile)
     : null;
-  let profile =
-    existingCareerProfile ||
-    legacyProfileToCareerProfile(
-      legacyProfile,
-      input.userId,
-      input.message,
-    );
-  let achievementLogResult: ReturnType<
-    typeof applyAchievementLog
-  >["result"] | null = null;
+  let profile = existingCareerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+  let achievementLogResult: ReturnType<typeof applyAchievementLog>["result"] | null = null;
   let assistantMessage = "";
 
   if (input.mode === "build") {
@@ -266,17 +154,8 @@ export async function applyBrainToResume(input: {
       recommendedMissing: [],
       resumeRisk: [],
     };
-    if (input.message.length < 50) {
-      gaps = await detectGapsAgent(
-        legacyProfile,
-        input.mode,
-        input.metadata,
-      );
-    }
-    if (
-      !gaps.readyToGenerate &&
-      gaps.questionsToAsk.length > 0
-    ) {
+    if (input.message.length < 50) gaps = await detectGapsAgent(legacyProfile, input.mode, input.metadata);
+    if (!gaps.readyToGenerate && gaps.questionsToAsk.length > 0) {
       return {
         assistantMessage: `I need a few details first:\n\n${gaps.questionsToAsk.map((q, i) => `${i + 1}. ${q.question}`).join("\n")}`,
         resume: input.currentResume,
@@ -285,11 +164,8 @@ export async function applyBrainToResume(input: {
         workspace: buildCareerWorkspaceState(input.currentResume),
       };
     }
-    const extractedCareerProfile = legacyProfileToCareerProfile(
-      legacyProfile,
-      input.userId,
-      input.message,
-    );
+
+    const extractedCareerProfile = legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
     profile = mergeCareerMemory(existingCareerProfile, extractedCareerProfile);
     if (isAchievementLogInput(input.message)) {
       const logged = applyAchievementLog(profile, input.message);
@@ -331,8 +207,7 @@ export async function applyBrainToResume(input: {
       input.currentResume.targetRole || "",
       input.metadata,
     );
-    assistantMessage =
-      "Improved the wording and formatting while preserving your original details.";
+    assistantMessage = "Improved the wording and formatting while preserving your original details.";
   } else {
     content = await writeResumeAgent(
       legacyProfile,
@@ -340,8 +215,7 @@ export async function applyBrainToResume(input: {
       input.currentResume?.jobDescription || "",
       input.metadata,
     );
-    if (!assistantMessage)
-      assistantMessage = "Created a new resume based on your profile.";
+    if (!assistantMessage) assistantMessage = "Created a new resume based on your profile.";
   }
 
   const beforeState = input.currentResume
@@ -354,64 +228,55 @@ export async function applyBrainToResume(input: {
     id: input.currentResume?.id || "new",
     targetRole: input.currentResume?.targetRole,
   });
-
-  const validationMode =
-    input.mode === "tailor"
-      ? "TAILOR_TO_JOB"
-      : input.mode === "improve"
-        ? "IMPROVE_EXISTING_RESUME"
-        : "BUILD_FROM_DATA";
-  const validated = validateResumeTruthfulness(
-    beforeState,
-    afterState,
-    input.message,
-    {
-      type: validationMode,
-      confidence: 1,
-      reason: "LLM Orchestrator",
-      needsLlm: true,
-      needsCurrentResume: Boolean(input.currentResume),
-      hasEnoughData: true,
-    },
-  );
+  const validationMode = input.mode === "tailor"
+    ? "TAILOR_TO_JOB"
+    : input.mode === "improve"
+      ? "IMPROVE_EXISTING_RESUME"
+      : "BUILD_FROM_DATA";
+  const validated = validateResumeTruthfulness(beforeState, afterState, input.message, {
+    type: validationMode,
+    confidence: 1,
+    reason: "LLM Orchestrator",
+    needsLlm: true,
+    needsCurrentResume: Boolean(input.currentResume),
+    hasEnoughData: true,
+  });
 
   content = deriveRenderableResume(validated.cleanedResume);
 
-  const targetRole =
-    input.currentResume?.targetRole ||
-    profile.target?.targetRoles?.[0] ||
-    "Target Role";
+  // Claim-level provenance is a second deterministic gate after the existing
+  // validator. It links each generated bullet to Career Memory evidence and
+  // strips unsupported claims before they can be scored, rendered or exported.
+  const provenance = enforceResumeClaimProvenance(content, profile);
+  content = provenance.content;
+  if (provenance.report.removedClaims > 0) {
+    assistantMessage += ` Removed ${provenance.report.removedClaims} unsupported claim${provenance.report.removedClaims === 1 ? "" : "s"} that could not be linked back to Career Memory evidence.`;
+  }
 
-  // A score shown to users must come from a real audit of the exact cleaned
-  // resume content. Never manufacture an initial score to make the UI look
-  // complete. If this audit fails, the whole generation attempt remains
-  // retryable and no misleading score is persisted.
+  const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
+
+  // A user-visible score must come from a real audit of the final, provenance-
+  // checked content. There are no starter or fabricated scores in this path.
   const audit = await auditResumeAgent(
     content,
     targetRole,
     input.currentResume?.jobDescription || "",
     input.metadata,
   );
-
   const now = new Date().toISOString();
 
   const nextResume = input.currentResume
     ? {
         ...input.currentResume,
-        title:
-          validated.cleanedResume.title || input.currentResume.title,
+        title: validated.cleanedResume.title || input.currentResume.title,
         targetRole,
         mode: input.mode,
         status: "final" as const,
         content,
         score: audit.score,
         audit,
-        jobDescription:
-          validated.cleanedResume.target.jobDescription ||
-          input.currentResume.jobDescription,
-        version:
-          input.currentResume.version +
-          (input.mode === "build" ? 0 : 1),
+        jobDescription: validated.cleanedResume.target.jobDescription || input.currentResume.jobDescription,
+        version: input.currentResume.version + (input.mode === "build" ? 0 : 1),
         updatedAt: now,
       }
     : createResumeRecord({
@@ -420,21 +285,15 @@ export async function applyBrainToResume(input: {
         targetRole,
         content,
         audit,
-        title:
-          validated.cleanedResume.title ||
-          `${targetRole || "CareerPath"} Resume`,
+        title: validated.cleanedResume.title || `${targetRole || "CareerPath"} Resume`,
       });
 
   nextResume.profile = legacyProfile;
   nextResume.careerProfile = profile;
-
-  if (tailoringResult) {
-    nextResume.tailoring = tailoringResult;
-  }
+  if (tailoringResult) nextResume.tailoring = tailoringResult;
 
   decorateResumeForCareerOS(nextResume, input.message, {
-    versionType:
-      input.mode === "tailor" ? "job_specific" : "master",
+    versionType: input.mode === "tailor" ? "job_specific" : "master",
   });
   await saveServerResume(nextResume, input.userId);
 
