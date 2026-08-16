@@ -1,70 +1,77 @@
 # CareerOS Production Release Checklist
 
-## Automated release gate
+## Automated gate
 
 - [ ] `npm ci`
+- [ ] `npm audit --omit=dev --audit-level=high`
 - [ ] `npm run lint`
 - [ ] `npm run typecheck`
 - [ ] `npm test`
 - [ ] `npm run build`
-- [ ] GitHub Actions CI green on the release PR
-
-> GitHub Actions is the authoritative automated release gate. Do not mark the release ready until CI is green.
+- [ ] Chrome extension beta builds successfully
+- [ ] GitHub Actions is green on the exact release commit
 
 ## Database
 
-- [ ] Apply every pending file in `supabase/migrations/` to production
-- [ ] Confirm `resumes.differentiation_json` exists
-- [ ] Confirm `job_applications.career_resume_id`, `resume_version`, `source`, `fit_score`, and `fit_recommendation` exist
-- [ ] Verify RLS denies cross-user reads and writes
-- [ ] Verify `SUPABASE_SERVICE_ROLE_KEY` is server-only
+- [ ] Apply every pending file in `supabase/migrations/` in order
+- [ ] Apply `20260816144000_production_readiness.sql`
+- [ ] Apply `20260816161000_careerloop_core.sql`
+- [ ] Apply `20260816172000_stripe_event_hardening.sql`
+- [ ] Verify `resumes.differentiation_json` exists
+- [ ] Verify CareerLoop attribution columns exist on `job_applications`
+- [ ] Verify Stripe webhook event ledger/RPC exists if billing is enabled
+- [ ] Verify RLS denies cross-user reads and writes with two real test users
+- [ ] Verify service-role key is server-only
+- [ ] Verify backup/PITR and restore procedure
 
 ## Infrastructure
 
-- [ ] Node.js 22+ in local/CI/production runtime
-- [ ] `/api/health` returns HTTP 200 and `status: ready`
-- [ ] Inngest production app is connected and processing `resume/process.intent`
-- [ ] Upstash Redis and `RATE_LIMIT_SALT` configured
-- [ ] Sentry DSN configured
-- [ ] Production domain configured in `NEXT_PUBLIC_APP_URL`
+- [ ] `/api/health` returns HTTP 200 / `status: ready`
+- [ ] Health response commit matches the release commit
+- [ ] Inngest production app processes a real AI job
+- [ ] Upstash rate limit deliberately returns HTTP 429
+- [ ] Sentry receives synthetic server + browser errors without resume/job payloads
+- [ ] Production domain is HTTPS
+- [ ] CSP, HSTS, frame denial, and nosniff headers are present
 
-## Billing (if enabled)
+## Billing (only if enabled)
 
-- [ ] `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_PRO_PRICE_ID` configured
-- [ ] Checkout completes in Stripe test mode
-- [ ] Webhook promotes user to Pro
-- [ ] Settings shows actual plan after webhook
-- [ ] Billing portal opens for Pro user
+- [ ] Stripe secret, webhook secret, and Pro price are all configured
+- [ ] Checkout completes in test mode
+- [ ] Active Pro account cannot accidentally create a second checkout
+- [ ] Customer portal uses the persisted customer mapping
+- [ ] Duplicate webhook replay is idempotent
+- [ ] Stale/out-of-order webhook cannot overwrite newer subscription state
+- [ ] Cancellation/downgrade updates entitlements
+- [ ] Persistence failure produces a retryable non-2xx webhook response
+- [ ] Only after all tests pass, switch Stripe to live credentials
 
-## Critical CareerOS flows
+## Critical web flows
 
 - [ ] Sign up → login → logout → password reset
 - [ ] Upload valid PDF; reject invalid/oversized files
 - [ ] Build Career Memory and generate resume
-- [ ] Refresh and confirm resume + advanced Power Tool results persist
+- [ ] Refresh and confirm resume + Power Tool results persist
 - [ ] Tailor to job without inventing unsupported skills
 - [ ] ATS audit + ATS robot view
 - [ ] Humanizer + STAR + impact + gap analysis + persona generation
-- [ ] Generate outreach pack
-- [ ] Track application from chat and confirm it appears in Job Tracker + analytics
+- [ ] Apply/Skip from pasted JD and supported public URL
+- [ ] Career Twin evidence graph renders from real memory
+- [ ] Generate outreach/application pack
+- [ ] Track application and confirm Job Tracker + Conversion Intelligence attribution
 - [ ] Drag application stages and refresh
 - [ ] Offer comparison
 - [ ] Duplicate/delete resume
 - [ ] Print/Save PDF in Chrome and Safari
-- [ ] Chrome extension clip flow against supported sites
+- [ ] Free/Pro quota behavior
 
-## Critical CareerLoop flows
+## Extension status
 
-- [ ] Career Twin renders evidence coverage and provenance from Career Memory
-- [ ] Apply / Skip works with a pasted JD
-- [ ] Apply / Skip safely handles a public job URL and rejects localhost/private URLs
-- [ ] Missing requirements show as missing rather than being added as fake experience
-- [ ] Saving an analyzed opportunity persists resume ID/version, source, fit score, and recommendation
-- [ ] Tracking an application from chat persists the same attribution fields
-- [ ] Updating status to interview/rejected/offer changes Conversion Intelligence
-- [ ] Conversion Intelligence compares role/source/resume/fit cohorts only after meaningful samples
-- [ ] Strategy recommendations explicitly describe observed correlation rather than causation
+- [ ] Extension build is green
+- [ ] Authenticated production clip E2E is proven before GA
+
+Until that second box is checked, the Chrome extension is **beta** and is not a web-app launch blocker.
 
 ## Launch decision
 
-Launch only when CI is green, production migrations are applied, `/api/health` is ready, and the critical user flows above have been exercised against the production environment.
+Launch the web app only when CI is green, production migrations are applied, `/api/health` is ready, the infrastructure gate is complete, and all critical web flows pass on the production deployment.

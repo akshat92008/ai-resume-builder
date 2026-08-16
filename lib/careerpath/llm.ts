@@ -4,16 +4,19 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateObject, LanguageModel } from "ai";
 
 export function getModel(fast?: boolean): LanguageModel {
+  const apiKey = process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY;
+  if (!apiKey) throw new Error("AI provider is not configured for this deployment.");
+
   const nvidia = createOpenAI({
     baseURL: process.env.NVIDIA_NIM_BASE_URL || "https://integrate.api.nvidia.com/v1",
-    apiKey: process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY || "",
+    apiKey,
   });
-  
+
   if (fast) {
     const modelName = process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
     return nvidia.chat(modelName);
   }
-  
+
   const modelName = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
   return nvidia.chat(modelName);
 }
@@ -23,12 +26,12 @@ export function getFallbackModel(fast?: boolean): LanguageModel | undefined {
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     return anthropic(fast ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620");
   }
-  
+
   if (process.env.OPENAI_API_KEY) {
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
     return openai(fast ? "gpt-4o-mini" : "gpt-4o");
   }
-  
+
   return undefined;
 }
 
@@ -188,10 +191,6 @@ export const TailoringResultSchema = z.object({
   tailoringSummary: z.array(z.string()),
   tailoredResume: ResumeContentSchema,
 });
-
-// ---------------------------------------------------------------------------
-// Differentiation Feature Schemas
-// ---------------------------------------------------------------------------
 
 export const StarInterviewSchema = z.object({
   questions: z.array(z.object({
