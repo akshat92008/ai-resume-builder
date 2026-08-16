@@ -1,32 +1,33 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from "@playwright/test";
 
-test.describe('CareerOS Core Flow', () => {
-  test('User can paste career info and generate a resume', async ({ page }) => {
-    // Navigate to the app workspace
-    await page.goto('http://localhost:3000/app');
+const email = process.env.E2E_EMAIL;
+const password = process.env.E2E_PASSWORD;
+const requireAuthE2E = process.env.REQUIRE_AUTH_E2E === "true";
 
-    // Wait for initial load
-    await expect(page.locator('text=CareerPath AI')).toBeVisible();
+if (requireAuthE2E && (!email || !password)) {
+  throw new Error("REQUIRE_AUTH_E2E=true but E2E_EMAIL/E2E_PASSWORD are not configured.");
+}
 
-    // Fill the chat input with messy career info
-    const chatInput = page.locator('textarea[placeholder*="Paste career info"]');
-    await chatInput.fill('I am a frontend developer with 5 years of experience using React and Next.js. I worked at TechCorp and built a dashboard that increased engagement by 20%.');
-    
-    // Press send
-    await chatInput.press('Enter');
+test.describe("authenticated CareerOS release flow", () => {
+  test.skip(!email || !password, "Authenticated release credentials are not configured.");
 
-    // Wait for AI response and "CareerPath AI is working" animation to finish
-    await expect(page.locator('text=CareerPath AI is working')).toBeVisible();
-    await expect(page.locator('text=CareerPath AI is working')).toBeHidden({ timeout: 15000 });
+  test("login reaches the persisted CareerOS workspace", async ({ page }) => {
+    await page.goto("/login?next=/app");
+    await page.getByLabel("Email").fill(email!);
+    await page.getByLabel("Password").fill(password!);
+    await page.getByRole("button", { name: "Login" }).click();
 
-    // Verify the resume score is displayed
-    await expect(page.locator('text=Career Readiness Score')).toBeVisible();
-    
-    // Switch to Memory tab
-    await page.click('button:has-text("Memory")');
-    await expect(page.locator('text=TechCorp')).toBeVisible();
-    
-    // Verify the Score Panel exists on the sidebar
-    await expect(page.locator('aside h2:has-text("Resume Score")')).toBeVisible();
+    await page.waitForURL(/\/app(?:$|\?)/, { timeout: 30_000 });
+    await expect(page.getByText("CareerOS", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Verified PDF/i })).toBeVisible();
+
+    // The app-state call proves the authenticated browser session can reach
+    // the persistence boundary. This test deliberately does not burn a paid
+    // AI action on every CI run; a separate production smoke can do that when
+    // REQUIRE_AUTH_E2E is enabled for a release environment.
+    const state = await page.request.get("/api/app-state");
+    expect(state.status()).toBe(200);
+    const payload = await state.json();
+    expect(payload).toHaveProperty("workspace");
   });
 });
