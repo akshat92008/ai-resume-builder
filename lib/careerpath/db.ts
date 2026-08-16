@@ -139,10 +139,98 @@ export async function saveResumeVersion(version: { userId: string; resumeId: str
   if (error) logger.error("[db/saveResumeVersion] Error", { error });
 }
 
-export async function saveAgentRun(run: { agentName: string; userId?: string; resumeId?: string; sessionId?: string; inputJson?: unknown; outputJson?: unknown; status: string; error?: string; latencyMs?: number; model?: string; }): Promise<void> {
+type AgentRunInput = {
+  agentName: string;
+  userId?: string;
+  resumeId?: string;
+  sessionId?: string;
+  inputJson?: unknown;
+  outputJson?: unknown;
+  status: string;
+  error?: string;
+  latencyMs?: number;
+  model?: string;
+  provider?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  estimatedCostUsd?: number;
+  attempts?: number;
+};
+
+function telemetryShape(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return { type: "string", length: value.length };
+  if (typeof value === "number" || typeof value === "boolean") return { type: typeof value };
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      length: value.length,
+      sampleShapes: value.slice(0, 3).map(telemetryShape),
+    };
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return {
+      type: "object",
+      keys: Object.keys(record).slice(0, 40),
+      fields: Object.fromEntries(Object.entries(record).slice(0, 20).map(([key, item]) => [key, telemetryShape(item)])),
+    };
+  }
+  return { type: typeof value };
+}
+
+function telemetryPayload(value: unknown) {
+  const allowRaw = process.env.AGENT_TELEMETRY_CAPTURE_CONTENT === "true" && process.env.NODE_ENV !== "production";
+  return allowRaw ? value ?? {} : telemetryShape(value ?? {});
+}
+
+function configuredEstimatedCost(run: AgentRunInput) {
+  if (typeof run.estimatedCostUsd === "number" && Number.isFinite(run.estimatedCostUsd) && run.estimatedCostUsd >= 0) {
+    return run.estimatedCostUsd;
+  }
+  const inputRate = Number(process.env.AI_COST_INPUT_USD_PER_1M || "0");
+  const outputRate = Number(process.env.AI_COST_OUTPUT_USD_PER_1M || "0");
+  if (!Number.isFinite(inputRate) || !Number.isFinite(outputRate) || inputRate < 0 || outputRate < 0) return null;
+  if (!run.inputTokens && !run.outputTokens) return null;
+  const total = ((run.inputTokens || 0) * inputRate + (run.outputTokens || 0) * outputRate) / 1_000_000;
+  return Math.round(total * 1_000_000) / 1_000_000;
+}
+
+/**
+ * Central AI telemetry boundary. Production stores shape/operational metadata
+ * by default instead of raw resume, job-description or model-output bodies.
+ */
+export async function saveAgentRun(run: AgentRunInput): Promise<void> {
   if (!isServerSupabaseConfigured) return;
   const client = createSupabaseAdminClient(); if (!client) return;
-  const { error } = await client.from("agent_runs").insert({ id: crypto.randomUUID(), user_id: run.userId || null, resume_id: run.resumeId || null, session_id: run.sessionId || null, agent_name: run.agentName, input_json: run.inputJson || {}, output_json: run.outputJson || {}, status: run.status, error: run.error || null, latency_ms: run.latencyMs || null, model: run.model || null });
+  const inputTokens = Number.isFinite(run.inputTokens) ? Math.max(0, Math.round(run.inputTokens || 0)) : null;
+  const outputTokens = Number.isFinite(run.outputTokens) ? Math.max(0, Math.round(run.outputTokens || 0)) : null;
+  const totalTokens = Number.isFinite(run.totalTokens)
+    ? Math.max(0, Math.round(run.totalTokens || 0))
+    : inputTokens !== null || outputTokens !== null
+      ? (inputTokens || 0) + (outputTokens || 0)
+      : null;
+
+  const { error } = await client.from("agent_runs").insert({
+    id: crypto.randomUUID(),
+    user_id: run.userId || null,
+    resume_id: run.resumeId || null,
+    session_id: run.sessionId || null,
+    agent_name: run.agentName,
+    input_json: telemetryPayload(run.inputJson),
+    output_json: telemetryPayload(run.outputJson),
+    status: run.status,
+    error: run.error ? run.error.slice(0, 2000) : null,
+    latency_ms: run.latencyMs || null,
+    model: run.model || null,
+    provider: run.provider || null,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: totalTokens,
+    estimated_cost_usd: configuredEstimatedCost(run),
+    attempts: Math.max(1, Math.round(run.attempts || 1)),
+  });
   if (error) logger.error("[agent_runs] insert failed", { error });
 }
 
