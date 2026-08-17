@@ -52,47 +52,30 @@ function LoginForm() {
 
   return (
     <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Login to CareerOS</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle>Login to CareerOS</CardTitle></CardHeader>
       <CardContent>
-        {!isSupabaseConfigured && (
-          <Alert className="mb-5" variant="error">
-            Authentication is not configured on this deployment.
-          </Alert>
-        )}
+        {!isSupabaseConfigured && <Alert className="mb-5" variant="error">Authentication is not configured on this deployment.</Alert>}
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
+            <Label htmlFor="login-email">Email</Label>
+            <Input id="login-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Password</Label>
+              <Label htmlFor="login-password">Password</Label>
               <Link href="/forgot-password" className="text-sm font-medium text-blue-700 hover:underline">Forgot password?</Link>
             </div>
-            <Input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
+            <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           {message && <Alert variant="error">{message}</Alert>}
-          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured}>
-            {loading ? "Logging in..." : "Login"}
-          </Button>
+          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured}>{loading ? "Logging in..." : "Login"}</Button>
         </form>
-        <p className="mt-5 text-center text-sm text-slate-600">
-          New here? <Link href={signupUrl} className="font-medium text-blue-700">Create account</Link>
-        </p>
+        <p className="mt-5 text-center text-sm text-slate-600">New here? <Link href={signupUrl} className="font-medium text-blue-700">Create account</Link></p>
       </CardContent>
     </Card>
   );
 }
 
 export default function LoginPage() {
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <MarketingNav />
-      <main className="mx-auto flex max-w-md px-4 py-12">
-        <Suspense fallback={<div>Loading...</div>}><LoginForm /></Suspense>
-      </main>
-    </div>
-  );
+  return <div className="min-h-screen bg-slate-50"><MarketingNav /><main className="mx-auto flex max-w-md px-4 py-12"><Suspense fallback={<div>Loading...</div>}><LoginForm /></Suspense></main></div>;
 }
