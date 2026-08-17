@@ -1,7 +1,30 @@
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isServerSupabaseConfigured } from "@/lib/supabase/server";
+import { logger } from "@/lib/observability/logger";
+
 export type AgentTokenUsage = {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+};
+
+export type AgentProvider = "nvidia" | "anthropic" | "openai" | "unknown";
+
+export type AgentTelemetryRun = {
+  agentName: string;
+  userId?: string;
+  resumeId?: string;
+  sessionId?: string;
+  inputJson?: unknown;
+  outputJson?: unknown;
+  status: "completed" | "failed" | string;
+  error?: string;
+  latencyMs?: number;
+  model?: string;
+  provider?: AgentProvider;
+  usage?: AgentTokenUsage;
+  attempts?: number;
+  estimatedCostUsd?: number;
 };
 
 function finiteNumber(value: unknown): number | undefined {
@@ -46,7 +69,7 @@ function parseRate(value: string | undefined): number | undefined {
  * Rates are configuration, not hard-coded assumptions, because provider pricing changes.
  */
 export function estimateAgentCostUsd(
-  provider: "nvidia" | "anthropic" | "openai" | "unknown",
+  provider: AgentProvider,
   usage: AgentTokenUsage | undefined,
   source: NodeJS.ProcessEnv = process.env,
 ): number | undefined {
@@ -60,4 +83,53 @@ export function estimateAgentCostUsd(
   const inputCost = ((usage.inputTokens ?? 0) / 1_000_000) * (inputRate ?? 0);
   const outputCost = ((usage.outputTokens ?? 0) / 1_000_000) * (outputRate ?? 0);
   return Number((inputCost + outputCost).toFixed(6));
+}
+
+export function inferProvider(modelName?: string): AgentProvider {
+  const model = (modelName || "").toLowerCase();
+  if (model.includes("claude")) return "anthropic";
+  if (model.includes("gpt") || model.includes("openai")) return "openai";
+  if (model.includes("llama") || model.includes("nvidia")) return "nvidia";
+  return "unknown";
+}
+
+/**
+ * Persist only operational metadata in production. Raw payloads are available only
+ * through an explicit local-development opt-in to prevent accidental resume PII capture.
+ */
+export async function saveAgentTelemetry(run: AgentTelemetryRun): Promise<void> {
+  if (!isServerSupabaseConfigured) return;
+  const client = createSupabaseAdminClient();
+  if (!client) return;
+
+  const capturePayloads = shouldCaptureAgentPayloads();
+  const usage = run.usage;
+  const provider = run.provider ?? inferProvider(run.model);
+  const estimatedCostUsd = run.estimatedCostUsd ?? estimateAgentCostUsd(provider, usage);
+
+  const { error } = await client.from("agent_runs").insert({
+    id: crypto.randomUUID(),
+    user_id: run.userId || null,
+    resume_id: run.resumeId || null,
+    session_id: run.sessionId || null,
+    agent_name: run.agentName,
+    input_json: capturePayloads ? (run.inputJson ?? {}) : {},
+    output_json: capturePayloads ? (run.outputJson ?? {}) : {},
+    status: run.status,
+    error: run.error ? run.error.slice(0, 240) : null,
+    latency_ms: run.latencyMs ?? null,
+    model: run.model || null,
+    provider,
+    input_tokens: usage?.inputTokens ?? null,
+    output_tokens: usage?.outputTokens ?? null,
+    total_tokens: usage?.totalTokens ?? null,
+    estimated_cost_usd: estimatedCostUsd ?? null,
+    attempts: Math.max(1, run.attempts ?? 1),
+  });
+
+  if (error) {
+    logger.error("[agent_runs] privacy-safe telemetry insert failed", {
+      code: typeof error.code === "string" ? error.code : undefined,
+    });
+  }
 }
