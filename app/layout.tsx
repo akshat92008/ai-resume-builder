@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CareerPath AI - Agentic Resume Builder',
-  description: 'Build, improve, tailor, score, and export job-ready resumes from messy career notes.',
+  title: 'CareerOS by Amaura Labs',
+  description: 'Decide where to apply, build truthful tailored applications, track outcomes, and learn what actually gets you interviews.',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
