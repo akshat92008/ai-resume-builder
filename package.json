@@ -1,5 +1,5 @@
 {
-  "name": "careerpath-ai",
+  "name": "careeros",
   "version": "0.1.0",
   "private": true,
   "overrides": { "postcss": "^8.5.15" },
@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
     "clean": "next clean"
   },
   "dependencies": {
