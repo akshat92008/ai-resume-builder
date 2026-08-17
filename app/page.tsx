@@ -1,30 +1,29 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { ArrowRight, Brain, FileText, Settings, ShieldCheck, MessageSquare, Briefcase, FileBadge, Linkedin, Send, Compass, Award, Sparkles, CheckCircle2 } from "lucide-react";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
+import { ArrowRight, Brain, Briefcase, CheckCircle2, RefreshCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { Badge, Button, Card, CardContent } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 
 const steps = [
-  ["Memory", "Paste messy notes, old resumes, or achievements. We build a structured Career Memory."],
-  ["Resume", "Generate a proof-based, ATS-friendly resume from your Memory in seconds."],
-  ["Tailor", "Drop in a job description to tailor your resume without keyword stuffing."],
-  ["Audit", "Get a harsh but fair ATS audit flagging weak bullets and missing metrics."],
-  ["Coach", "Receive proactive career advice, interview prep, and missing skill alerts."],
-];
-
-const modules = [
-  { icon: Brain, title: "Career Memory", desc: "Your single source of truth for all career data." },
-  { icon: FileText, title: "Resume Builder", desc: "Generate ATS-friendly resumes instantly." },
-  { icon: Settings, title: "Job Tailoring", desc: "Align your resume to specific job descriptions." },
-  { icon: ShieldCheck, title: "ATS Audit", desc: "Identify and fix weak bullets and timeline issues." },
-  { icon: MessageSquare, title: "Cover Letters", desc: "Write tailored cover letters automatically." },
-  { icon: Linkedin, title: "LinkedIn Optimizer", desc: "Generate optimized profile sections." },
-  { icon: Briefcase, title: "Job Intelligence", desc: "Extract hidden expectations from JDs." },
-  { icon: Send, title: "Application Tracker", desc: "Track jobs and follow-ups in one place." },
-  { icon: Compass, title: "Career Coach", desc: "Get AI-driven insights and next steps." },
-  { icon: Award, title: "Achievement Logger", desc: "Log wins periodically so you never forget them." },
-  { icon: FileBadge, title: "Smart Versions", desc: "Save multiple versions for different roles." },
-  { icon: Sparkles, title: "Auto-Improve", desc: "Let AI rewrite weak bullets with strong verbs." },
+  {
+    icon: Brain,
+    title: "Tell us about you once",
+    text: "Paste an old resume, messy notes, projects, achievements, or experience. CareerOS turns them into a reusable Career Memory.",
+  },
+  {
+    icon: Briefcase,
+    title: "Give us a job",
+    text: "Paste a job description and see whether it is worth your time: Apply, Consider, or Skip — with the evidence behind the recommendation.",
+  },
+  {
+    icon: Sparkles,
+    title: "Build the application",
+    text: "CareerOS creates the strongest truthful version of your resume and application material for that opportunity without inventing experience.",
+  },
+  {
+    icon: RefreshCcw,
+    title: "Track what happens",
+    text: "Record interviews, rejections, and offers. CareerLoop learns from your outcomes so the next decision can be better than the last.",
+  },
 ];
 
 export default function LandingPage() {
@@ -33,117 +32,95 @@ export default function LandingPage() {
       <MarketingNav />
       <main>
         <section className="border-b bg-slate-50">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-24 text-center">
-            <Badge className="bg-white text-blue-700 ring-1 ring-blue-100 hover:bg-white mb-6">CareerPath AI by Amaura Labs</Badge>
+          <div className="mx-auto max-w-6xl px-4 py-16 text-center sm:px-6 lg:py-28">
+            <Badge className="mb-6 bg-white text-blue-700 ring-1 ring-blue-100 hover:bg-white">
+              CareerOS by Amaura Labs · Free beta
+            </Badge>
             <h1 className="mx-auto max-w-5xl text-5xl font-bold tracking-tight text-slate-950 sm:text-7xl">
-              Your AI Career Memory.<br/>Store once. Generate forever.
+              Stop guessing which jobs are worth your time.
             </h1>
             <p className="mx-auto mt-8 max-w-3xl text-lg leading-8 text-slate-600">
-              Paste your career notes once. Get resumes, cover letters, ATS audits, LinkedIn copy, job tailoring, and career coaching — all from a single source of truth.
+              Tell CareerOS about yourself once. Give it a job. It helps you decide whether to apply, builds a truthful tailored application, tracks the result, and learns what actually works for you.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button size="lg" asChild>
                 <Link href="/app">
-                  Build Your Memory <ArrowRight className="ml-2 h-4 w-4" />
+                  Try the free beta <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
                 <Link href="/login">Login</Link>
               </Button>
             </div>
+            <div className="mx-auto mt-6 flex max-w-xl items-start justify-center gap-2 text-sm text-slate-500">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <span>Free during beta with fair-use AI limits. CareerOS optimizes your evidence — it does not invent skills, experience, or achievements.</span>
+            </div>
           </div>
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="text-center max-w-3xl mx-auto">
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">How it works</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">One system. Endless career documents.</h2>
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Four simple steps</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">The complexity stays underneath.</h2>
+            <p className="mt-4 text-slate-600">You should not have to learn a dozen AI tools just to apply for a job.</p>
           </div>
-          <div className="mt-12 grid gap-6 md:grid-cols-5">
-            {steps.map(([title, text]) => (
-              <Card key={title} className="bg-slate-50 border-none shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg text-slate-900">{title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-6 text-slate-600">{text}</p>
+          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {steps.map((step, index) => (
+              <Card key={step.title} className="border-slate-200 shadow-sm">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                      <step.icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-300">0{index + 1}</span>
+                  </div>
+                  <h3 className="mt-5 font-semibold text-slate-950">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{step.text}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
         </section>
 
-        <section className="border-y bg-slate-50 py-20">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="text-center max-w-3xl mx-auto mb-16">
-              <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">The Modules</p>
-              <h2 className="mt-2 text-3xl font-bold text-slate-950">Everything you need for your career loop.</h2>
-            </div>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
-              {modules.map((mod) => (
-                <div key={mod.title} className="flex flex-col rounded-xl border bg-white p-6 shadow-sm">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                    <mod.icon className="h-5 w-5 text-blue-700" />
-                  </div>
-                  <h3 className="mt-4 text-base font-semibold text-slate-900">{mod.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{mod.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-950">Stop repeating yourself.</h2>
-          </div>
-          <div className="grid gap-8 lg:grid-cols-2">
-            <Card className="border-slate-200">
-              <CardHeader className="border-b bg-slate-50 pb-4">
-                <CardTitle className="text-slate-500">Before: Messy Notes</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <p className="text-sm leading-6 text-slate-600 italic">
-                  "I know react next js supabase made ai resume builder and ai tutor did cs50p python made some websites learning python bca admission maybe no work experience. Also increased sales by 20% but I forget when."
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="border-blue-200 ring-1 ring-blue-50">
-              <CardHeader className="border-b bg-blue-50 pb-4">
-                <CardTitle className="text-blue-900">After: Structured Memory & Documents</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-4 text-sm leading-6 text-slate-700">
-                <div className="flex gap-2 items-start"><CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" /> <p><strong>Memory Built:</strong> Extracted React, Next.js, Python, Supabase into Skills. Added AI Resume Builder to Projects.</p></div>
-                <div className="flex gap-2 items-start"><CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" /> <p><strong>Resume Bullet:</strong> Built an AI resume builder using React and Supabase to turn rough user notes into structured resume content.</p></div>
-                <div className="flex gap-2 items-start"><CheckCircle2 className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" /> <p><strong>Audit Flag:</strong> "Increased sales by 20%" lacks context. What project was this for? (Safety: Not added to resume yet).</p></div>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
         <section className="border-y bg-slate-950 text-white">
-          <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-20 sm:px-6 md:flex-row md:items-center md:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-wide text-blue-400">Pro Tier</p>
-              <h2 className="mt-3 text-4xl font-bold">Start building your Career Memory today.</h2>
-              <p className="mt-4 text-lg text-slate-300">Free during launch. Paid plans will unlock unlimited resumes, advanced tailoring, and multiple persona versions.</p>
+          <div className="mx-auto grid max-w-6xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-blue-400">Built around outcomes</p>
+              <h2 className="mt-3 text-4xl font-bold tracking-tight">Your resume is only one part of the job search.</h2>
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
+                CareerOS keeps the job, the exact resume version, your fit analysis, and the eventual outcome connected. Over time, CareerLoop can show you what is actually producing interviews instead of giving you another arbitrary score.
+              </p>
             </div>
-            <Button size="lg" asChild className="bg-blue-600 text-white hover:bg-blue-500 whitespace-nowrap">
-              <Link href="/app">
-                Get Started for Free <Sparkles className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <div className="space-y-4 text-sm text-slate-200">
+                {["Should I apply to this job?", "What evidence should my application emphasize?", "Which resume version is performing best?", "Where is my job-search funnel failing?"].map((question) => (
+                  <div key={question} className="flex gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                    <span>{question}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
+        </section>
+
+        <section className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-950">Bring one real job. See what CareerOS does with it.</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-slate-600">The beta is free. We are using early-user feedback and real job-search outcomes to make the system more reliable before paid plans are introduced.</p>
+          <Button size="lg" asChild className="mt-8">
+            <Link href="/app">Open CareerOS <ArrowRight className="ml-2 h-4 w-4" /></Link>
+          </Button>
         </section>
       </main>
 
-      <footer className="bg-white px-4 py-12 text-center text-sm text-slate-500 border-t">
-        <div className="font-semibold text-slate-900">CareerPath AI by Amaura Labs.</div>
+      <footer className="border-t bg-white px-4 py-12 text-center text-sm text-slate-500">
+        <div className="font-semibold text-slate-900">CareerOS by Amaura Labs</div>
         <div className="mt-6 flex flex-wrap justify-center gap-6">
-          <Link href="/app" className="hover:text-slate-900 transition-colors">Career Memory</Link>
-          <Link href="/dashboard" className="hover:text-slate-900 transition-colors">Dashboard</Link>
-          <Link href="/privacy" className="hover:text-slate-900 transition-colors">Privacy</Link>
-          <Link href="/terms" className="hover:text-slate-900 transition-colors">Terms</Link>
+          <Link href="/app" className="transition-colors hover:text-slate-900">Workspace</Link>
+          <Link href="/dashboard" className="transition-colors hover:text-slate-900">My work</Link>
+          <Link href="/privacy" className="transition-colors hover:text-slate-900">Privacy</Link>
+          <Link href="/terms" className="transition-colors hover:text-slate-900">Terms</Link>
         </div>
       </footer>
     </div>
