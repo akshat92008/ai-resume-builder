@@ -3,7 +3,8 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
+import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { Alert, Button, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/utils";
@@ -16,39 +17,16 @@ function SignupForm() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-
-
   async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-    setMessage("");
+    event.preventDefault(); setLoading(true); setMessage("");
     const nextPath = searchParams.get("next");
-
     const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
-
-    if (!isSupabaseConfigured) {
-      setMessage("Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      setLoading(false);
-      return;
-    }
-
+    if (!isSupabaseConfigured) { setMessage("CareerOS authentication is not configured on this deployment yet."); setLoading(false); return; }
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      setMessage("Supabase is not initialized.");
-      setLoading(false);
-      return;
-    }
+    if (!supabase) { setMessage("CareerOS authentication is temporarily unavailable."); setLoading(false); return; }
     const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      setMessage(error.message);
-      setLoading(false);
-      return;
-    }
-    if (!data.session) {
-      setMessage("Check your email to confirm your account.");
-      setLoading(false);
-      return;
-    }
+    if (error) { setMessage(error.message); setLoading(false); return; }
+    if (!data.session) { setMessage("Check your email to confirm your account, then return here to sign in."); setLoading(false); return; }
     router.push(targetUrl);
   }
 
@@ -58,46 +36,30 @@ function SignupForm() {
   const loginUrl = loginParams.toString() ? `/login?${loginParams.toString()}` : "/login";
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Create an Account</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!isSupabaseConfigured && (
-          <Alert className="mb-5" variant="error">
-            Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable authentication.
-          </Alert>
-        )}
-        <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
-          </div>
-          <div className="space-y-2">
-            <Label>Password</Label>
-            <Input type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
-          </div>
-          {message && <Alert variant="error">{message}</Alert>}
-          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured}>
-            {loading ? "Creating account..." : "Sign Up"}
-          </Button>
-        </form>
-        <p className="mt-5 text-center text-sm text-slate-600">
-          Already have an account? <Link href={loginUrl} className="font-medium text-blue-700">Login</Link>
-        </p>
-      </CardContent>
-    </Card>
+    <div className="career-surface w-full rounded-[28px] p-6 sm:p-8">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white"><Sparkles className="h-5 w-5" /></div>
+      <h1 className="mt-6 text-3xl font-bold tracking-[-0.04em] text-slate-950">Build your career operating system.</h1>
+      <p className="mt-2 text-sm leading-6 text-slate-500">Create one Career Memory, then use it across job decisions, tailoring, applications, and outcome tracking.</p>
+      {!isSupabaseConfigured && <Alert className="mt-5" variant="error">Authentication is not configured on this deployment.</Alert>}
+      <form onSubmit={submit} className="mt-6 space-y-5">
+        <div className="space-y-2"><Label htmlFor="signup-email">Email</Label><Input id="signup-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} placeholder="you@example.com" /></div>
+        <div className="space-y-2"><Label htmlFor="signup-password">Password</Label><Input id="signup-password" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="At least 6 characters" /></div>
+        {message && <Alert variant={message.startsWith("Check your email") ? "success" : "error"}>{message}</Alert>}
+        <Button type="submit" size="lg" className="w-full" disabled={loading || !isSupabaseConfigured}>{loading ? "Creating account..." : <>Create free account <ArrowRight className="ml-2 h-4 w-4" /></>}</Button>
+      </form>
+      <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-400"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />Free beta with fair-use AI limits.</div>
+      <p className="mt-5 text-center text-sm text-slate-500">Already have an account? <Link href={loginUrl} className="font-semibold text-indigo-600 hover:underline">Sign in</Link></p>
+    </div>
   );
 }
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f7f8fc]">
       <MarketingNav />
-      <main className="mx-auto flex max-w-md px-4 py-12">
-        <Suspense fallback={<div>Loading...</div>}>
-          <SignupForm />
-        </Suspense>
+      <main className="relative isolate flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-hidden px-4 py-12">
+        <div className="pointer-events-none absolute h-[520px] w-[520px] rounded-full bg-violet-200/35 blur-[110px]" />
+        <div className="relative w-full max-w-md"><Suspense fallback={<div className="career-surface rounded-3xl p-8 text-sm text-slate-500">Loading...</div>}><SignupForm /></Suspense></div>
       </main>
     </div>
   );
