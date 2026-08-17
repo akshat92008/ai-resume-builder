@@ -64,7 +64,7 @@ async function callWithValidation<T>(
     try {
       const systemMessage = messages.find(m => m.role === "system")?.content;
       const chatMessages = messages.filter(m => m.role !== "system");
-      const { object } = await generateObject({
+      const result = await generateObject({
         model,
         schema,
         system: systemMessage,
@@ -80,9 +80,10 @@ async function callWithValidation<T>(
         sessionId: metadata?.sessionId,
         resumeId: metadata?.resumeId,
         userId: metadata?.userId,
+        usage: result.usage,
         attempts: attempt + 1,
       }).catch(() => {});
-      return object as T;
+      return result.object as T;
     } catch (err: unknown) {
       lastError = safeErrorSummary(err);
       logger.warn("[orchestrator] Agent attempt failed", { agentName, attempt: attempt + 1, error: lastError });
@@ -276,13 +277,13 @@ export async function answerCareerQuestionAgent(question: string, workspace: Car
   const startMs = Date.now();
   const model = getModel(metadata?.fast);
   try {
-    const { text } = await generateText({
+    const result = await generateText({
       model,
       system: PROMPTS.CAREER_QUESTION,
       prompt: `My Career Workspace Data:\n${JSON.stringify(workspace, null, 2)}\n\nMy Question:\n${question}`,
     });
-    await saveAgentTelemetry({ agentName: "answerCareerQuestionAgent", status: "completed", latencyMs: Date.now() - startMs, model: getModelName(model), sessionId: metadata?.sessionId, resumeId: metadata?.resumeId, userId: metadata?.userId, attempts: 1 }).catch(() => {});
-    return text;
+    await saveAgentTelemetry({ agentName: "answerCareerQuestionAgent", status: "completed", latencyMs: Date.now() - startMs, model: getModelName(model), sessionId: metadata?.sessionId, resumeId: metadata?.resumeId, userId: metadata?.userId, usage: result.usage, attempts: 1 }).catch(() => {});
+    return result.text;
   } catch (err: unknown) {
     const errorSummary = safeErrorSummary(err);
     logger.warn("[orchestrator] Career question generation failed", { error: errorSummary });
