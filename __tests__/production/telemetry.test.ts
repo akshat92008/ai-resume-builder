@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { estimateAgentCostUsd, inferProvider, safeErrorSummary } from "@/lib/careerpath/telemetry";
 
+function testEnv(values: Record<string, string> = {}): NodeJS.ProcessEnv {
+  return { NODE_ENV: "test", ...values } as NodeJS.ProcessEnv;
+}
+
 describe("privacy-safe AI telemetry", () => {
   it("does not expose provider error messages or payloads", () => {
     const error = Object.assign(new Error("resume contains private@example.com and secret career history"), {
@@ -29,16 +33,16 @@ describe("privacy-safe AI telemetry", () => {
     const cost = estimateAgentCostUsd(
       "nvidia",
       { inputTokens: 1_000_000, outputTokens: 500_000, totalTokens: 1_500_000 },
-      {
+      testEnv({
         NVIDIA_INPUT_COST_PER_MILLION_USD: "0.10",
         NVIDIA_OUTPUT_COST_PER_MILLION_USD: "0.30",
-      } as NodeJS.ProcessEnv,
+      }),
     );
 
     expect(cost).toBe(0.25);
   });
 
   it("returns no cost estimate when rates are not configured", () => {
-    expect(estimateAgentCostUsd("nvidia", { inputTokens: 100 }, {} as NodeJS.ProcessEnv)).toBeUndefined();
+    expect(estimateAgentCostUsd("nvidia", { inputTokens: 100 }, testEnv())).toBeUndefined();
   });
 });
