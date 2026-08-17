@@ -21,21 +21,21 @@ function LoginForm() {
     setLoading(true);
     setMessage("");
     const nextPath = searchParams.get("next");
-
     const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
 
     if (!isSupabaseConfigured) {
-      setMessage("Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      setMessage("CareerOS authentication is not configured on this deployment yet.");
       setLoading(false);
       return;
     }
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setMessage("Supabase is not initialized.");
+      setMessage("CareerOS authentication is temporarily unavailable.");
       setLoading(false);
       return;
     }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setMessage(error.message);
@@ -53,27 +53,25 @@ function LoginForm() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Login to CareerPath AI</CardTitle>
+        <CardTitle>Login to CareerOS</CardTitle>
       </CardHeader>
       <CardContent>
         {!isSupabaseConfigured && (
           <Alert className="mb-5" variant="error">
-            Supabase environment variables are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable authentication.
+            Authentication is not configured on this deployment.
           </Alert>
         )}
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
+            <Input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Password</Label>
-              <Link href="/forgot-password" className="text-sm font-medium text-blue-700 hover:underline">
-                Forgot password?
-              </Link>
+              <Link href="/forgot-password" className="text-sm font-medium text-blue-700 hover:underline">Forgot password?</Link>
             </div>
-            <Input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
+            <Input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} />
           </div>
           {message && <Alert variant="error">{message}</Alert>}
           <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured}>
@@ -93,9 +91,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50">
       <MarketingNav />
       <main className="mx-auto flex max-w-md px-4 py-12">
-        <Suspense fallback={<div>Loading...</div>}>
-          <LoginForm />
-        </Suspense>
+        <Suspense fallback={<div>Loading...</div>}><LoginForm /></Suspense>
       </main>
     </div>
   );
