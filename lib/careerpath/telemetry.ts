@@ -15,8 +15,6 @@ export type AgentTelemetryRun = {
   userId?: string;
   resumeId?: string;
   sessionId?: string;
-  inputJson?: unknown;
-  outputJson?: unknown;
   status: "completed" | "failed" | string;
   error?: string;
   latencyMs?: number;
@@ -37,10 +35,7 @@ function safeString(value: unknown): string | undefined {
   return trimmed ? trimmed.slice(0, 80) : undefined;
 }
 
-/**
- * Provider failures can contain request/response bodies with resume PII.
- * Keep operationally useful metadata only; never persist or log raw provider errors.
- */
+/** Provider failures may contain prompts or provider response bodies with resume PII. */
 export function safeErrorSummary(error: unknown): string {
   if (!error || typeof error !== "object") return "ProviderError";
 
@@ -54,20 +49,13 @@ export function safeErrorSummary(error: unknown): string {
     .join(" ");
 }
 
-export function shouldCaptureAgentPayloads(source: NodeJS.ProcessEnv = process.env): boolean {
-  return source.NODE_ENV !== "production" && source.AGENT_TELEMETRY_CAPTURE_PAYLOADS === "true";
-}
-
 function parseRate(value: string | undefined): number | undefined {
   if (!value?.trim()) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-/**
- * Estimate inference cost from configured per-million-token rates.
- * Rates are configuration, not hard-coded assumptions, because provider pricing changes.
- */
+/** Pricing is deployment configuration because provider rates change over time. */
 export function estimateAgentCostUsd(
   provider: AgentProvider,
   usage: AgentTokenUsage | undefined,
@@ -94,15 +82,15 @@ export function inferProvider(modelName?: string): AgentProvider {
 }
 
 /**
- * Persist only operational metadata in production. Raw payloads are available only
- * through an explicit local-development opt-in to prevent accidental resume PII capture.
+ * agent_runs is metadata-only by design. Resume text, job descriptions, prompts,
+ * and model output belong in product tables with the correct ownership controls,
+ * never in operational telemetry.
  */
 export async function saveAgentTelemetry(run: AgentTelemetryRun): Promise<void> {
   if (!isServerSupabaseConfigured) return;
   const client = createSupabaseAdminClient();
   if (!client) return;
 
-  const capturePayloads = shouldCaptureAgentPayloads();
   const usage = run.usage;
   const provider = run.provider ?? inferProvider(run.model);
   const estimatedCostUsd = run.estimatedCostUsd ?? estimateAgentCostUsd(provider, usage);
@@ -113,8 +101,8 @@ export async function saveAgentTelemetry(run: AgentTelemetryRun): Promise<void> 
     resume_id: run.resumeId || null,
     session_id: run.sessionId || null,
     agent_name: run.agentName,
-    input_json: capturePayloads ? (run.inputJson ?? {}) : {},
-    output_json: capturePayloads ? (run.outputJson ?? {}) : {},
+    input_json: {},
+    output_json: {},
     status: run.status,
     error: run.error ? run.error.slice(0, 240) : null,
     latency_ms: run.latencyMs ?? null,
