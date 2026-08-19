@@ -1,61 +1,46 @@
 import { describe, expect, it } from "vitest";
-import type Stripe from "stripe";
-import {
-  checkoutSessionCustomerId,
-  checkoutSessionSubscriptionId,
-  checkoutSessionUserId,
-  subscriptionSnapshot,
-} from "@/lib/careerpath/billing-state";
-import { reconciliationEventId } from "@/lib/careerpath/billing-sync";
+import { razorpaySubscriptionSnapshot } from "@/lib/careerpath/razorpay-state";
+import { razorpayReconciliationEventId } from "@/lib/careerpath/razorpay-billing-sync";
+import type { RazorpaySubscription } from "@/lib/careerpath/razorpay";
 
-function session(input: Partial<Stripe.Checkout.Session>): Stripe.Checkout.Session {
-  return input as Stripe.Checkout.Session;
-}
-
-function subscription(input: Partial<Stripe.Subscription>): Stripe.Subscription {
-  return input as Stripe.Subscription;
+function subscription(input: Partial<RazorpaySubscription>): RazorpaySubscription {
+  return {
+    id: "sub_default",
+    entity: "subscription",
+    plan_id: "plan_pro",
+    status: "created",
+    ...input,
+  } as RazorpaySubscription;
 }
 
 describe("paid billing state", () => {
-  it("binds checkout confirmation to the authenticated application user", () => {
-    const value = session({
-      client_reference_id: "user-123",
-      metadata: { userId: "user-123" },
-      subscription: "sub_123",
-      customer: "cus_123",
-    });
-    expect(checkoutSessionUserId(value)).toBe("user-123");
-    expect(checkoutSessionSubscriptionId(value)).toBe("sub_123");
-    expect(checkoutSessionCustomerId(value)).toBe("cus_123");
-  });
-
-  it("prefers signed checkout metadata over the fallback reference", () => {
-    expect(checkoutSessionUserId(session({ metadata: { userId: "owner" }, client_reference_id: "fallback" }))).toBe("owner");
-  });
-
-  it("maps active Stripe state to a deterministic Pro snapshot", () => {
-    const value = subscription({
+  it("maps active Razorpay state to a deterministic Pro snapshot", () => {
+    const snapshot = razorpaySubscriptionSnapshot(subscription({
       id: "sub_123",
       status: "active",
-      customer: "cus_123",
-      cancel_at_period_end: false,
-      items: { data: [{ current_period_end: 2_000_000_000 }] } as Stripe.ApiList<Stripe.SubscriptionItem>,
-    });
-    const snapshot = subscriptionSnapshot(value);
+      customer_id: "cust_123",
+      current_end: 2_000_000_000,
+    }));
     expect(snapshot.status).toBe("pro");
-    expect(snapshot.customerId).toBe("cus_123");
+    expect(snapshot.customerId).toBe("cust_123");
     expect(snapshot.periodEnd).toBe(new Date(2_000_000_000 * 1000).toISOString());
-    expect(reconciliationEventId("cs_123", snapshot)).toContain("sub_123:pro");
+    expect(razorpayReconciliationEventId("checkout", snapshot)).toContain("sub_123:active");
   });
 
-  it("revokes Pro for payment-problem subscription states", () => {
-    const value = subscription({
-      id: "sub_456",
-      status: "past_due",
-      customer: "cus_456",
-      cancel_at_period_end: false,
-      items: { data: [{ current_period_end: 2_000_000_000 }] } as Stripe.ApiList<Stripe.SubscriptionItem>,
-    });
-    expect(subscriptionSnapshot(value).status).toBe("free");
+  it("fails closed before activation and on payment-problem states", () => {
+    for (const status of ["created", "authenticated", "pending", "halted", "cancelled", "completed", "expired"] as const) {
+      expect(razorpaySubscriptionSnapshot(subscription({ status })).status).toBe("free");
+    }
+  });
+
+  it("recognizes scheduled cancellation without revoking the current active period", () => {
+    const snapshot = razorpaySubscriptionSnapshot(subscription({
+      status: "active",
+      current_end: 2_000_000_000,
+      has_scheduled_changes: true,
+      change_scheduled_at: 2_000_000_000,
+    }));
+    expect(snapshot.status).toBe("pro");
+    expect(snapshot.cancelAtPeriodEnd).toBe(true);
   });
 });
