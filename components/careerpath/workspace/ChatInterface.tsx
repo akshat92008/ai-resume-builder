@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Loader2, Send, Sparkles, Paperclip } from "lucide-react";
+import { Loader2, Send, Sparkles, Paperclip, ShieldCheck } from "lucide-react";
 import { Alert, Textarea, Button } from "@/components/ui";
 import { motion, AnimatePresence } from "motion/react";
 import { useWorkspaceStore } from "@/lib/store/workspace";
@@ -7,52 +7,46 @@ import { getApiError } from "@/lib/utils";
 import type { CareerPathResume, CareerWorkspaceState, ResumeMessage } from "@/lib/careerpath/types";
 
 const COMMAND_CHIPS = [
-  "Build Career Memory from messy info",
-  "Generate my ATS resume",
-  "Tailor to a job description",
-  "Audit my resume",
-  "Improve my resume",
-  "Write cover letter",
-  "Optimize LinkedIn profile",
-  "Track this application",
-  "Log achievement: ",
+  "Build my Career Memory",
+  "Should I apply to this job?",
+  "Tailor my resume",
+  "Find my biggest resume weakness",
+  "Prepare me for an interview",
 ];
 
 const THINKING_PHRASES = [
-  "Analyzing input data...", "Cross-referencing skills...", "Structuring resume sections...", "Drafting professional summary...",
-  "Refining bullet points...", "Optimizing for ATS compatibility...", "Mining career memory...", "Checking missing proof...",
-  "Analyzing job keywords...", "Preparing application copy...", "Updating career health...", "Finalizing layout...",
+  "Reading your evidence...",
+  "Comparing role requirements...",
+  "Checking unsupported claims...",
+  "Prioritizing strongest proof...",
+  "Updating your career context...",
+  "Preparing the next best action...",
 ];
 
 function ThinkingAnimation() {
   const [index, setIndex] = React.useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setIndex((i) => (i + 1) % THINKING_PHRASES.length), 2500);
+    const timer = setInterval(() => setIndex((i) => (i + 1) % THINKING_PHRASES.length), 2200);
     return () => clearInterval(timer);
   }, []);
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="relative flex flex-col gap-2 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50/50 p-4 shadow-sm border border-blue-100 overflow-hidden">
-      <motion.div animate={{ x: ["-100%", "100%"] }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }} className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent z-0 pointer-events-none" />
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/60 p-4 shadow-sm">
       <div className="relative z-10 flex items-center gap-3">
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100/80 shadow-inner">
-          <motion.div animate={{ rotate: 360, scale: [1, 1.15, 1] }} transition={{ rotate: { duration: 4, repeat: Infinity, ease: "linear" }, scale: { duration: 2, repeat: Infinity, ease: "easeInOut" } }}>
-            <Sparkles className="h-4 w-4 text-blue-600" />
-          </motion.div>
-        </div>
-        <div className="flex flex-col overflow-hidden w-full relative h-[38px] justify-center">
-          <span className="font-semibold text-[13px] leading-tight text-blue-800">CareerPath AI is orchestrating...</span>
-          <div className="relative h-[16px] w-full overflow-hidden mt-0.5">
+        <motion.div animate={{ rotate: 360 }} transition={{ duration: 6, repeat: Infinity, ease: "linear" }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+          <Sparkles className="h-4 w-4" />
+        </motion.div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-900">CareerOS is reasoning</p>
+          <div className="relative mt-1 h-5 overflow-hidden">
             <AnimatePresence mode="popLayout">
-              <motion.span key={index} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.4, ease: "easeOut" }} className="absolute left-0 text-[12px] font-medium text-blue-600/80 whitespace-nowrap">
+              <motion.span key={index} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute left-0 text-xs font-medium text-indigo-600">
                 {THINKING_PHRASES[index]}
               </motion.span>
             </AnimatePresence>
           </div>
         </div>
       </div>
-      <div className="relative z-10 h-1 w-full overflow-hidden rounded-full bg-blue-100/50 mt-1">
-        <motion.div animate={{ x: ["-100%", "200%"] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="h-full w-1/2 rounded-full bg-gradient-to-r from-blue-400 to-indigo-500 opacity-80" />
-      </div>
+      <motion.div animate={{ x: ["-120%", "220%"] }} transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }} className="absolute inset-y-0 w-24 skew-x-12 bg-white/35 blur-xl" />
     </motion.div>
   );
 }
@@ -62,8 +56,8 @@ function formatMessageText(text: string) {
     const isBullet = line.trim().startsWith('- ');
     const content = isBullet ? line.replace(/^\s*-\s*/, '') : line;
     const parts = content.split(/(\*\*.*?\*\*)/g);
-    const formatted = parts.map((part, j) => part.startsWith("**") && part.endsWith("**") ? <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong> : part);
-    if (isBullet) return <div key={i} className="flex items-start gap-2 mt-1"><span className="text-blue-500 mt-0.5">•</span><span>{formatted}</span></div>;
+    const formatted = parts.map((part, j) => part.startsWith("**") && part.endsWith("**") ? <strong key={j} className="font-semibold text-slate-950">{part.slice(2, -2)}</strong> : part);
+    if (isBullet) return <div key={i} className="mt-1.5 flex items-start gap-2"><span className="mt-0.5 text-indigo-500">•</span><span>{formatted}</span></div>;
     if (!line.trim()) return <div key={i} className="h-2" />;
     return <p key={i} className={i > 0 ? "mt-1.5" : ""}>{formatted}</p>;
   });
@@ -130,7 +124,7 @@ export function ChatInterface() {
         return;
       }
     }
-    setMessages((prev) => [...prev, { id: `assistant_pending_${Date.now()}`, role: "assistant", content: "I’m still working in the background. Refresh the workspace in a moment to pick up the completed result.", createdAt: new Date().toISOString() }]);
+    setMessages((prev) => [...prev, { id: `assistant_pending_${Date.now()}`, role: "assistant", content: "The analysis is still finishing. Your workspace will pick up the result when it completes.", createdAt: new Date().toISOString() }]);
   }
 
   async function sendMessage(overrideText?: string) {
@@ -156,26 +150,62 @@ export function ChatInterface() {
   function handleKeyDown(e: React.KeyboardEvent) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
   function useCommand(command: string) { if (command.startsWith("Log achievement")) { setShowAchievementModal(true); return; } setInput(command); textareaRef.current?.focus(); }
 
+  const hasConversation = messages.length > 0;
+
   return (
-    <section className="no-print flex min-h-[520px] flex-col border-r bg-white h-full">
-      <div className="border-b px-4 py-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Store once. Generate forever.</p>
-        <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-950">CareerPath AI</h1>
-        <p className="mt-1 text-sm leading-5 text-slate-600">Build Career Memory once, then produce resumes, audits, tailoring, letters, LinkedIn copy, tracker updates, and coaching from it.</p>
-        <div className="mt-3 flex flex-wrap gap-2">{COMMAND_CHIPS.map((command) => <button key={command} type="button" onClick={() => useCommand(command)} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800">{command}</button>)}</div>
-      </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((msg) => <div key={msg.id} className={`rounded-lg px-4 py-3 text-sm leading-relaxed ${msg.role === "assistant" ? "bg-blue-50 text-blue-950" : "bg-slate-100 text-slate-800"}`}><div className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-60">{msg.role === "assistant" ? "CareerPath AI" : "You"}</div><div className="text-sm">{formatMessageText(msg.content)}</div></div>)}
-        {loading && <ThinkingAnimation />}<div ref={chatEndRef} />
-      </div>
-      {error && <div className="px-4 pb-2"><Alert variant="error">{error}</Alert></div>}
-      <div className="border-t bg-white p-4">
-        <div className="flex gap-2 items-end">
-          <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-          <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} disabled={loading || uploading} title="Upload PDF (e.g. Certificate, Job Description, old Resume)" className="mb-0 shrink-0 self-end">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}</Button>
-          <Textarea ref={textareaRef} rows={2} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Paste career info, a job description, or ask CareerPath AI what to do next..." disabled={loading} className="min-h-[70px] flex-1 resize-none" />
-          <Button onClick={() => sendMessage()} disabled={!input.trim() || loading} className="self-end" size="sm">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
+    <section className="no-print flex min-h-[560px] h-full flex-col border-r border-slate-200/70 bg-white">
+      <div className="border-b border-slate-100 px-5 pb-4 pt-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2"><div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-950 text-white"><Sparkles className="h-4 w-4" /></div><span className="text-[11px] font-bold uppercase tracking-[0.17em] text-indigo-600">Career intelligence</span></div>
+            <h1 className="mt-4 text-2xl font-bold tracking-[-0.04em] text-slate-950">What are you trying to achieve?</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Give CareerOS your evidence, a job, or a decision. It will keep the reasoning tied to what you can actually prove.</p>
+          </div>
         </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {COMMAND_CHIPS.map((command) => <button key={command} type="button" onClick={() => useCommand(command)} className="rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">{command}</button>)}
+        </div>
+      </div>
+
+      <div className="career-scrollbar flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+        {!hasConversation ? (
+          <div className="flex min-h-[240px] flex-col items-center justify-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><Sparkles className="h-5 w-5" /></div>
+            <p className="mt-4 text-sm font-semibold text-slate-900">Start with whatever you have.</p>
+            <p className="mt-1 max-w-[280px] text-xs leading-5 text-slate-500">Messy notes, a PDF resume, a job description, or simply “I don’t know why I’m not getting interviews.”</p>
+          </div>
+        ) : null}
+        {messages.map((msg) => (
+          <div key={msg.id} className={msg.role === "assistant" ? "mr-4" : "ml-8"}>
+            <div className={`rounded-2xl px-4 py-3.5 text-sm leading-6 shadow-sm ${msg.role === "assistant" ? "border border-slate-200 bg-white text-slate-700" : "bg-slate-950 text-slate-100"}`}>
+              <div className={`mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] ${msg.role === "assistant" ? "text-indigo-500" : "text-slate-400"}`}>{msg.role === "assistant" ? "CareerOS" : "You"}</div>
+              <div>{formatMessageText(msg.content)}</div>
+            </div>
+          </div>
+        ))}
+        {loading && <ThinkingAnimation />}
+        <div ref={chatEndRef} />
+      </div>
+
+      {error && <div className="px-4 pb-2 sm:px-5"><Alert variant="error">{error}</Alert></div>}
+
+      <div className="border-t border-slate-100 bg-white/95 p-4 sm:p-5">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-2 shadow-[0_8px_26px_rgba(15,23,42,0.05)] transition focus-within:border-indigo-200 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-500/[0.06]">
+          <Textarea ref={textareaRef} rows={2} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Paste career evidence, a job description, or ask CareerOS what to do next..." disabled={loading} className="min-h-[80px] resize-none border-0 bg-transparent p-2 shadow-none focus:ring-0" />
+          <div className="mt-1 flex items-center justify-between gap-3 border-t border-slate-200/70 px-1 pt-2">
+            <div className="flex items-center gap-2">
+              <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+              <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={loading || uploading} title="Upload a PDF">
+                {uploading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Paperclip className="mr-1.5 h-3.5 w-3.5" />}Attach PDF
+              </Button>
+              <span className="hidden items-center gap-1.5 text-[11px] font-medium text-slate-400 sm:flex"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />Evidence-first</span>
+            </div>
+            <Button onClick={() => sendMessage()} disabled={!input.trim() || loading} size="sm">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><span className="mr-2">Send</span><Send className="h-3.5 w-3.5" /></>}
+            </Button>
+          </div>
+        </div>
+        <p className="mt-2 text-center text-[10px] leading-4 text-slate-400">CareerOS can make mistakes. Verify generated claims before you send an application.</p>
       </div>
     </section>
   );

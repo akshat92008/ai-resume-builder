@@ -1,62 +1,47 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { ArrowLeft, CreditCard, User, Loader2, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { CheckCircle2, FlaskConical, LogOut, ShieldCheck, User } from "lucide-react";
+import { Button } from "@/components/ui";
 
-function SettingsContent() {
-  const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [plan, setPlan] = useState<"free" | "pro">("free");
-  const [aiActionsPerDay, setAiActionsPerDay] = useState(3);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
-  const [billingError, setBillingError] = useState<string | null>(null);
-  useEffect(() => { if (searchParams.get("success") === "true") { setSuccess(true); setTimeout(() => setSuccess(false), 5000); } }, [searchParams]);
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSubscription() {
-      try {
-        const res = await fetch("/api/subscription", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) { setPlan(data.plan === "pro" ? "pro" : "free"); setAiActionsPerDay(Number(data.aiActionsPerDay) || 3); }
-      } finally { if (!cancelled) setSubscriptionLoading(false); }
-    }
-    loadSubscription(); return () => { cancelled = true; };
-  }, [success]);
-
-  const handleUpgrade = async () => {
-    setLoading(true); setBillingError(null);
-    try { const res = await fetch("/api/stripe/checkout", { method: "POST" }); const data = await res.json(); if (data.url) window.location.href = data.url; else setBillingError(data.error?.message || "Unable to start checkout."); }
-    catch (err) { console.error(err); setBillingError("Unable to start checkout."); }
-    finally { setLoading(false); }
-  };
-  const handleManageSubscription = async () => {
-    setLoading(true);
-    try { const res = await fetch("/api/stripe/create-portal-session", { method: "POST" }); const data = await res.json(); if (data.url) window.location.href = data.url; else if (data.error) alert(data.error.message); }
-    catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
+export default function SettingsPage() {
+  async function logout() {
+    const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
+    const supabase = getSupabaseBrowserClient();
+    if (supabase) await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50/50 overflow-y-auto">
-      <div className="flex-none p-6 pb-4 border-b border-slate-200 bg-white sticky top-0 z-10"><div className="max-w-4xl mx-auto flex items-center gap-4"><Link href="/" className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"><ArrowLeft className="h-5 w-5" /></Link><div><h1 className="text-2xl font-bold tracking-tight text-slate-900">Settings</h1><p className="text-sm text-slate-500 mt-1">Manage your account and subscription.</p></div></div></div>
-      <div className="flex-1 p-6"><div className="max-w-4xl mx-auto space-y-8">
-        {success && <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-3 text-emerald-800"><CheckCircle2 className="h-5 w-5" /><div><p className="font-medium">Checkout complete</p><p className="text-sm">Your plan will update as soon as Stripe confirms the subscription.</p></div></div>}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8"><div className="md:col-span-1"><h3 className="font-semibold text-slate-900 flex items-center gap-2"><CreditCard className="h-4 w-4" /> Subscription</h3><p className="text-sm text-slate-500 mt-1">Upgrade to Pro for higher AI limits, interview prep, and advanced career analytics.</p></div>
-          <div className="md:col-span-2"><div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6"><div><div className="inline-block bg-slate-100 text-slate-600 font-semibold px-3 py-1 rounded-full text-sm mb-2">Current Plan: {subscriptionLoading ? "Loading…" : plan === "pro" ? "Pro" : "Free"}</div><p className="text-sm text-slate-500">{plan === "pro" ? `You have up to ${aiActionsPerDay} AI actions per day plus higher tailoring and outreach limits.` : `You have core CareerOS access with up to ${aiActionsPerDay} AI actions per day.`}</p></div>
-            <div className="pt-4 border-t border-slate-100"><h4 className="font-medium text-slate-900 mb-4">Pro Plan - $15/month</h4><ul className="space-y-2 text-sm text-slate-600 mb-6"><li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Up to 100 AI actions/day</li><li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Advanced Interview Prep</li><li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Automated Cover Letters</li><li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Priority Support</li></ul>
-              {billingError && <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{billingError}</p>}
-              <div className="flex gap-3 flex-col sm:flex-row">{plan === "free" ? <Button onClick={handleUpgrade} disabled={loading || subscriptionLoading} className="w-full sm:w-auto">{loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}Upgrade to Pro</Button> : <Button onClick={handleManageSubscription} disabled={loading} variant="outline" className="w-full sm:w-auto">{loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}Manage Subscription</Button>}</div>
-            </div></div></div></div>
-        <div className="border-t border-slate-200 pt-8 grid grid-cols-1 md:grid-cols-3 gap-8"><div className="md:col-span-1"><h3 className="font-semibold text-slate-900 flex items-center gap-2"><User className="h-4 w-4" /> Account Settings</h3></div><div className="md:col-span-2"><div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between"><div><p className="font-medium text-slate-900">Email Address</p><p className="text-sm text-slate-500">Connected via Supabase Auth</p></div><Button variant="outline" disabled>Managed internally</Button></div></div></div>
-      </div></div>
+    <div className="mx-auto max-w-4xl space-y-8">
+      <header>
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-600">Account</p>
+        <h1 className="mt-2 font-display text-3xl font-semibold tracking-[-0.045em] text-slate-950 sm:text-4xl">Settings</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">CareerOS is currently in free beta. Keep your account simple while we validate the core job-search workflow.</p>
+      </header>
+
+      <section className="career-surface overflow-hidden rounded-3xl">
+        <div className="border-b border-slate-100 p-6 sm:p-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><FlaskConical className="h-5 w-5" /></div><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-slate-950">Free beta access</h2><span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700">Active</span></div><p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">Core CareerOS features are available with fair-use AI limits. There is nothing to purchase during this launch phase.</p></div></div>
+            <CheckCircle2 className="hidden h-6 w-6 text-emerald-500 sm:block" />
+          </div>
+        </div>
+        <div className="grid gap-4 p-6 sm:grid-cols-2 sm:p-7">
+          <SettingPoint icon={<ShieldCheck className="h-4 w-4" />} title="Evidence-first AI" text="CareerOS should not invent skills, achievements, or experience that are missing from your career data." />
+          <SettingPoint icon={<User className="h-4 w-4" />} title="Your account" text="Authentication and account identity are managed securely through the connected auth service." />
+        </div>
+      </section>
+
+      <section className="career-surface rounded-3xl p-6 sm:p-7">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-slate-950">Session</h2><p className="mt-1 text-sm leading-6 text-slate-500">Sign out of CareerOS on this device.</p></div><Button variant="outline" onClick={logout}><LogOut className="mr-2 h-4 w-4" />Log out</Button></div>
+      </section>
+
+      <p className="text-center text-xs leading-5 text-slate-400">Need to review how CareerOS handles your data? <Link href="/privacy" className="font-semibold text-slate-600 hover:text-indigo-700">Read the privacy policy</Link>.</p>
     </div>
   );
 }
 
-export default function SettingsPage() { return <Suspense fallback={<SettingsFallback />}><SettingsContent /></Suspense>; }
-function SettingsFallback() { return <div className="flex min-h-screen items-center justify-center bg-slate-50/50"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>; }
+function SettingPoint({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  return <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4"><div className="flex items-center gap-2 font-semibold text-slate-900"><span className="text-indigo-500">{icon}</span>{title}</div><p className="mt-2 text-sm leading-6 text-slate-500">{text}</p></div>;
+}

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { generateObject, LanguageModel } from "ai";
+import type { LanguageModel } from "ai";
 
 export function getModel(fast?: boolean): LanguageModel {
   const apiKey = process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY;
@@ -12,24 +12,34 @@ export function getModel(fast?: boolean): LanguageModel {
     apiKey,
   });
 
-  if (fast) {
-    const modelName = process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct";
-    return nvidia.chat(modelName);
-  }
+  const modelName = fast
+    ? process.env.NVIDIA_NIM_MODEL_FAST || "meta/llama-3.1-8b-instruct"
+    : process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
 
-  const modelName = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.3-70b-instruct";
   return nvidia.chat(modelName);
 }
 
+/**
+ * Fallbacks are opt-in and model IDs are configuration, not source-code constants.
+ * This avoids silently relying on stale/deprecated model IDs in production.
+ */
 export function getFallbackModel(fast?: boolean): LanguageModel | undefined {
-  if (process.env.ANTHROPIC_API_KEY) {
+  const anthropicModel = fast
+    ? process.env.ANTHROPIC_FALLBACK_MODEL_FAST
+    : process.env.ANTHROPIC_FALLBACK_MODEL;
+
+  if (process.env.ANTHROPIC_API_KEY && anthropicModel) {
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    return anthropic(fast ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620");
+    return anthropic(anthropicModel);
   }
 
-  if (process.env.OPENAI_API_KEY) {
+  const openAIModel = fast
+    ? process.env.OPENAI_FALLBACK_MODEL_FAST
+    : process.env.OPENAI_FALLBACK_MODEL;
+
+  if (process.env.OPENAI_API_KEY && openAIModel) {
     const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    return openai(fast ? "gpt-4o-mini" : "gpt-4o");
+    return openai(openAIModel);
   }
 
   return undefined;

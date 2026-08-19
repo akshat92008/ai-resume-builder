@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+const optionalNonNegativeNumberString = z.string().refine((value) => {
+  if (!value.trim()) return true;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0;
+}, "Must be a non-negative number when configured").optional();
+
 export const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
@@ -12,7 +18,17 @@ export const envSchema = z.object({
   NVIDIA_NIM_MODEL: z.string().min(1).optional(),
   NVIDIA_NIM_MODEL_FAST: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_FALLBACK_MODEL: z.string().min(1).optional(),
+  ANTHROPIC_FALLBACK_MODEL_FAST: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_FALLBACK_MODEL: z.string().min(1).optional(),
+  OPENAI_FALLBACK_MODEL_FAST: z.string().min(1).optional(),
+  NVIDIA_INPUT_COST_PER_MILLION_USD: optionalNonNegativeNumberString,
+  NVIDIA_OUTPUT_COST_PER_MILLION_USD: optionalNonNegativeNumberString,
+  ANTHROPIC_INPUT_COST_PER_MILLION_USD: optionalNonNegativeNumberString,
+  ANTHROPIC_OUTPUT_COST_PER_MILLION_USD: optionalNonNegativeNumberString,
+  OPENAI_INPUT_COST_PER_MILLION_USD: optionalNonNegativeNumberString,
+  OPENAI_OUTPUT_COST_PER_MILLION_USD: optionalNonNegativeNumberString,
   INNGEST_EVENT_KEY: z.string().min(1).optional(),
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
