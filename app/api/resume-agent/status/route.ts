@@ -9,7 +9,7 @@ import { logger } from "@/lib/observability/logger";
 import type { ResumeMessage } from "@/lib/careerpath/types";
 
 const StatusQuerySchema = z.object({
-  after: z.string().datetime().optional(),
+  operationId: z.string().uuid(),
   resumeId: z.string().uuid().optional(),
 }).strict();
 
@@ -32,23 +32,19 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const parseResult = StatusQuerySchema.safeParse({
-      after: url.searchParams.get("after") || undefined,
+      operationId: url.searchParams.get("operationId") || undefined,
       resumeId: url.searchParams.get("resumeId") || undefined,
     });
 
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Invalid status query.", recoverable: true } },
+        { error: { code: "INVALID_INPUT", message: "A valid operationId is required.", recoverable: true } },
         { status: 400 },
       );
     }
 
     const userId = auth.user.id;
-    const requestedResumeId = parseResult.data.resumeId;
-    const afterIso = parseResult.data.after
-      ? new Date(Date.parse(parseResult.data.after) - 1000).toISOString()
-      : new Date(0).toISOString();
-
+    const { operationId, resumeId: requestedResumeId } = parseResult.data;
     const admin = createSupabaseAdminClient();
     if (!admin) {
       return NextResponse.json(
@@ -57,44 +53,39 @@ export async function GET(request: Request) {
       );
     }
 
-    let messageQuery = admin
+    const { data: messageRows, error: messageError } = await admin
       .from("resume_messages")
       .select("id,user_id,resume_id,role,content,intent,created_at")
       .eq("user_id", userId)
+      .eq("operation_id", operationId)
       .eq("role", "assistant")
-      .gt("created_at", afterIso)
       .order("created_at", { ascending: false })
       .limit(1);
-
-    if (requestedResumeId) {
-      messageQuery = messageQuery.or(`resume_id.eq.${requestedResumeId},resume_id.is.null`);
-    }
-
-    const { data: messageRows, error: messageError } = await messageQuery;
     if (messageError) throw messageError;
 
     const latestAssistant = messageRows?.[0] ? mapMessage(messageRows[0] as Record<string, unknown>) : null;
     if (!latestAssistant) {
       return NextResponse.json({
         done: false,
+        operationId,
         latestAssistant: null,
         resumeId: requestedResumeId || null,
       });
     }
 
-    // Polling stays tiny while a job is running. Fetch the heavier result only once,
-    // after the completion message is visible.
-    const resume = requestedResumeId
-      ? await getServerResume(requestedResumeId, userId)
+    const resultResumeId = latestAssistant.resumeId || requestedResumeId || null;
+    const resume = resultResumeId
+      ? await getServerResume(resultResumeId, userId)
       : await getLatestResumeForUser(userId);
     const applications = resume ? await listJobApplications(userId, { limit: 100 }) : [];
     if (resume) resume.applications = applications;
 
     return NextResponse.json({
       done: true,
+      operationId,
       latestAssistant,
       resume: resume || null,
-      resumeId: resume?.id || requestedResumeId || null,
+      resumeId: resume?.id || resultResumeId,
       workspace: buildCareerWorkspaceState(resume || null),
     });
   } catch (err) {
