@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
+const MAX_MULTIPART_BYTES = MAX_PDF_BYTES + 1_000_000;
 const MAX_EXTRACTED_CHARS = 120_000;
 
 export async function POST(request: Request) {
@@ -29,8 +30,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const declaredLength = Number(request.headers.get("content-length") || 0);
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_PDF_BYTES + 1_000_000) {
+    // request.formData() buffers multipart input before file.size can be checked.
+    // Require a bounded transport-level length first so an attacker cannot make
+    // the parser consume an arbitrarily large multipart body before rejection.
+    const declaredLengthHeader = request.headers.get("content-length");
+    if (!declaredLengthHeader) {
+      return NextResponse.json(
+        { error: { code: "CONTENT_LENGTH_REQUIRED", message: "PDF uploads require a Content-Length header." } },
+        { status: 411 },
+      );
+    }
+    const declaredLength = Number(declaredLengthHeader);
+    if (!Number.isFinite(declaredLength) || declaredLength <= 0) {
+      return NextResponse.json(
+        { error: { code: "INVALID_CONTENT_LENGTH", message: "Invalid upload size." } },
+        { status: 400 },
+      );
+    }
+    if (declaredLength > MAX_MULTIPART_BYTES) {
       return NextResponse.json(
         { error: { code: "FILE_TOO_LARGE", message: "PDF files must be 8 MB or smaller." } },
         { status: 413 },
