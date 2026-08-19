@@ -46,9 +46,6 @@ export const envSchema = z.object({
 
 export type AppEnv = z.infer<typeof envSchema>;
 export const envValidation = envSchema.safeParse(process.env);
-
-// Never fall back to raw, unvalidated process.env values. Optional configuration is
-// represented as undefined and production readiness is evaluated explicitly below.
 export const env: Partial<AppEnv> = envValidation.success ? envValidation.data : {};
 
 const REQUIRED_PRODUCTION_KEYS = [
@@ -66,7 +63,7 @@ const REQUIRED_PRODUCTION_KEYS = [
   "NEXT_PUBLIC_SENTRY_DSN",
 ] as const;
 
-const BILLING_KEYS = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRO_PRICE_ID"] as const;
+export const BILLING_KEYS = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRO_PRICE_ID"] as const;
 
 function firstPathSegment(issue: { path: PropertyKey[] }): string | null {
   const value = issue.path[0];
@@ -115,4 +112,18 @@ export function validateProductionConfiguration(source: NodeJS.ProcessEnv = proc
     invalidKeys,
     billing: billingConfigured ? "ready" as const : billingPartial ? "partial" as const : "disabled" as const,
   };
+}
+
+export function validatePaidProductionConfiguration(source: NodeJS.ProcessEnv = process.env) {
+  const core = validateProductionConfiguration(source);
+  const missingBilling = BILLING_KEYS.filter((key) => !source[key]?.trim());
+  return {
+    ...core,
+    paidReady: core.ready && core.billing === "ready" && missingBilling.length === 0,
+    missingBilling,
+  };
+}
+
+export function isBillingConfigured(source: NodeJS.ProcessEnv = process.env) {
+  return validatePaidProductionConfiguration(source).paidReady;
 }
