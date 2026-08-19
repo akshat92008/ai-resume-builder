@@ -1,49 +1,36 @@
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60; // Max allowed for Vercel Hobby plan
+export const maxDuration = 60;
 import { auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
-import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
-import { parseJsonBody } from "@/lib/careerpath/api-utils";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 
 const AuditRequestSchema = z.object({
-  resumeId: z.string().optional(),
+  resumeId: z.string().uuid().optional(),
   resume: ResumePayloadSchema.optional(),
-});
+}).strict();
 
 export async function POST(request: Request) {
   try {
     const auth = await requireAiAccess();
     if (!auth.ok) return auth.response;
 
-    const text = await request.text().catch(() => "{}");
-    if (text.length > 100000) {
-      return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
-    }
-    
-    const json = parseJsonBody(text);
-    if ("error" in json && json.error === "INVALID_JSON") {
+    const parsedBody = await readJsonLimited(request, 100_000, AuditRequestSchema);
+    if (!parsedBody.ok) {
       return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } },
-        { status: 400 }
+        { error: { code: parsedBody.code, message: "Invalid audit payload.", recoverable: true } },
+        { status: parsedBody.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
       );
     }
-    const parseResult = AuditRequestSchema.safeParse(json);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Invalid payload.", recoverable: true } },
-        { status: 400 },
-      );
-    }
-    const body = parseResult.data as { resumeId?: string; resume?: CareerPathResume };
+    const body = parsedBody.data as { resumeId?: string; resume?: CareerPathResume };
 
     if (isServerSupabaseConfigured && !body.resumeId) {
       return NextResponse.json(
@@ -54,8 +41,7 @@ export async function POST(request: Request) {
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_audit", entitlements.aiActionsPerDay);
-    
+    const rateLimit = await checkAiActionRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
@@ -73,7 +59,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const metadata = { userId: auth.user?.id, resumeId: resume.id };
+    const metadata = { userId: auth.user.id, resumeId: resume.id };
     const audit = await auditResumeAgent(resume.content, resume.targetRole, resume.jobDescription, metadata);
     const updated = { ...resume, audit, score: audit.score, updatedAt: new Date().toISOString() };
     await saveServerResume(updated as CareerPathResume, auth.user.id);
