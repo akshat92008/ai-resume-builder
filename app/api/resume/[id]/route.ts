@@ -76,10 +76,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     const parsed = await readJsonLimited(request, 100_000, EditResumeSchema);
     if (!parsed.ok) {
+      const publicCode = parsed.code === "VALIDATION_ERROR" ? "INVALID_INPUT" : parsed.code;
       return NextResponse.json(
         {
           error: {
-            code: parsed.code,
+            code: publicCode,
             message: parsed.code === "PAYLOAD_TOO_LARGE" ? "Payload too large." : "Invalid resume update payload.",
             recoverable: parsed.code !== "INVALID_JSON",
           },
