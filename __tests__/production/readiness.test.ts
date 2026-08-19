@@ -41,7 +41,7 @@ describe("production configuration", () => {
   });
 
   it("validates observability separately from functional core configuration", () => {
-    const withoutSentry = { ...validProductionEnv };
+    const withoutSentry: NodeJS.ProcessEnv = { ...validProductionEnv };
     delete withoutSentry.SENTRY_DSN;
     delete withoutSentry.NEXT_PUBLIC_SENTRY_DSN;
     const result = validateProductionConfiguration(withoutSentry);
@@ -51,7 +51,7 @@ describe("production configuration", () => {
   });
 
   it("requires a real support contact before commercial core readiness", () => {
-    const withoutSupport = { ...validProductionEnv };
+    const withoutSupport: NodeJS.ProcessEnv = { ...validProductionEnv };
     delete withoutSupport.NEXT_PUBLIC_SUPPORT_EMAIL;
     const result = validateProductionConfiguration(withoutSupport);
     expect(result.ready).toBe(false);
@@ -100,7 +100,11 @@ describe("production observability", () => {
   });
 
   it("uses Vercel structured runtime/browser telemetry for a controlled beta", () => {
-    const vercelEnv = { ...validProductionEnv, VERCEL: "1", VERCEL_ENV: "production" };
+    const vercelEnv: NodeJS.ProcessEnv = {
+      ...validProductionEnv,
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+    };
     delete vercelEnv.SENTRY_DSN;
     delete vercelEnv.NEXT_PUBLIC_SENTRY_DSN;
     expect(getObservabilityBackend(vercelEnv)).toBe("vercel-runtime");
@@ -108,7 +112,7 @@ describe("production observability", () => {
   });
 
   it("fails closed when no supported observability backend exists", () => {
-    const noObservability = { ...validProductionEnv };
+    const noObservability: NodeJS.ProcessEnv = { ...validProductionEnv };
     delete noObservability.SENTRY_DSN;
     delete noObservability.NEXT_PUBLIC_SENTRY_DSN;
     expect(getObservabilityBackend(noObservability)).toBe("none");
