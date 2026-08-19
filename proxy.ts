@@ -34,7 +34,8 @@ function buildContentSecurityPolicy(nonce: string) {
 }
 
 function nextWithSecurityHeaders(request: NextRequest) {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  // UUID hex is valid nonce-source base64-value syntax and avoids Node-only Buffer at the edge.
+  const nonce = crypto.randomUUID().replaceAll("-", "");
   const csp = buildContentSecurityPolicy(nonce);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
