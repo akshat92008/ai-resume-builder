@@ -73,7 +73,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
 
       - name: Install Chromium for browser smoke tests
-        run: npx playwright install --with-deps chromium
+        # GitHub's hosted Ubuntu image already carries Chromium's system libraries.
+        # Avoid --with-deps here: it performs a full apt update and has proven flaky
+        # across runner-image rotations even when every required library is present.
+        run: npx playwright install chromium
 
       - name: Browser smoke tests
         run: npm run test:e2e:smoke
