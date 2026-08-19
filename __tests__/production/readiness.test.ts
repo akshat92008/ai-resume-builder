@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getEntitlementsForPlan } from "@/lib/careerpath/entitlements";
 import { CreateJobApplicationSchema, UpdateJobApplicationSchema } from "@/lib/careerpath/job-validation";
 import { stripePeriodEndIso, stripeSubscriptionStatusToPlan } from "@/lib/careerpath/stripe-state";
-import { validateProductionConfiguration } from "@/lib/env";
+import { validatePaidProductionConfiguration, validateProductionConfiguration } from "@/lib/env";
 
 const validProductionEnv: NodeJS.ProcessEnv = {
   NODE_ENV: "production",
@@ -22,13 +22,33 @@ const validProductionEnv: NodeJS.ProcessEnv = {
   NEXT_PUBLIC_SENTRY_DSN: "https://public@example.ingest.sentry.io/1",
 };
 
+const paidProductionEnv: NodeJS.ProcessEnv = {
+  ...validProductionEnv,
+  STRIPE_SECRET_KEY: "sk_live_example",
+  STRIPE_WEBHOOK_SECRET: "whsec_example",
+  STRIPE_PRO_PRICE_ID: "price_example",
+};
+
 describe("production configuration", () => {
   it("accepts a complete core configuration with billing disabled", () => {
     const result = validateProductionConfiguration(validProductionEnv);
     expect(result.ready).toBe(true);
     expect(result.billing).toBe("disabled");
-    expect(result.missingCore).toEqual([]);
-    expect(result.invalidKeys).toEqual([]);
+  });
+
+  it("does not call a billing-disabled deployment paid-ready", () => {
+    const result = validatePaidProductionConfiguration(validProductionEnv);
+    expect(result.ready).toBe(true);
+    expect(result.paidReady).toBe(false);
+    expect(result.missingBilling).toEqual(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRO_PRICE_ID"]);
+  });
+
+  it("marks a fully configured Stripe deployment paid-ready", () => {
+    const result = validatePaidProductionConfiguration(paidProductionEnv);
+    expect(result.ready).toBe(true);
+    expect(result.billing).toBe("ready");
+    expect(result.paidReady).toBe(true);
+    expect(result.missingBilling).toEqual([]);
   });
 
   it("fails closed for mock AI and weak rate-limit salt", () => {
@@ -43,17 +63,6 @@ describe("production configuration", () => {
     expect(result.ready).toBe(false);
     expect(result.billing).toBe("partial");
   });
-
-  it("accepts a complete Stripe configuration", () => {
-    const result = validateProductionConfiguration({
-      ...validProductionEnv,
-      STRIPE_SECRET_KEY: "sk_test_example",
-      STRIPE_WEBHOOK_SECRET: "whsec_example",
-      STRIPE_PRO_PRICE_ID: "price_example",
-    });
-    expect(result.ready).toBe(true);
-    expect(result.billing).toBe("ready");
-  });
 });
 
 describe("Stripe state mapping", () => {
@@ -61,6 +70,8 @@ describe("Stripe state mapping", () => {
     expect(stripeSubscriptionStatusToPlan("active")).toBe("pro");
     expect(stripeSubscriptionStatusToPlan("trialing")).toBe("pro");
     expect(stripeSubscriptionStatusToPlan("past_due")).toBe("free");
+    expect(stripeSubscriptionStatusToPlan("unpaid")).toBe("free");
+    expect(stripeSubscriptionStatusToPlan("incomplete_expired")).toBe("free");
     expect(stripeSubscriptionStatusToPlan("canceled")).toBe("free");
   });
 
