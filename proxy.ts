@@ -7,10 +7,12 @@ export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const protectedRoutes = ["/app", "/builder", "/dashboard", "/resume"];
-  const isProtected = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route));
+  const protectedRoutes = ["/app", "/builder", "/dashboard", "/resume", "/settings"];
+  const isProtected = protectedRoutes.some(
+    (route) => request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(`${route}/`),
+  );
 
-  // If Supabase is not configured, redirect protected routes to login
+  // If Supabase is not configured, protected routes fail closed to login.
   if (!supabaseUrl || !supabaseKey) {
     if (isProtected) {
       const url = request.nextUrl.clone();
@@ -49,9 +51,8 @@ export async function proxy(request: NextRequest) {
       url.searchParams.set("next", next);
       return NextResponse.redirect(url);
     }
-  } catch (error) {
-    console.error("Middleware error:", error);
-    // If auth check fails on protected route, redirect to login
+  } catch {
+    // Do not log auth/session material from the edge boundary. Protected routes fail closed.
     if (isProtected) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
