@@ -43,7 +43,7 @@ export async function PUT(req: Request) {
     }
 
     const raw = await req.text().catch(() => "");
-    if (!raw || Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
+    if (!raw || new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
       return NextResponse.json(
         { error: { code: "PAYLOAD_TOO_LARGE", message: "Career Memory updates must be 100 KB or smaller." } },
         { status: 413 },
