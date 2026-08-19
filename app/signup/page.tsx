@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 import { Alert, Button, Input, Label } from "@/components/ui";
 import { MarketingNav } from "@/components/layout/MarketingNav";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/utils";
 
 function SignupForm() {
@@ -22,12 +22,29 @@ function SignupForm() {
     const nextPath = searchParams.get("next");
     const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
     if (!isSupabaseConfigured) { setMessage("CareerOS authentication is not configured on this deployment yet."); setLoading(false); return; }
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) { setMessage("CareerOS authentication is temporarily unavailable."); setLoading(false); return; }
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) { setMessage(error.message); setLoading(false); return; }
-    if (!data.session) { setMessage("Check your email to confirm your account, then return here to sign in."); setLoading(false); return; }
-    router.push(targetUrl);
+
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data?.error?.message || "Unable to create account. Try again.");
+        setLoading(false);
+        return;
+      }
+      if (data.requiresEmailConfirmation) {
+        setMessage("Check your email to confirm your account, then return here to sign in.");
+        setLoading(false);
+        return;
+      }
+      router.push(targetUrl);
+    } catch {
+      setMessage("Unable to create account right now. Try again.");
+      setLoading(false);
+    }
   }
 
   const loginParams = new URLSearchParams();
@@ -43,7 +60,7 @@ function SignupForm() {
       {!isSupabaseConfigured && <Alert className="mt-5" variant="error">Authentication is not configured on this deployment.</Alert>}
       <form onSubmit={submit} className="mt-6 space-y-5">
         <div className="space-y-2"><Label htmlFor="signup-email">Email</Label><Input id="signup-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} placeholder="you@example.com" /></div>
-        <div className="space-y-2"><Label htmlFor="signup-password">Password</Label><Input id="signup-password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="At least 8 characters" /></div>
+        <div className="space-y-2"><Label htmlFor="signup-password">Password</Label><Input id="signup-password" type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="At least 8 characters" /></div>
         {message && <Alert variant={message.startsWith("Check your email") ? "success" : "error"}>{message}</Alert>}
         <Button type="submit" size="lg" className="w-full" disabled={loading || !isSupabaseConfigured}>{loading ? "Creating account..." : <>Create free account <ArrowRight className="ml-2 h-4 w-4" /></>}</Button>
       </form>
