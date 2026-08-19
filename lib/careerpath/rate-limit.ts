@@ -4,9 +4,8 @@ import { logger } from "@/lib/observability/logger";
 
 const ratelimiters = new Map<string, Ratelimit>();
 
-// All general-purpose AI endpoints share one economic budget. Feature-specific
-// caps (tailoring/outreach) are additional limits and are deliberately excluded
-// from this alias set so their routes can consume both budgets explicitly.
+// Legacy event names that represent general AI work all map to one shared
+// economic budget. New code should call checkAiActionRateLimit directly.
 const GLOBAL_AI_EVENTS = new Set([
   "builder_message",
   "resume_agent",
@@ -16,11 +15,15 @@ const GLOBAL_AI_EVENTS = new Set([
   "job_analyzer",
 ]);
 
+function canonicalEventName(eventType: string) {
+  return GLOBAL_AI_EVENTS.has(eventType) ? "global_ai_daily" : eventType;
+}
+
 function getRatelimiter(eventType: string, maxLimit: number) {
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!redisUrl || !redisToken) throw new Error("Upstash Redis is not configured");
-  const canonicalEvent = GLOBAL_AI_EVENTS.has(eventType) ? "global_ai_daily" : eventType;
+  const canonicalEvent = canonicalEventName(eventType);
   const key = `${canonicalEvent}_${maxLimit}`;
   if (!ratelimiters.has(key)) {
     ratelimiters.set(key, new Ratelimit({
@@ -64,11 +67,29 @@ export async function checkRateLimit(
   }
 }
 
-/** Consume the shared AI budget explicitly before a feature-specific budget. */
 export async function checkGlobalAiRateLimit(
   userId: string | null,
   ipHash: string,
   maxLimit: number,
 ) {
   return checkRateLimit(userId, ipHash, "global_ai_daily", maxLimit);
+}
+
+/**
+ * Consume the global AI budget, then an optional feature-specific sublimit.
+ * A feature cannot bypass the global account budget by owning its own bucket.
+ */
+export async function checkAiActionRateLimit(
+  userId: string | null,
+  ipHash: string,
+  globalMaxLimit: number,
+  featureType?: string,
+  featureMaxLimit?: number,
+): Promise<{ allowed: boolean; remaining: number; error?: string }> {
+  const global = await checkGlobalAiRateLimit(userId, ipHash, globalMaxLimit);
+  if (!global.allowed || !featureType || featureMaxLimit == null) return global;
+
+  const feature = await checkRateLimit(userId, ipHash, featureType, featureMaxLimit);
+  if (!feature.allowed) return feature;
+  return { allowed: true, remaining: Math.min(global.remaining, feature.remaining) };
 }
