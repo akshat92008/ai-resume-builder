@@ -20,10 +20,6 @@ const STOPWORDS = new Set([
   "the", "and", "for", "with", "from", "into", "that", "this", "using", "used", "built", "created", "developed", "implemented", "designed", "delivered", "worked", "role", "team", "project", "application", "system", "user", "users", "through", "across", "while", "which", "their", "your", "our", "was", "were", "are", "is", "to", "of", "in", "on", "a", "an",
 ]);
 
-// These words materially change a factual claim by asserting an outcome,
-// ownership level, or scale. A generic vocabulary overlap is not enough to
-// support them: the matching Career Memory source must itself contain the
-// signal (or a close inflection of it).
 const MATERIAL_OUTCOME_STEMS = [
   "accelerat", "boost", "cut", "decreas", "deliver", "drove", "driv", "enhanc",
   "grew", "grow", "improv", "increas", "lead", "led", "optimiz", "own", "rais",
@@ -45,7 +41,10 @@ function claimTokens(value: string) {
 }
 
 function numericSignals(value: string) {
-  return [...new Set(normalize(value).match(/\b\d+(?:\.\d+)?%?\b/g) || [])];
+  // Do not use a trailing word boundary here: `%` is not a word character, so
+  // `/\b...%?\b/` silently turned `900%` into `900`. Keeping the unit matters
+  // because `9`, `9%`, and `900%` are materially different factual claims.
+  return [...new Set(normalize(value).match(/\d+(?:\.\d+)?%?/g) || [])];
 }
 
 function materialOutcomeSignals(value: string) {
@@ -148,8 +147,6 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
   const entries: ClaimProvenanceEntry[] = [];
   const profileSource = sourceTextForProfile(profile);
 
-  // Summary prose can synthesize across the whole Career Memory, but it still
-  // cannot introduce unsupported scale, impact, ownership, or unrelated facts.
   const summarySentences = sentenceClaims(content.summary);
   const supportedSummary = summarySentences.filter((claim) => {
     const assessment = assessClaim(claim, profileSource, 0.35);
@@ -158,8 +155,6 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
   });
   const summary = supportedSummary.join(" ");
 
-  // Skills are only retained when they are represented somewhere in durable
-  // Career Memory (explicit skill, project technology, or experience technology).
   const skills = content.skills
     .map((group) => ({
       ...group,
