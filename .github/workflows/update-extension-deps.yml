@@ -27,6 +27,14 @@ jobs:
         working-directory: extension
         run: npm install --save-dev @crxjs/vite-plugin@^2.7.1
 
+      - name: Apply non-breaking security fixes
+        working-directory: extension
+        run: npm audit fix
+
+      - name: Require zero high-severity extension vulnerabilities
+        working-directory: extension
+        run: npm audit --audit-level=high
+
       - name: Build extension with regenerated dependency graph
         working-directory: extension
         run: npm run build
@@ -39,6 +47,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Dependency files are already current"
           else
-            git commit -m "Upgrade extension build dependencies"
+            git commit -m "Fix extension dependency vulnerabilities"
             git push origin HEAD:agent/final-architecture-hardening
           fi
