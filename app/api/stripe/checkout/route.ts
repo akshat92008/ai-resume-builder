@@ -20,8 +20,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user.id, ipHash, "stripe_checkout", 5);
+    const rateLimit = await checkRateLimit(auth.user.id, getClientIp(request), "stripe_checkout", 5);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many checkout attempts. Please try again later." } },
@@ -68,6 +67,28 @@ export async function POST(request: Request) {
     }
 
     const stripe = getStripeClient();
+
+    // Database state can lag Stripe while webhook delivery is in flight. Before
+    // creating another Checkout Session, ask Stripe directly for this customer's
+    // live subscriptions so a double-click/retry cannot create two paid plans.
+    if (subscription?.stripe_customer_id) {
+      const liveSubscriptions = await stripe.subscriptions.list({
+        customer: subscription.stripe_customer_id,
+        status: "all",
+        limit: 100,
+      });
+      const hasLivePro = liveSubscriptions.data.some((item) =>
+        (item.status === "active" || item.status === "trialing")
+        && item.items.data.some((line) => line.price.id === priceId),
+      );
+      if (hasLivePro) {
+        return NextResponse.json(
+          { error: { code: "ALREADY_SUBSCRIBED", message: "Your Pro subscription is already active or activating." } },
+          { status: 409 },
+        );
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       ...(subscription?.stripe_customer_id
         ? { customer: subscription.stripe_customer_id }
