@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getEntitlementsForPlan } from "@/lib/careerpath/entitlements";
-import { getUserSubscription } from "@/lib/careerpath/stripe";
+import { getUserSubscription } from "@/lib/careerpath/billing";
 import { isBillingConfigured } from "@/lib/env";
 import { logger } from "@/lib/observability/logger";
 
@@ -19,6 +19,8 @@ export async function GET() {
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
         hasBillingAccount: subscription.hasBillingAccount,
+        providerStatus: subscription.providerStatus,
+        billingProvider: "razorpay",
         billingConfigured: isBillingConfigured(),
       },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
