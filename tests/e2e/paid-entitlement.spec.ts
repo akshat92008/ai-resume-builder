@@ -11,7 +11,7 @@ if (requirePaidE2E && (!email || !password)) {
 test.describe("paid CareerOS release flow", () => {
   test.skip(!email || !password, "Paid release credentials are not configured.");
 
-  test("a paid account receives Pro entitlements and can open billing management", async ({ page }) => {
+  test("a Razorpay-paid account receives Pro entitlements", async ({ page }) => {
     await page.goto("/login?next=/settings");
     await page.getByLabel("Email").fill(email!);
     await page.getByLabel("Password").fill(password!);
@@ -22,15 +22,14 @@ test.describe("paid CareerOS release flow", () => {
     expect(subscriptionResponse.status()).toBe(200);
     const subscription = await subscriptionResponse.json();
     expect(subscription.billingConfigured).toBe(true);
+    expect(subscription.billingProvider).toBe("razorpay");
     expect(subscription.plan).toBe("pro");
     expect(subscription.isPro).toBe(true);
+    expect(subscription.providerStatus).toBe("active");
     expect(subscription.aiActionsPerDay).toBeGreaterThan(3);
     expect(subscription.tailoringPerDay).toBeGreaterThan(1);
     expect(subscription.outreachPerDay).toBeGreaterThan(1);
 
-    const portalResponse = await page.request.post("/api/stripe/create-portal-session");
-    expect(portalResponse.status()).toBe(200);
-    const portal = await portalResponse.json();
-    expect(portal.url).toMatch(/^https:\/\//);
+    await expect(page.getByText(/Recurring billing is managed securely by Razorpay/i)).toBeVisible();
   });
 });
