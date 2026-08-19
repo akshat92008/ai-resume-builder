@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
-import { getLatestResumeForUser, getServerResume } from "@/lib/careerpath/db";
+import { DatabaseUnavailableError, getLatestResumeForUser, getServerResume } from "@/lib/careerpath/db";
 import { listJobApplications } from "@/lib/careerpath/db-jobs";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/observability/logger";
@@ -46,12 +46,7 @@ export async function GET(request: Request) {
     const userId = auth.user.id;
     const { operationId, resumeId: requestedResumeId } = parseResult.data;
     const admin = createSupabaseAdminClient();
-    if (!admin) {
-      return NextResponse.json(
-        { error: { code: "STATUS_LOAD_FAILED", message: "Unable to load agent status.", recoverable: true } },
-        { status: 503 },
-      );
-    }
+    if (!admin) throw new DatabaseUnavailableError("agent status lookup");
 
     const { data: messageRows, error: messageError } = await admin
       .from("resume_messages")
@@ -61,7 +56,10 @@ export async function GET(request: Request) {
       .eq("role", "assistant")
       .order("created_at", { ascending: false })
       .limit(1);
-    if (messageError) throw messageError;
+    if (messageError) {
+      logger.error("[resume-agent/status] Message lookup failed", { error: messageError });
+      throw new DatabaseUnavailableError("agent status lookup");
+    }
 
     const latestAssistant = messageRows?.[0] ? mapMessage(messageRows[0] as Record<string, unknown>) : null;
     if (!latestAssistant) {
@@ -90,9 +88,16 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     logger.error("[resume-agent/status] Error", { error: err });
+    const unavailable = err instanceof DatabaseUnavailableError;
     return NextResponse.json(
-      { error: { code: "STATUS_LOAD_FAILED", message: "Unable to load agent status.", recoverable: true } },
-      { status: 500 },
+      {
+        error: {
+          code: unavailable ? "DATABASE_UNAVAILABLE" : "STATUS_LOAD_FAILED",
+          message: unavailable ? "Agent status is temporarily unavailable. Please retry." : "Unable to load agent status.",
+          recoverable: true,
+        },
+      },
+      { status: unavailable ? 503 : 500 },
     );
   }
 }
