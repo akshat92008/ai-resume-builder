@@ -58,15 +58,23 @@ export async function POST(req: Request) {
         userId,
         snapshot,
       });
-    } else if (
-      event.type === "customer.subscription.created" ||
-      event.type === "customer.subscription.updated" ||
-      event.type === "customer.subscription.deleted"
-    ) {
+    } else if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
+      const eventSubscription = event.data.object as Stripe.Subscription;
+      // Use Stripe's current object instead of trusting delivery order. This
+      // prevents an older webhook delivered later from restoring stale access.
+      const liveSubscription = await stripe.subscriptions.retrieve(eventSubscription.id);
+      const snapshot = subscriptionSnapshot(liveSubscription);
+      await persistStripeSubscriptionState({
+        eventId: event.id,
+        eventType: event.type,
+        eventCreated: event.created,
+        userId: null,
+        snapshot,
+      });
+    } else if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription;
       const snapshot = subscriptionSnapshot(subscription);
-      if (event.type === "customer.subscription.deleted") snapshot.status = "free";
-
+      snapshot.status = "free";
       await persistStripeSubscriptionState({
         eventId: event.id,
         eventType: event.type,
