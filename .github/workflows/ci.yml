@@ -14,6 +14,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database-migrations:
+    name: Clean Supabase migration replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Postgres
+        run: supabase db start
+
+      - name: Replay every migration from zero
+        run: supabase db reset --local --no-seed
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup || true
+
   ci:
     name: Audit → Lint → Typecheck → Test → Build → Browser Smoke
     runs-on: ubuntu-latest
