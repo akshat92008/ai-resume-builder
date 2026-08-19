@@ -6,6 +6,8 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 
+const CHECKOUT_IDEMPOTENCY_WINDOW_MS = 30 * 60 * 1000;
+
 export async function POST(request: Request) {
   try {
     const auth = await requireAppAccess();
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
 
     // Database state can lag Stripe while webhook delivery is in flight. Before
     // creating another Checkout Session, ask Stripe directly for this customer's
-    // live subscriptions so a double-click/retry cannot create two paid plans.
+    // live subscriptions so a retry cannot create two paid plans.
     if (subscription?.stripe_customer_id) {
       const liveSubscriptions = await stripe.subscriptions.list({
         customer: subscription.stripe_customer_id,
@@ -89,6 +91,7 @@ export async function POST(request: Request) {
       }
     }
 
+    const checkoutWindow = Math.floor(Date.now() / CHECKOUT_IDEMPOTENCY_WINDOW_MS);
     const session = await stripe.checkout.sessions.create({
       ...(subscription?.stripe_customer_id
         ? { customer: subscription.stripe_customer_id }
@@ -102,6 +105,10 @@ export async function POST(request: Request) {
       cancel_url: `${appUrl}/settings?canceled=true`,
       metadata: { userId: auth.user.id },
       subscription_data: { metadata: { userId: auth.user.id } },
+    }, {
+      // Stripe replays the same POST result for the same key. Combined with the
+      // live-subscription check above, this closes both double-click and webhook-lag races.
+      idempotencyKey: `careeros-pro-checkout:${auth.user.id}:${checkoutWindow}`,
     });
 
     if (!session.url) {
