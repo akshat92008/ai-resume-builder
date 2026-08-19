@@ -4,34 +4,34 @@ export const maxDuration = 60;
 import { createResumeRecord } from "@/lib/careerpath/agents";
 import { writeResumeAgent, auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
-import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
-
 import { requireAiAccess } from "@/lib/careerpath/auth";
 
 const GenerateRequestSchema = z.object({
   sessionId: z.string().uuid(),
-});
+}).strict();
 
 export async function POST(request: Request) {
   try {
     const auth = await requireAiAccess();
     if (!auth.ok) return auth.response;
 
-    const json = await request.json().catch(() => ({}));
-    const parseResult = GenerateRequestSchema.safeParse(json);
-    if (!parseResult.success) {
-      return NextResponse.json({ error: { code: "INVALID_INPUT", message: "sessionId is required and invalid.", recoverable: true } }, { status: 400 });
+    const parsedBody = await readJsonLimited(request, 8_000, GenerateRequestSchema);
+    if (!parsedBody.ok) {
+      return NextResponse.json(
+        { error: { code: parsedBody.code, message: "sessionId is required and invalid.", recoverable: true } },
+        { status: parsedBody.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
+      );
     }
-    const body = parseResult.data;
+    const body = parsedBody.data;
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_generate", entitlements.aiActionsPerDay);
-    
+    const rateLimit = await checkAiActionRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
