@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 
 const RAZORPAY_API = "https://api.razorpay.com/v1";
+const RAZORPAY_TIMEOUT_MS = 8_000;
 
 export type RazorpaySubscription = {
   id: string;
@@ -32,15 +33,26 @@ function credentials() {
 async function razorpayRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const { keyId, keySecret } = credentials();
   const authorization = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-  const response = await fetch(`${RAZORPAY_API}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      Authorization: `Basic ${authorization}`,
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${RAZORPAY_API}${path}`, {
+      ...init,
+      cache: "no-store",
+      signal: AbortSignal.timeout(RAZORPAY_TIMEOUT_MS),
+      headers: {
+        Authorization: `Basic ${authorization}`,
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("Razorpay request timed out. Please retry.");
+    }
+    throw new Error("Razorpay is temporarily unreachable. Please retry.");
+  }
+
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const description = payload?.error?.description || payload?.error?.reason || `Razorpay request failed (${response.status})`;
