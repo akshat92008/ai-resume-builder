@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui";
-
 import * as Sentry from "@sentry/nextjs";
+import { reportClientError } from "@/components/observability/ClientErrorReporter";
 
 export default function GlobalError({
   error,
@@ -14,15 +14,13 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Report to structured logger (server-side) and console (client-side)
-    console.error("[GlobalErrorBoundary]", {
-      message: error.message,
-      digest: error.digest,
-      stack: error.stack,
-    });
+    // Always emit a privacy-safe fingerprint into the first-party observability
+    // path. Raw messages/stacks never leave the browser through this channel.
+    void reportClientError(error, "react-boundary", error.digest);
 
-    // Report to Sentry client SDK
-    if (typeof window !== "undefined") {
+    // Keep Sentry as an optional richer backend for deployments that configure
+    // it explicitly. The SDK is inert when NEXT_PUBLIC_SENTRY_DSN is absent.
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
       Sentry.captureException(error);
     }
   }, [error]);
