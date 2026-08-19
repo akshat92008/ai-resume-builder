@@ -1,63 +1,81 @@
-# CareerOS Free Beta — Release Status
+# CareerOS Release Status
 
-CareerOS is being hardened for a **small free beta**, not declared generally available by code changes alone.
+CareerOS has two distinct release decisions:
 
-## Automated gate
+1. **Core web launch** — authenticated Career Memory, resume intelligence, job analysis/tracking, PDF/export, quotas and observability.
+2. **Paid GA** — core launch requirements **plus** a fully certified Razorpay subscription lifecycle.
 
-The required pull-request CI sequence is:
+Code changes or configured environment variables alone are not sufficient evidence for either decision.
+
+## Automated qualification
+
+Every release candidate must pass:
 
 1. production dependency audit
-2. lint
+2. ESLint
 3. TypeScript typecheck
-4. unit tests
-5. production build
+4. unit/regression tests
+5. production Next.js build
 6. Playwright public browser smoke tests
-7. Chrome extension beta build verification
+7. Chrome extension dependency audit + beta build verification
+8. clean Supabase migration replay from zero
 
 The branch must not merge while this gate is red.
 
-## Security and privacy changes in this release
+## Current architecture guarantees
 
-- `agent_runs` is operational metadata only; raw prompts, resumes, job descriptions, and model output are stripped in application code and again by a database trigger.
-- provider failures are summarized to safe operational fields instead of logging raw error objects.
-- fallback models are explicit deployment configuration rather than stale hard-coded IDs.
-- AI usage captures provider, attempts, token usage, and configurable estimated cost.
+- AI-generated resume persistence uses one canonical verification boundary: truthfulness validation, render normalization, Career Memory claim provenance, audit, then persistence.
+- async CareerOS operations use durable UUID `operationId` correlation rather than timestamp-based polling.
+- resume mutations use optimistic version checks so stale operations fail with a conflict instead of silently overwriting newer work.
+- tenant ownership is checked in application logic and reinforced by RLS/same-tenant database relationships.
+- AI actions share an account-wide economic quota; feature sublimits are checked before consuming the global bucket.
+- public JSON bodies use bounded parsing and strict route schemas; reviewed raw-body/multipart endpoints have explicit byte boundaries.
+- product-data database failures fail explicitly; telemetry-only writes may remain intentionally best-effort.
+- PDF uploads are bounded and parsed in an isolated worker with timeout/page/text limits. A worker thread is an isolation boundary, **not** an OS/container sandbox.
+- billing is Razorpay. Historical Stripe migrations remain immutable migration history and are not active runtime configuration.
 
-## Product changes in this release
+## Deployed core gate
 
-- product identity: **CareerOS by Amaura Labs**
-- CareerLoop remains the internal outcome-learning engine
-- primary workspace navigation is limited to **Home / My Career / Applications / Tools**
-- advanced capabilities remain contextual rather than becoming separate top-level screens
-- launch messaging is **free beta with fair-use AI limits**; paid/unlimited claims are intentionally removed
+Before declaring the web product ready, verify against the exact production deployment:
 
-## Manual staging gate before public beta
+- [ ] `/api/health/live` is HTTP 200 and commit equals the release SHA
+- [ ] `/api/health` is HTTP 200 / ready
+- [ ] database, Redis, core configuration and observability checks are green
+- [ ] real NVIDIA NIM generation succeeds
+- [ ] real Inngest async completion succeeds
+- [ ] Career Memory → resume generation persists verified output
+- [ ] unsupported/adversarial claims are removed
+- [ ] improve and tailor retain truthfulness guarantees
+- [ ] PDF export/ATS round-trip succeeds
+- [ ] two-user tenant isolation succeeds
+- [ ] operation correlation remains isolated across concurrent jobs
+- [ ] stale concurrent resume write produces 409 rather than lost update
+- [ ] no raw resume/job content appears in operational telemetry/provider-error logs
 
-The following must be verified against the actual deployed environment:
+The GitHub `Core Commercial Release Gate` workflow is the canonical automated deployed gate.
 
-- [ ] apply all Supabase migrations successfully
-- [ ] verify RLS prevents cross-user reads/writes
-- [ ] verify `/api/health` reports the expected production configuration
-- [ ] sign up a new user and log in
-- [ ] create/import Career Memory and refresh the browser; data persists
-- [ ] analyze a real job and receive Apply / Consider / Skip guidance
-- [ ] tailor a resume without unsupported facts being introduced
-- [ ] save the application and refresh; job + resume version persist
-- [ ] record an interview/rejection/offer outcome
-- [ ] verify CareerLoop conversion data updates after sufficient outcomes
-- [ ] log out, log back in, and verify account data is preserved
-- [ ] intentionally exceed the free AI limit and verify a controlled 429 response
-- [ ] verify no raw resume/job content appears in `agent_runs` or provider-error logs
-- [ ] verify Sentry receives a deliberate test exception without PII
+## External security settings still required
 
-## Beta-only / non-blocking
+These are dashboard/repository controls, not code patches:
 
-- Chrome extension remains beta and must not block the web beta.
-- Stripe can remain disabled while CareerOS is free. Billing becomes a release gate only when paid access is enabled.
-- Broad job discovery, full auto-apply, autonomous networking, and marketplace features remain intentionally out of scope.
+- [ ] enable Supabase leaked-password protection
+- [ ] review Supabase public-signup abuse controls/captcha before broad signup
+- [ ] enable GitHub `main` branch protection/ruleset
+- [ ] require pull requests and CI status checks
+- [ ] block force pushes/deletion of `main`
+
+## Paid Razorpay GA
+
+Billing may remain disabled for a core/free launch. If paid access is enabled, paid GA additionally requires a real provider lifecycle qualification covering checkout, confirmation signature, webhook authenticity, provider re-fetch, plan verification, idempotency, out-of-order events, cancellation/downgrade, persistence failure/retry behavior and duplicate-subscription prevention.
+
+Do not describe paid access as certified merely because Razorpay environment variables are present.
+
+## Chrome extension
+
+The extension remains **beta** until authenticated production clip-to-persist behavior is proven end-to-end. Its build passing is required for repository health but extension GA is not a core web launch blocker.
 
 ## Release rule
 
-**Green CI + completed deployed staging checklist = eligible for free beta.**
+**Core GO** = green repository CI + current production migrations + exact-SHA deployed core gate + required external security settings.
 
-Paid GA requires a separate billing lifecycle test and production hosting/commercial-policy review.
+**Paid GO** = Core GO + complete Razorpay lifecycle certification.

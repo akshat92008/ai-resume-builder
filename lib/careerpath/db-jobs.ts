@@ -2,16 +2,12 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseUser } from "./db";
+import { DatabaseUnavailableError } from "./db-errors";
 import type { JobApplication, JobDescription, ApplicationPack } from "./types";
 import type { CareerLoopJobApplication } from "@/lib/careerloop/types";
 import { logger } from "@/lib/observability/logger";
 
-export class DatabaseUnavailableError extends Error {
-  constructor(operation: string) {
-    super(`Database unavailable during ${operation}`);
-    this.name = "DatabaseUnavailableError";
-  }
-}
+export { DatabaseUnavailableError } from "./db-errors";
 
 type OwnedTable = "resumes" | "job_descriptions" | "application_packs";
 

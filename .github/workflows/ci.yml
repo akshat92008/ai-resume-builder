@@ -32,6 +32,12 @@ jobs:
       - name: Replay every migration from zero
         run: supabase db reset --local --no-seed
 
+      - name: Lint local database
+        run: supabase db lint --local
+
+      - name: Verify RLS security invariants
+        run: supabase test db
+
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup || true

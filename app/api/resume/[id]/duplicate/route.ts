@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
-import { duplicateServerResume } from "@/lib/careerpath/db";
+import { DatabaseUnavailableError, duplicateServerResume } from "@/lib/careerpath/db";
 import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
+import { logger } from "@/lib/observability/logger";
 
 const IdSchema = z.string().uuid();
 
@@ -25,10 +26,17 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     }
     return NextResponse.json({ resume: copy });
   } catch (err) {
-    console.error("[api/resume/[id]/duplicate] Error:", err);
+    logger.error("[api/resume/[id]/duplicate] Error", { error: err });
+    const unavailable = err instanceof DatabaseUnavailableError;
     return NextResponse.json(
-      { error: { code: "DUPLICATE_FAILED", message: "Unable to duplicate resume.", recoverable: true } },
-      { status: 500 },
+      {
+        error: {
+          code: unavailable ? "DATABASE_UNAVAILABLE" : "DUPLICATE_FAILED",
+          message: unavailable ? "Resume data is temporarily unavailable. Please retry." : "Unable to duplicate resume.",
+          recoverable: true,
+        },
+      },
+      { status: unavailable ? 503 : 500 },
     );
   }
 }

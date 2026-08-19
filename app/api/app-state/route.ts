@@ -2,18 +2,12 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60; // Max allowed for Vercel Hobby plan
 import { requireAppAccess } from "@/lib/careerpath/auth";
-import { getLatestResumeForUser, getLatestMessagesForUser } from "@/lib/careerpath/db";
+import { DatabaseUnavailableError, getLatestResumeForUser, getLatestMessagesForUser } from "@/lib/careerpath/db";
 import { listJobApplications } from "@/lib/careerpath/db-jobs";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { logger } from "@/lib/observability/logger";
 
-/**
- * GET /api/app-state
- *
- * Load the authenticated user's current workspace state:
- * - Latest resume
- * - Chat messages for that resume
- */
+/** Load the authenticated user's current CareerOS workspace state. */
 export async function GET() {
   try {
     const auth = await requireAppAccess();
@@ -35,9 +29,16 @@ export async function GET() {
     });
   } catch (err) {
     logger.error("[app-state] Error", { error: err });
+    const unavailable = err instanceof DatabaseUnavailableError;
     return NextResponse.json(
-      { error: { code: "STATE_LOAD_FAILED", message: "Unable to load workspace state.", recoverable: true } },
-      { status: 500 },
+      {
+        error: {
+          code: unavailable ? "DATABASE_UNAVAILABLE" : "STATE_LOAD_FAILED",
+          message: unavailable ? "CareerOS data is temporarily unavailable. Please retry." : "Unable to load workspace state.",
+          recoverable: true,
+        },
+      },
+      { status: unavailable ? 503 : 500 },
     );
   }
 }

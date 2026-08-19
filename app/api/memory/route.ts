@@ -4,7 +4,7 @@ import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getLatestResumeForUser, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerProfile } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 
 export const runtime = "edge";
@@ -42,30 +42,13 @@ export async function PUT(req: Request) {
       );
     }
 
-    const raw = await req.text().catch(() => "");
-    if (!raw || new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
-      return NextResponse.json(
-        { error: { code: "PAYLOAD_TOO_LARGE", message: "Career Memory updates must be 100 KB or smaller." } },
-        { status: 413 },
-      );
-    }
-
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(raw);
-    } catch {
-      return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Provide a valid JSON object." } },
-        { status: 400 },
-      );
-    }
-
-    const parsed = EditableCareerProfileSchema.safeParse(decoded);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "One or more Career Memory fields are invalid." } },
-        { status: 400 },
-      );
+    const parsed = await readJsonLimited(req, MAX_BODY_BYTES, EditableCareerProfileSchema);
+    if (!parsed.ok) {
+      const status = parsed.code === "PAYLOAD_TOO_LARGE" ? 413 : 400;
+      const message = parsed.code === "PAYLOAD_TOO_LARGE"
+        ? "Career Memory updates must be 100 KB or smaller."
+        : "One or more Career Memory fields are invalid.";
+      return NextResponse.json({ error: { code: parsed.code, message } }, { status });
     }
 
     let resume = await getLatestResumeForUser(userId);

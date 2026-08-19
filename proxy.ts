@@ -18,7 +18,11 @@ function buildContentSecurityPolicy(nonce: string) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' https://fonts.googleapis.com",
+    `style-src-elem 'self' 'nonce-${nonce}' https://fonts.googleapis.com`,
+    // Motion/React components legitimately use style attributes for transforms
+    // and CSS variables. Keep that narrow allowance separate from style blocks.
+    "style-src-attr 'unsafe-inline'",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
     `connect-src ${connectSources.join(" ")}`,
