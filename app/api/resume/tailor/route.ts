@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
-import { auditResume, createResumeRecord } from "@/lib/careerpath/agents";
+import { createResumeRecord } from "@/lib/careerpath/agents";
 import { tailorResumeAgent } from "@/lib/careerpath/orchestrator";
-import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
+import { getServerResume, saveResumeVersion, saveServerResume } from "@/lib/careerpath/db";
+import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
@@ -64,22 +65,46 @@ export async function POST(request: Request) {
       body.jobDescription,
       { userId: auth.user.id, resumeId: resume.id },
     );
-    const tailoredContent = tailoring.tailoredResume;
-    const audit = auditResume(tailoredContent, resume.targetRole, body.jobDescription);
+
+    const verified = await verifyResumeCandidate({
+      content: tailoring.tailoredResume,
+      currentResume: resume,
+      userId: auth.user.id,
+      legacyProfile: resume.profile,
+      careerProfile: resume.careerProfile,
+      instruction: body.jobDescription,
+      mode: "tailor",
+      targetRole: resume.targetRole,
+      jobDescription: body.jobDescription,
+      metadata: { userId: auth.user.id, resumeId: resume.id },
+    });
+
+    await saveResumeVersion({
+      userId: auth.user.id,
+      resumeId: resume.id,
+      versionName: `Before tailoring v${resume.version}`,
+      resumeJson: resume.content,
+      reason: "Pre-tailoring snapshot",
+    });
+
     const tailored = createResumeRecord({
       userId: auth.user.id,
       mode: "tailor",
       targetRole: resume.targetRole,
-      content: tailoredContent,
+      content: verified.content,
       profile: resume.profile,
       jobDescription: body.jobDescription,
       version: resume.version + 1,
       title: `${resume.targetRole} Tailored Resume`,
+      audit: verified.audit,
     });
-    tailored.careerProfile = resume.careerProfile;
-    tailored.tailoring = tailoring;
-    tailored.audit = audit;
-    tailored.score = audit.score;
+    tailored.careerProfile = verified.careerProfile;
+    tailored.tailoring = {
+      ...tailoring,
+      tailoredResume: verified.content,
+    };
+    tailored.audit = verified.audit;
+    tailored.score = verified.score;
     await saveServerResume(tailored, auth.user.id);
 
     return NextResponse.json({
@@ -87,8 +112,12 @@ export async function POST(request: Request) {
       matchScore: tailoring.matchScore,
       matchedKeywords: tailoring.matchedKeywords,
       missingKeywords: tailoring.missingKeywordsNotAdded,
-      tailoredContent,
-      tailoring,
+      tailoredContent: verified.content,
+      tailoring: tailored.tailoring,
+      verification: {
+        removedUnsupportedClaims: verified.provenance.removedClaims,
+        warnings: verified.validation.warnings.length,
+      },
       resume: tailored,
     });
   } catch (err) {
