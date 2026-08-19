@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { sanitizeLogContext, sanitizeLogValue } from "@/lib/observability/logger";
+
+const originalNodeEnv = process.env.NODE_ENV;
+
+afterEach(() => {
+  Object.defineProperty(process.env, "NODE_ENV", { value: originalNodeEnv, writable: true, configurable: true });
+});
 
 describe("production log sanitization", () => {
   it("redacts sensitive keys recursively", () => {
@@ -38,5 +44,13 @@ describe("production log sanitization", () => {
     expect(typeof result).toBe("string");
     expect((result as string).length).toBeLessThan(2_100);
     expect(result).toContain("[TRUNCATED]");
+  });
+
+  it("does not emit arbitrary provider error messages in production", () => {
+    Object.defineProperty(process.env, "NODE_ENV", { value: "production", writable: true, configurable: true });
+    const result = sanitizeLogValue(new Error("Failed parsing Jane Doe's resume phone +91 9999999999")) as Record<string, unknown>;
+    expect(result.name).toBe("Error");
+    expect(result.message).toBe("[REDACTED_ERROR_MESSAGE]");
+    expect(result.stack).toBeUndefined();
   });
 });
