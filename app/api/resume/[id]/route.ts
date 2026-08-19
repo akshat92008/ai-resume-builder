@@ -2,15 +2,37 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { auditResume } from "@/lib/careerpath/agents";
-import { getServerResume, saveServerResume, deleteServerResume, ResumeConflictError, saveResumeVersion } from "@/lib/careerpath/db";
+import {
+  DatabaseUnavailableError,
+  getServerResume,
+  saveServerResume,
+  deleteServerResume,
+  ResumeConflictError,
+  saveResumeVersion,
+} from "@/lib/careerpath/db";
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
 import { ResumePayloadSchema, mergeResumeContent } from "@/lib/careerpath/types";
 import { requireAppAccess } from "@/lib/careerpath/auth";
-import { parseJsonBody } from "@/lib/careerpath/api-utils";
+import { readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
+const EditResumeSchema = ResumePayloadSchema.strict();
+
+function databaseFailure(error: unknown, fallbackCode: string, fallbackMessage: string) {
+  const unavailable = error instanceof DatabaseUnavailableError;
+  return NextResponse.json(
+    {
+      error: {
+        code: unavailable ? "DATABASE_UNAVAILABLE" : fallbackCode,
+        message: unavailable ? "Resume data is temporarily unavailable. Please retry." : fallbackMessage,
+        recoverable: true,
+      },
+    },
+    { status: unavailable ? 503 : 500 },
+  );
+}
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -31,10 +53,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ resume });
   } catch (error: unknown) {
     logger.error("[api/resume/[id]] GET failed", { error });
-    return NextResponse.json(
-      { error: { code: "FETCH_FAILED", message: "Unable to load resume.", recoverable: true } },
-      { status: 500 },
-    );
+    return databaseFailure(error, "FETCH_FAILED", "Unable to load resume.");
   }
 }
 
@@ -55,22 +74,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       );
     }
 
-    const text = await request.text().catch(() => "{}");
-    if (Buffer.byteLength(text, "utf8") > 100_000) {
-      return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
-    }
-    const json = parseJsonBody(text);
-    if ("error" in json && json.error === "INVALID_JSON") {
+    const parsed = await readJsonLimited(request, 100_000, EditResumeSchema);
+    if (!parsed.ok) {
       return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } },
-        { status: 400 },
+        {
+          error: {
+            code: parsed.code,
+            message: parsed.code === "PAYLOAD_TOO_LARGE" ? "Payload too large." : "Invalid resume update payload.",
+            recoverable: parsed.code !== "INVALID_JSON",
+          },
+        },
+        { status: parsed.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
       );
     }
-    const parseResult = ResumePayloadSchema.strict().safeParse(json);
-    if (!parseResult.success) {
-      return NextResponse.json({ error: { code: "INVALID_INPUT", message: "Invalid payload.", recoverable: true } }, { status: 400 });
-    }
-    const body = parseResult.data;
+    const body = parsed.data;
 
     await saveResumeVersion({
       userId: auth.user.id,
@@ -103,10 +120,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       );
     }
     logger.error("[api/resume/[id]] PATCH failed", { error });
-    return NextResponse.json(
-      { error: { code: "UPDATE_FAILED", message: "Unable to update resume.", recoverable: true } },
-      { status: 500 },
-    );
+    return databaseFailure(error, "UPDATE_FAILED", "Unable to update resume.");
   }
 }
 
@@ -130,9 +144,6 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     return NextResponse.json({ deleted: true });
   } catch (error: unknown) {
     logger.error("[api/resume/[id]] DELETE failed", { error });
-    return NextResponse.json(
-      { error: { code: "DELETE_FAILED", message: "Unable to delete resume.", recoverable: true } },
-      { status: 500 },
-    );
+    return databaseFailure(error, "DELETE_FAILED", "Unable to delete resume.");
   }
 }
