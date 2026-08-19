@@ -1,8 +1,8 @@
 # CareerOS Production Release Checklist
 
-This checklist is for the **core web product**. Paid Razorpay GA has its own lifecycle gate and must not be inferred from a green core deployment.
+This checklist distinguishes a **controlled free beta** from broad public/paid GA. Paid Razorpay GA has its own lifecycle gate and must not be inferred from a green core deployment.
 
-## Automated gate
+## Automated gate — controlled beta blocker
 
 - [ ] `npm ci`
 - [ ] `npm audit --omit=dev --audit-level=high`
@@ -13,9 +13,11 @@ This checklist is for the **core web product**. Paid Razorpay GA has its own lif
 - [ ] Playwright public browser smoke tests pass
 - [ ] Chrome extension dependency audit + beta build pass
 - [ ] clean Supabase migration replay succeeds from zero
-- [ ] GitHub Actions is green on the exact release commit
+- [ ] `supabase db lint --local` passes
+- [ ] pgTAP RLS/security invariants pass
+- [ ] GitHub Actions is green on the exact source tree being released
 
-## Database
+## Database — controlled beta blocker
 
 - [ ] `supabase/migrations/` is the only schema source of truth
 - [ ] every migration pending in production is applied in order
@@ -23,38 +25,52 @@ This checklist is for the **core web product**. Paid Razorpay GA has its own lif
 - [ ] same-tenant foreign-key constraints exist for service-role write paths
 - [ ] RLS denies cross-user reads and writes with two real users
 - [ ] service-role key remains server-only
-- [ ] backup/PITR and restore procedure are verified for the production plan
+
+Before broad GA, also verify backup/PITR and a documented restore procedure appropriate for the production plan.
 
 Do not edit historical migrations after they have shipped. Add a new migration.
 
 ## Authentication and account abuse
 
+Controlled beta:
+
 - [ ] server-side signup throttle returns a controlled 429 under abuse
-- [ ] Supabase leaked-password protection is enabled before broad public signup
+- [ ] canonical signup rejects a known compromised password through the HIBP k-anonymity check
+- [ ] HIBP outage returns a controlled 503 rather than silently skipping password safety
 - [ ] password reset and email-confirmation flows work on the production origin
+
+Before broad public signup:
+
+- [ ] Supabase native leaked-password protection is enabled when the project plan supports it
 - [ ] direct Supabase Auth abuse controls/captcha settings are reviewed for public scale
 
-## Infrastructure
+The application-layer HIBP check is a real controlled-beta protection, but it is not represented as enabling Supabase's separate account-level feature.
+
+## Infrastructure — controlled beta blocker
 
 - [ ] `/api/health/live` returns HTTP 200 and reports the exact deployed Git SHA
 - [ ] `/api/health` returns HTTP 200 / `status: ready`
 - [ ] database readiness is true
 - [ ] Redis readiness is true
 - [ ] observability readiness is true
+- [ ] when using `vercel-runtime`, a synthetic browser error fingerprint is visible in sanitized Runtime Logs
 - [ ] Inngest processes a real production AI job
 - [ ] NVIDIA NIM completes a real generation through the deployed product path
 - [ ] Upstash deliberately returns a controlled 429 at the configured boundary
-- [ ] Sentry receives synthetic server + browser errors without resume/job payloads
 - [ ] production origin is HTTPS
 - [ ] CSP, HSTS, frame denial, referrer policy, permissions policy, and nosniff headers are present
 
-## GitHub release controls
+Before broad public/paid GA, configure and verify active external alerting (for example Sentry or an equivalent) for synthetic server + browser failures without resume/job payloads.
+
+## GitHub release controls — broad GA hardening
 
 - [ ] `main` branch protection/ruleset is enabled
 - [ ] pull requests are required before merge
 - [ ] CI status checks are required
 - [ ] force pushes and branch deletion are blocked
 - [ ] the deployed release gate is run against the exact production URL and commit
+
+The exact-SHA deployed release gate is still mandatory for controlled beta. Repository protection settings become a broad-GA blocker because they are account-level controls rather than application runtime correctness.
 
 ## Billing — only when paid access is enabled
 
@@ -80,7 +96,7 @@ RAZORPAY_PRO_TOTAL_COUNT
 - [ ] public webhook and confirmation request-size boundaries are verified
 - [ ] only after the full lifecycle passes are live credentials/public paid traffic enabled
 
-## Critical web flows
+## Critical web flows — controlled beta blocker
 
 - [ ] sign up → login → logout → password reset
 - [ ] upload valid PDF; reject invalid/oversized files
@@ -108,4 +124,4 @@ Until the second item is proven, the Chrome extension remains **beta** and is no
 
 ## Launch decision
 
-Core launch requires green CI, current production migrations, ready health checks, release-SHA binding, and the deployed core E2E gate. Paid GA additionally requires the complete Razorpay lifecycle gate above.
+A controlled free beta requires green CI, current production migrations, ready health checks, exact deployed-SHA binding, and the deployed authenticated core E2E gate. Broad public production additionally requires repository protection, native account/auth hardening where available, active external alerting, backup/restore verification, and operational ownership. Paid GA additionally requires the complete Razorpay lifecycle gate above.

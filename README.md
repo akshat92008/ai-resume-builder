@@ -6,7 +6,7 @@ CareerOS by Amaura Labs is an evidence-aware career operating system built aroun
 
 - **Evidence before generation.** AI-generated resume content is passed through runtime truthfulness checks and claim provenance before persistence.
 - **One durable career context.** Experience, projects, achievements, skills, education, documents, and job outcomes are reusable across workflows.
-- **Fail closed in production.** Missing auth, Redis, or required production configuration does not silently fall back to demo behavior.
+- **Fail closed in production.** Missing auth, Redis, observability, or required production configuration does not silently fall back to demo behavior.
 - **Verified exports.** PDF output is rendered, re-read, and checked for ATS-readable content before it is returned.
 - **Tenant isolation in depth.** Supabase RLS, explicit application ownership filters, and same-tenant database relationships protect user data.
 
@@ -21,7 +21,7 @@ CareerOS verifies generated claims against Career Memory and removes unsupported
 - Optional Anthropic/OpenAI fallbacks
 - Upstash Redis rate limits and economic quotas
 - Razorpay subscriptions when paid billing is enabled
-- Sentry-compatible observability
+- Privacy-sanitized structured observability with optional Sentry
 - Deterministic PDF rendering and verification
 - Chrome extension (beta)
 
@@ -58,8 +58,6 @@ UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
 RATE_LIMIT_SALT
 
-SENTRY_DSN
-NEXT_PUBLIC_SENTRY_DSN
 NEXT_PUBLIC_SUPPORT_EMAIL
 ```
 
@@ -68,6 +66,21 @@ Production rejects `AI_PROVIDER=mock`, weak rate-limit salts, and insecure servi
 ### Optional AI fallbacks
 
 Fallback providers are disabled unless both the provider key and explicit tested model IDs are configured. Do not rely on source-code model defaults for a production fallback.
+
+### Observability
+
+Readiness requires a supported observability backend. CareerOS supports:
+
+- **Sentry** when both `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are configured.
+- **Vercel-native controlled-beta observability** when deployed on Vercel: sanitized server logs go to Runtime Logs, while browser failures are converted into SHA-256 fingerprints and sent to a bounded, rate-limited first-party endpoint. Raw browser messages and stacks are not sent through that Vercel-native path.
+
+The Vercel-native backend is intended for a controlled free beta. Before broad public or paid GA, add an external alerting backend such as Sentry (or an equivalent) so incidents are actively surfaced rather than dashboard-only.
+
+### Password safety
+
+The canonical server-side signup route checks passwords against the free Have I Been Pwned Pwned Passwords range API using k-anonymity. Only the first five characters of the password's SHA-1 hash are sent, padded responses are requested, and the full password/full hash never leave CareerOS. If the safety service is unavailable, production signup fails closed instead of silently skipping the check.
+
+Supabase's native leaked-password protection remains a useful defense-in-depth control when the project plan supports it. The application-layer check does not claim to modify Supabase account-level settings.
 
 ### Billing
 
@@ -95,7 +108,7 @@ Paid GA is not certified merely because these variables exist. Complete the Razo
 
 ## Database and migrations
 
-Supabase migrations are the source of truth. CI replays the migration chain from zero against a clean local Supabase database.
+Supabase migrations are the source of truth. CI replays the migration chain from zero against a clean local Supabase database, runs database linting, and executes pgTAP security invariants.
 
 Important recent hardening migrations include:
 
@@ -144,7 +157,7 @@ GET /api/health
 
 `/api/health/live` proves the process is alive and reports the deployed commit.
 
-`/api/health` verifies production configuration plus infrastructure checks such as database and Redis. A green readiness endpoint is **not** equivalent to a complete release certification: it does not by itself prove a real NVIDIA generation, Inngest completion, PDF round-trip, RLS isolation, or paid provider lifecycle.
+`/api/health` verifies production configuration, database, Redis, and a supported observability backend. A green readiness endpoint is **not** equivalent to a complete release certification: it does not by itself prove a real NVIDIA generation, Inngest completion, PDF round-trip, RLS isolation, or paid provider lifecycle.
 
 ## CI and release gates
 
@@ -158,6 +171,8 @@ Standard CI covers:
 - Chromium browser smoke
 - Chrome extension dependency/build verification
 - clean Supabase migration replay
+- local database linting
+- pgTAP RLS/security invariants
 
 The deployed core release gate additionally binds the exact Git SHA to the production deployment and runs authenticated E2E against that deployment.
 

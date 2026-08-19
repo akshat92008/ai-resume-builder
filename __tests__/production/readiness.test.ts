@@ -3,6 +3,7 @@ import { getEntitlementsForPlan } from "@/lib/careerpath/entitlements";
 import { CreateJobApplicationSchema, UpdateJobApplicationSchema } from "@/lib/careerpath/job-validation";
 import { razorpayPeriodEndIso, razorpayStatusToPlan } from "@/lib/careerpath/razorpay-state";
 import { validatePaidProductionConfiguration, validateProductionConfiguration } from "@/lib/env";
+import { getObservabilityBackend, hasCoreObservability } from "@/lib/observability/backend";
 
 const validProductionEnv: NodeJS.ProcessEnv = {
   NODE_ENV: "production",
@@ -39,8 +40,18 @@ describe("production configuration", () => {
     expect(result.billing).toBe("disabled");
   });
 
+  it("validates observability separately from functional core configuration", () => {
+    const withoutSentry: NodeJS.ProcessEnv = { ...validProductionEnv };
+    delete withoutSentry.SENTRY_DSN;
+    delete withoutSentry.NEXT_PUBLIC_SENTRY_DSN;
+    const result = validateProductionConfiguration(withoutSentry);
+    expect(result.ready).toBe(true);
+    expect(result.missingCore).not.toContain("SENTRY_DSN");
+    expect(result.missingCore).not.toContain("NEXT_PUBLIC_SENTRY_DSN");
+  });
+
   it("requires a real support contact before commercial core readiness", () => {
-    const withoutSupport = { ...validProductionEnv };
+    const withoutSupport: NodeJS.ProcessEnv = { ...validProductionEnv };
     delete withoutSupport.NEXT_PUBLIC_SUPPORT_EMAIL;
     const result = validateProductionConfiguration(withoutSupport);
     expect(result.ready).toBe(false);
@@ -79,6 +90,33 @@ describe("production configuration", () => {
     const result = validateProductionConfiguration({ ...validProductionEnv, RAZORPAY_KEY_ID: "rzp_test_example" });
     expect(result.ready).toBe(false);
     expect(result.billing).toBe("partial");
+  });
+});
+
+describe("production observability", () => {
+  it("uses Sentry when both browser and server DSNs are configured", () => {
+    expect(getObservabilityBackend(validProductionEnv)).toBe("sentry");
+    expect(hasCoreObservability(validProductionEnv)).toBe(true);
+  });
+
+  it("uses Vercel structured runtime/browser telemetry for a controlled beta", () => {
+    const vercelEnv: NodeJS.ProcessEnv = {
+      ...validProductionEnv,
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+    };
+    delete vercelEnv.SENTRY_DSN;
+    delete vercelEnv.NEXT_PUBLIC_SENTRY_DSN;
+    expect(getObservabilityBackend(vercelEnv)).toBe("vercel-runtime");
+    expect(hasCoreObservability(vercelEnv)).toBe(true);
+  });
+
+  it("fails closed when no supported observability backend exists", () => {
+    const noObservability: NodeJS.ProcessEnv = { ...validProductionEnv };
+    delete noObservability.SENTRY_DSN;
+    delete noObservability.NEXT_PUBLIC_SENTRY_DSN;
+    expect(getObservabilityBackend(noObservability)).toBe("none");
+    expect(hasCoreObservability(noObservability)).toBe(false);
   });
 });
 

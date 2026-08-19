@@ -54,6 +54,12 @@ export type AppEnv = z.infer<typeof envSchema>;
 export const envValidation = envSchema.safeParse(process.env);
 export const env: Partial<AppEnv> = envValidation.success ? envValidation.data : {};
 
+/**
+ * Core configuration is limited to credentials/configuration required to run
+ * product functionality safely. Observability is validated independently by
+ * the health endpoint because CareerOS can use either Sentry or Vercel-native
+ * structured runtime/browser-error reporting.
+ */
 const REQUIRED_PRODUCTION_KEYS = [
   "NEXT_PUBLIC_APP_URL",
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -65,8 +71,6 @@ const REQUIRED_PRODUCTION_KEYS = [
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
   "RATE_LIMIT_SALT",
-  "SENTRY_DSN",
-  "NEXT_PUBLIC_SENTRY_DSN",
   "NEXT_PUBLIC_SUPPORT_EMAIL",
 ] as const;
 
