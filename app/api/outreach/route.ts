@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { generateOutreachAgent } from "@/lib/careerpath/orchestrator";
 import { getJobApplication } from "@/lib/careerpath/db-jobs";
@@ -10,7 +11,14 @@ import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import type { CareerProfile } from "@/lib/careerpath/types";
 
-export const maxDuration = 60; // Allow more time for AI generation
+export const maxDuration = 60;
+
+const MAX_BODY_BYTES = 60_000;
+const OutreachRequestSchema = z.object({
+  jobId: z.string().uuid().optional(),
+  resumeId: z.string().uuid(),
+  jobDescription: z.string().trim().min(1).max(50_000),
+}).strict();
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +27,7 @@ export async function POST(request: Request) {
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "outreach_generate", entitlements.outreachPerDay);
+    const rateLimit = await checkRateLimit(auth.user.id, ipHash, "outreach_generate", entitlements.outreachPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded. Please try again later.", recoverable: true } },
@@ -27,28 +35,38 @@ export async function POST(request: Request) {
       );
     }
 
-    const json = await request.json();
-    const { jobId, resumeId, jobDescription } = json;
-
-    if (!jobDescription) {
+    const raw = await request.text().catch(() => "");
+    if (!raw || new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Job description is required." } },
-        { status: 400 }
+        { error: { code: "PAYLOAD_TOO_LARGE", message: "Outreach requests must be 60 KB or smaller." } },
+        { status: 413 },
       );
     }
 
-    if (!resumeId) {
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(raw);
+    } catch {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Resume ID is required." } },
-        { status: 400 }
+        { error: { code: "INVALID_JSON", message: "Provide a valid JSON request." } },
+        { status: 400 },
       );
     }
 
+    const parsed = OutreachRequestSchema.safeParse(decoded);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Provide a valid resume, optional job, and job description." } },
+        { status: 400 },
+      );
+    }
+
+    const { jobId, resumeId, jobDescription } = parsed.data;
     const resume = await getServerResume(resumeId, auth.user.id);
     if (!resume || resume.userId !== auth.user.id) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Resume not found." } },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -57,13 +75,16 @@ export async function POST(request: Request) {
 
     let company = "the company";
     let role = resume.targetRole || "the position";
-    
     if (jobId) {
       const job = await getJobApplication(jobId, auth.user.id);
-      if (job) {
-        company = job.company;
-        role = job.role;
+      if (!job || job.userId !== auth.user.id) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "Job not found." } },
+          { status: 404 },
+        );
       }
+      company = job.company;
+      role = job.role;
     }
 
     const outreachPack = await generateOutreachAgent(
@@ -71,15 +92,15 @@ export async function POST(request: Request) {
       content,
       jobDescription,
       role,
-      { userId: auth.user.id, resumeId }
+      { userId: auth.user.id, resumeId },
     );
 
     return NextResponse.json({ outreachPack });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("[api/outreach] Error generating outreach pack", { error });
     return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: error.message || "Failed to generate outreach materials" } },
-      { status: 500 }
+      { error: { code: "INTERNAL_ERROR", message: "Failed to generate outreach materials." } },
+      { status: 500 },
     );
   }
 }
