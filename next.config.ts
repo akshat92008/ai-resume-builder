@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: false },
   images: { remotePatterns: [] },
   transpilePackages: ["motion"],
+  serverExternalPackages: ["pdf-parse"],
   async headers() {
     return [{
       source: "/(.*)",
