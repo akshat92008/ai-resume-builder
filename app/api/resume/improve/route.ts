@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60;
 import { auditResume } from "@/lib/careerpath/agents";
 import { improveResumeAgent } from "@/lib/careerpath/orchestrator";
-import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
+import { getServerResume, ResumeConflictError, saveResumeVersion, saveServerResume } from "@/lib/careerpath/db";
+import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
@@ -61,26 +62,65 @@ export async function POST(request: Request) {
     }
 
     const baselineAudit = resume.audit ?? auditResume(resume.content, resume.targetRole, resume.jobDescription);
-    const content = await improveResumeAgent(
+    const candidate = await improveResumeAgent(
       resume.content,
       baselineAudit,
       resume.targetRole,
       { userId: auth.user.id, resumeId: resume.id },
     );
-    const audit = auditResume(content, resume.targetRole, resume.jobDescription);
+
+    const verified = await verifyResumeCandidate({
+      content: candidate,
+      currentResume: resume,
+      userId: auth.user.id,
+      legacyProfile: resume.profile!,
+      careerProfile: resume.careerProfile,
+      instruction: "Improve this resume without inventing or expanding beyond the user's stored Career Memory evidence.",
+      mode: "improve",
+      targetRole: resume.targetRole,
+      jobDescription: resume.jobDescription,
+      metadata: { userId: auth.user.id, resumeId: resume.id },
+    });
+
+    await saveResumeVersion({
+      userId: auth.user.id,
+      resumeId: resume.id,
+      versionName: `Before improvement v${resume.version}`,
+      resumeJson: resume.content,
+      reason: "Pre-improvement snapshot",
+    });
+
     const updated: CareerPathResume = {
       ...resume,
       userId: auth.user.id,
-      content,
-      audit,
-      score: audit.score,
+      content: verified.content,
+      careerProfile: verified.careerProfile,
+      audit: verified.audit,
+      score: verified.score,
       status: "final",
+      version: resume.version + 1,
       updatedAt: new Date().toISOString(),
     };
-    await saveServerResume(updated, auth.user.id);
+    await saveServerResume(updated, auth.user.id, { expectedVersion: resume.version });
 
-    return NextResponse.json({ resumeId: updated.id, content, score: audit.score, audit, resume: updated });
+    return NextResponse.json({
+      resumeId: updated.id,
+      content: updated.content,
+      score: updated.score,
+      audit: updated.audit,
+      verification: {
+        removedUnsupportedClaims: verified.provenance.removedClaims,
+        warnings: verified.validation.warnings.length,
+      },
+      resume: updated,
+    });
   } catch (err) {
+    if (err instanceof ResumeConflictError) {
+      return NextResponse.json(
+        { error: { code: "RESUME_CONFLICT", message: "This resume changed while the improvement was running. Reload and try again.", recoverable: true } },
+        { status: 409 },
+      );
+    }
     logger.error("[api/resume/improve] Error", { error: err });
     return NextResponse.json(
       { error: { code: "IMPROVE_FAILED", message: "Unable to improve resume. Try again.", recoverable: true } },

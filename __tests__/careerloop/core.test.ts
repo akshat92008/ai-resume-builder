@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { CareerProfile, JobApplication } from "@/lib/careerpath/types";
+import type { CareerPathResumeContent, CareerProfile, JobApplication } from "@/lib/careerpath/types";
 import { extractJobDescription } from "@/lib/careerpath/domain/jobs";
 import { analyzeCareerLoopJob, buildCareerEvidenceGraph, buildConversionIntelligence, inferJobSource, validatePublicJobUrl } from "@/lib/careerloop";
+import { enforceResumeClaimProvenance } from "@/lib/careerloop/provenance";
 
 const now = new Date().toISOString();
 const profile = {
@@ -43,6 +44,63 @@ describe("Career Twin", () => {
     expect(graph.stats.verifiedNodes).toBeGreaterThan(0);
     expect(graph.skillEvidence.python?.length).toBeGreaterThan(0);
     expect(graph.stats.evidenceCoverage).toBeGreaterThan(50);
+  });
+});
+
+describe("claim provenance", () => {
+  it("removes unsupported outcome embellishment even when vocabulary overlaps", () => {
+    const evidenceProfile = {
+      ...profile,
+      projects: [{
+        ...profile.projects[0],
+        name: "Inventory Dashboard",
+        description: "Built React dashboard for inventory tracking",
+        technologies: ["React"],
+        metrics: [],
+      }],
+      skills: [...profile.skills, { id: "react", name: "React", category: "technical", evidence: ["Inventory Dashboard"] }],
+    } as CareerProfile;
+    const content: CareerPathResumeContent = {
+      header: { name: "A Candidate", links: {} },
+      summary: "Engineer building React inventory dashboards.",
+      skills: [{ category: "Technical", items: ["React", "CUDA"] }],
+      experience: [],
+      projects: [{
+        name: "Inventory Dashboard",
+        techStack: ["React"],
+        bullets: [
+          "Built React dashboard for inventory tracking",
+          "Built React inventory dashboard that optimized warehouse operations and improved fulfillment efficiency",
+        ],
+      }],
+      education: [],
+      certifications: [],
+      achievements: [],
+      languages: [],
+    };
+
+    const verified = enforceResumeClaimProvenance(content, evidenceProfile);
+    expect(verified.content.projects[0].bullets).toEqual(["Built React dashboard for inventory tracking"]);
+    expect(verified.content.skills[0].items).toEqual(["React"]);
+    expect(verified.report.entries.some((entry) => entry.claim.includes("optimized warehouse") && !entry.supported)).toBe(true);
+  });
+
+  it("rejects invented numeric signals", () => {
+    const content: CareerPathResumeContent = {
+      header: { name: "A Candidate", links: {} },
+      summary: "Backend engineer working with Python and FastAPI.",
+      skills: [{ category: "Backend", items: ["Python", "FastAPI"] }],
+      experience: [{
+        company: "Amaura",
+        role: "Backend Engineer",
+        dates: "2025–2026",
+        bullets: ["Built FastAPI services and production APIs", "Increased API throughput by 900%"],
+      }],
+      projects: [], education: [], certifications: [], achievements: [], languages: [],
+    };
+    const verified = enforceResumeClaimProvenance(content, profile);
+    expect(verified.content.experience[0].bullets).toEqual(["Built FastAPI services and production APIs"]);
+    expect(verified.report.entries.some((entry) => entry.reasons.some((reason) => reason.includes("900%")))).toBe(true);
   });
 });
 

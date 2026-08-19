@@ -8,6 +8,14 @@ import { logger } from "@/lib/observability/logger";
 import type { BuilderSession, CareerPathResume, ResumeMessage } from "./types";
 
 export type ResumeListItem = Pick<CareerPathResume, "id" | "userId" | "title" | "targetRole" | "mode" | "status" | "score" | "version" | "createdAt" | "updatedAt">;
+export type SaveResumeOptions = { expectedVersion?: number };
+export class ResumeConflictError extends Error {
+  constructor() {
+    super("Resume changed while this operation was running.");
+    this.name = "ResumeConflictError";
+  }
+}
+
 const RESUME_LIST_COLUMNS = ["id","user_id","title","target_role","mode","status","score_json","version","created_at","updated_at"].join(",");
 
 export async function getSupabaseUser() {
@@ -44,7 +52,7 @@ export async function deleteSession(id: string): Promise<void> {
   await supabase.from("builder_sessions").delete().eq("id", id);
 }
 
-export async function saveServerResume(resume: CareerPathResume, ownerUserId?: string): Promise<void> {
+export async function saveServerResume(resume: CareerPathResume, ownerUserId?: string, options: SaveResumeOptions = {}): Promise<void> {
   const supabase = ownerUserId ? null : await createServerSupabaseClient();
   const user = ownerUserId ? null : await getSupabaseUser();
   const ownerId = ownerUserId || user?.id;
@@ -60,6 +68,24 @@ export async function saveServerResume(resume: CareerPathResume, ownerUserId?: s
   };
   const client = ownerUserId ? createSupabaseAdminClient() : supabase;
   if (!client) throw new Error("Supabase not configured");
+
+  if (options.expectedVersion !== undefined) {
+    const { data, error } = await client
+      .from("resumes")
+      .update(payload)
+      .eq("id", resume.id)
+      .eq("user_id", ownerId)
+      .eq("version", options.expectedVersion)
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      logger.error("[db/saveServerResume] Conditional update failed", { error });
+      throw new Error(`Failed to save resume: ${error.message}`);
+    }
+    if (!data) throw new ResumeConflictError();
+    return;
+  }
+
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
   if (error) { logger.error("[db/saveServerResume] Error saving resume to Supabase", { error }); throw new Error(`Failed to save resume: ${error.message}`); }
 }
@@ -112,9 +138,9 @@ export async function getLatestResumeForUser(userId: string): Promise<CareerPath
   if (error || !data) return null; return mapResumeRow(data);
 }
 
-export async function saveResumeMessage(msg: { userId: string; resumeId: string | null; role: "user" | "assistant" | "system"; content: string; intent?: string; }): Promise<void> {
+export async function saveResumeMessage(msg: { userId: string; resumeId: string | null; role: "user" | "assistant" | "system"; content: string; intent?: string; operationId?: string; }): Promise<void> {
   const client = createSupabaseAdminClient(); if (!client) { logger.error("[db/saveResumeMessage] DB client not available"); return; }
-  const { error } = await client.from("resume_messages").insert({ user_id: msg.userId, resume_id: msg.resumeId, role: msg.role, content: msg.content, intent: msg.intent || null });
+  const { error } = await client.from("resume_messages").insert({ user_id: msg.userId, resume_id: msg.resumeId, role: msg.role, content: msg.content, intent: msg.intent || null, operation_id: msg.operationId || null });
   if (error) logger.error("[db/saveResumeMessage] Error", { error });
 }
 

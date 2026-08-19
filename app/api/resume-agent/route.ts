@@ -97,17 +97,24 @@ export async function POST(request: Request) {
     else if (command.intent === "log_achievement" || (command.intent === "build_career_profile" && currentResume)) intent = currentResume ? "ADD_INFORMATION" : "CREATE_RESUME";
     else intent = (await inferIntentLLM(message, !!currentResume, { userId, resumeId })).intent;
 
-    const queuedAt = new Date().toISOString();
-    await saveResumeMessage({ userId, resumeId: resumeId || null, role: "user", content: message, intent });
+    const operationId = crypto.randomUUID();
+    await saveResumeMessage({
+      userId,
+      resumeId: resumeId || null,
+      role: "user",
+      content: message,
+      intent,
+      operationId,
+    });
 
     const job = await inngest.send({
       name: "resume/process.intent",
-      data: { intent, message, currentResume, userId, resumeId, command },
+      data: { intent, message, currentResume, userId, resumeId, command, operationId },
     });
 
     return NextResponse.json({
       jobId: job.ids[0],
-      queuedAt,
+      operationId,
       status: "queued",
       assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
     });

@@ -5,10 +5,10 @@ test.describe("CareerOS public launch smoke", () => {
     const response = await page.goto("/");
     expect(response?.ok()).toBeTruthy();
 
-    await expect(page.getByRole("heading", { name: /Stop sending applications into a black hole/i })).toBeVisible();
-    await expect(page.getByText(/Free plan · Pro available/i).first()).toBeVisible();
-    await expect(page.getByText(/does not invent skills, experience, achievements, or credentials/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: /Start free/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Turn career evidence into better outcomes/i })).toBeVisible();
+    await expect(page.getByText(/Your career, finally in one system/i).first()).toBeVisible();
+    await expect(page.getByText(/verifies generated claims against Career Memory and removes unsupported claims/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: /Start free/i }).first()).toBeVisible();
   });
 
   test("production security headers are present on public pages", async ({ page }) => {

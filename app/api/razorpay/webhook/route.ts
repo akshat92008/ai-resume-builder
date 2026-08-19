@@ -11,6 +11,8 @@ import { logger } from "@/lib/observability/logger";
 
 export const dynamic = "force-dynamic";
 
+const MAX_WEBHOOK_BYTES = 256 * 1024;
+
 type RazorpayWebhookPayload = {
   event?: string;
   created_at?: number;
@@ -29,7 +31,19 @@ export async function POST(request: Request) {
   const signature = request.headers.get("x-razorpay-signature");
   if (!signature) return NextResponse.json({ error: "Missing Razorpay signature." }, { status: 400 });
 
+  const contentLength = request.headers.get("content-length");
+  if (contentLength) {
+    const announcedBytes = Number(contentLength);
+    if (!Number.isFinite(announcedBytes) || announcedBytes < 0 || announcedBytes > MAX_WEBHOOK_BYTES) {
+      return NextResponse.json({ error: "Webhook payload is too large." }, { status: 413 });
+    }
+  }
+
   const rawBody = await request.text();
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_WEBHOOK_BYTES) {
+    return NextResponse.json({ error: "Webhook payload is too large." }, { status: 413 });
+  }
+
   if (!verifyRazorpayWebhookSignature(rawBody, signature)) {
     logger.warn("[api/razorpay/webhook] Signature verification failed");
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 400 });
@@ -57,8 +71,6 @@ export async function POST(request: Request) {
   const eventCreated = Number.isFinite(event.created_at) ? Number(event.created_at) : Math.floor(Date.now() / 1000);
 
   try {
-    // Re-read current provider state so late or same-second webhook delivery cannot
-    // overwrite a newer subscription state with a stale payload.
     const subscription = await fetchRazorpaySubscription(payloadSubscription.id);
     if (subscription.plan_id !== process.env.RAZORPAY_PRO_PLAN_ID) {
       throw new Error("Webhook subscription does not match the configured Pro plan.");
