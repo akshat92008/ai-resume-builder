@@ -1,10 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { sanitizeLogContext, sanitizeLogValue } from "@/lib/observability/logger";
 
-const originalNodeEnv = process.env.NODE_ENV;
-
 afterEach(() => {
-  Object.defineProperty(process.env, "NODE_ENV", { value: originalNodeEnv, writable: true, configurable: true });
+  vi.unstubAllEnvs();
 });
 
 describe("production log sanitization", () => {
@@ -47,7 +45,7 @@ describe("production log sanitization", () => {
   });
 
   it("does not emit arbitrary provider error messages in production", () => {
-    Object.defineProperty(process.env, "NODE_ENV", { value: "production", writable: true, configurable: true });
+    vi.stubEnv("NODE_ENV", "production");
     const result = sanitizeLogValue(new Error("Failed parsing Jane Doe's resume phone +91 9999999999")) as Record<string, unknown>;
     expect(result.name).toBe("Error");
     expect(result.message).toBe("[REDACTED_ERROR_MESSAGE]");
