@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getEntitlementsForPlan } from "@/lib/careerpath/entitlements";
 import { CreateJobApplicationSchema, UpdateJobApplicationSchema } from "@/lib/careerpath/job-validation";
-import { stripePeriodEndIso, stripeSubscriptionStatusToPlan } from "@/lib/careerpath/stripe-state";
+import { razorpayPeriodEndIso, razorpayStatusToPlan } from "@/lib/careerpath/razorpay-state";
 import { validatePaidProductionConfiguration, validateProductionConfiguration } from "@/lib/env";
 
 const validProductionEnv: NodeJS.ProcessEnv = {
@@ -24,9 +24,11 @@ const validProductionEnv: NodeJS.ProcessEnv = {
 
 const paidProductionEnv: NodeJS.ProcessEnv = {
   ...validProductionEnv,
-  STRIPE_SECRET_KEY: "sk_live_example",
-  STRIPE_WEBHOOK_SECRET: "whsec_example",
-  STRIPE_PRO_PRICE_ID: "price_example",
+  RAZORPAY_KEY_ID: "rzp_live_example",
+  RAZORPAY_KEY_SECRET: "razorpay-secret",
+  RAZORPAY_WEBHOOK_SECRET: "webhook-secret",
+  RAZORPAY_PRO_PLAN_ID: "plan_example",
+  RAZORPAY_PRO_TOTAL_COUNT: "120",
 };
 
 describe("production configuration", () => {
@@ -40,10 +42,16 @@ describe("production configuration", () => {
     const result = validatePaidProductionConfiguration(validProductionEnv);
     expect(result.ready).toBe(true);
     expect(result.paidReady).toBe(false);
-    expect(result.missingBilling).toEqual(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRO_PRICE_ID"]);
+    expect(result.missingBilling).toEqual([
+      "RAZORPAY_KEY_ID",
+      "RAZORPAY_KEY_SECRET",
+      "RAZORPAY_WEBHOOK_SECRET",
+      "RAZORPAY_PRO_PLAN_ID",
+      "RAZORPAY_PRO_TOTAL_COUNT",
+    ]);
   });
 
-  it("marks a fully configured Stripe deployment paid-ready", () => {
+  it("marks a fully configured Razorpay deployment paid-ready", () => {
     const result = validatePaidProductionConfiguration(paidProductionEnv);
     expect(result.ready).toBe(true);
     expect(result.billing).toBe("ready");
@@ -59,28 +67,26 @@ describe("production configuration", () => {
   });
 
   it("rejects partially configured billing", () => {
-    const result = validateProductionConfiguration({ ...validProductionEnv, STRIPE_SECRET_KEY: "sk_test_example" });
+    const result = validateProductionConfiguration({ ...validProductionEnv, RAZORPAY_KEY_ID: "rzp_test_example" });
     expect(result.ready).toBe(false);
     expect(result.billing).toBe("partial");
   });
 });
 
-describe("Stripe state mapping", () => {
-  it("grants Pro only for active or trialing subscriptions", () => {
-    expect(stripeSubscriptionStatusToPlan("active")).toBe("pro");
-    expect(stripeSubscriptionStatusToPlan("trialing")).toBe("pro");
-    expect(stripeSubscriptionStatusToPlan("past_due")).toBe("free");
-    expect(stripeSubscriptionStatusToPlan("unpaid")).toBe("free");
-    expect(stripeSubscriptionStatusToPlan("incomplete_expired")).toBe("free");
-    expect(stripeSubscriptionStatusToPlan("canceled")).toBe("free");
+describe("Razorpay state mapping", () => {
+  it("grants Pro only for active subscriptions", () => {
+    expect(razorpayStatusToPlan("active")).toBe("pro");
+    expect(razorpayStatusToPlan("authenticated")).toBe("free");
+    expect(razorpayStatusToPlan("pending")).toBe("free");
+    expect(razorpayStatusToPlan("halted")).toBe("free");
+    expect(razorpayStatusToPlan("cancelled")).toBe("free");
+    expect(razorpayStatusToPlan("completed")).toBe("free");
+    expect(razorpayStatusToPlan("expired")).toBe("free");
   });
 
-  it("uses the earliest current subscription-item period end", () => {
-    expect(stripePeriodEndIso({ items: { data: [
-      { current_period_end: 1_700_000_100 },
-      { current_period_end: 1_700_000_000 },
-    ] } })).toBe("2023-11-14T22:13:20.000Z");
-    expect(stripePeriodEndIso({ items: { data: [] } })).toBeNull();
+  it("uses Razorpay current_end as the entitlement boundary", () => {
+    expect(razorpayPeriodEndIso({ id: "sub_x", entity: "subscription", plan_id: "plan_x", status: "active", current_end: 1_700_000_000 })).toBe("2023-11-14T22:13:20.000Z");
+    expect(razorpayPeriodEndIso({ id: "sub_x", entity: "subscription", plan_id: "plan_x", status: "created", current_end: null })).toBeNull();
   });
 });
 
