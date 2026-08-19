@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { request as httpsRequest } from "node:https";
 
 const MAX_RESPONSE_BYTES = 750_000;
 const TIMEOUT_MS = 8_000;
@@ -25,12 +26,13 @@ function isPrivateAddress(address: string) {
   const mapped = mappedIpv4(normalized);
   if (mapped) return isPrivateIpv4(mapped);
   return normalized === "::" || normalized === "::1" || normalized.startsWith("fc") ||
-    normalized.startsWith("fd") || normalized.startsWith("fe80:") || normalized.startsWith("ff");
+    normalized.startsWith("fd") || normalized.startsWith("fe80:") || normalized.startsWith("ff") ||
+    normalized.startsWith("2001:db8:");
 }
 
 export function validatePublicJobUrl(raw: string): URL {
   const url = new URL(raw);
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Job URL must use http or https.");
+  if (url.protocol !== "https:") throw new Error("Job URL must use https.");
   if (url.username || url.password) throw new Error("Job URLs with embedded credentials are not allowed.");
   const host = url.hostname.toLowerCase();
   if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
@@ -40,33 +42,79 @@ export function validatePublicJobUrl(raw: string): URL {
   return url;
 }
 
-async function assertPublicDns(url: URL) {
-  if (isIP(url.hostname)) return;
+async function resolvePublicAddress(url: URL): Promise<{ address: string; family: 4 | 6 }> {
+  if (isIP(url.hostname)) {
+    if (isPrivateAddress(url.hostname)) throw new Error("Private/local URLs are not allowed.");
+    return { address: url.hostname, family: isIP(url.hostname) as 4 | 6 };
+  }
+
   const addresses = await lookup(url.hostname, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some((entry) => isPrivateAddress(entry.address))) {
+  const publicAddresses = addresses.filter((entry) => !isPrivateAddress(entry.address));
+  if (!addresses.length || publicAddresses.length !== addresses.length) {
     throw new Error("The job URL resolves to a private or unavailable network address.");
   }
+  const selected = publicAddresses[0];
+  if (!selected || (selected.family !== 4 && selected.family !== 6)) {
+    throw new Error("The job URL resolves to an unavailable network address.");
+  }
+  return { address: selected.address, family: selected.family };
 }
 
-async function readLimitedBody(response: Response): Promise<string> {
-  const length = Number(response.headers.get("content-length") || 0);
-  if (length > MAX_RESPONSE_BYTES) throw new Error("Job page is too large to analyze safely.");
-  if (!response.body) return "";
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let total = 0;
-  let text = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error("Job page is too large to analyze safely.");
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-  return text + decoder.decode();
+type PinnedResponse = {
+  status: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: string;
+};
+
+async function requestPinned(url: URL, signal: AbortSignal): Promise<PinnedResponse> {
+  const resolved = await resolvePublicAddress(url);
+
+  return await new Promise<PinnedResponse>((resolve, reject) => {
+    const req = httpsRequest({
+      protocol: "https:",
+      hostname: url.hostname,
+      port: url.port ? Number(url.port) : 443,
+      path: `${url.pathname}${url.search}`,
+      method: "GET",
+      servername: url.hostname,
+      headers: {
+        host: url.host,
+        "user-agent": "CareerOS-JobAnalyzer/1.0 (+https://amauralabs.com)",
+        accept: "text/html,text/plain;q=0.9,*/*;q=0.1",
+      },
+      lookup: (_hostname, _options, callback) => callback(null, resolved.address, resolved.family),
+    }, (response) => {
+      const declared = Number(response.headers["content-length"] || 0);
+      if (declared > MAX_RESPONSE_BYTES) {
+        response.destroy();
+        reject(new Error("Job page is too large to analyze safely."));
+        return;
+      }
+      let total = 0;
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk: Buffer) => {
+        total += chunk.length;
+        if (total > MAX_RESPONSE_BYTES) {
+          response.destroy(new Error("Job page is too large to analyze safely."));
+          return;
+        }
+        chunks.push(Buffer.from(chunk));
+      });
+      response.on("end", () => resolve({
+        status: response.statusCode || 0,
+        headers: response.headers,
+        body: Buffer.concat(chunks).toString("utf8"),
+      }));
+      response.on("error", reject);
+    });
+
+    const abort = () => req.destroy(Object.assign(new Error("Job page timed out."), { name: "AbortError" }));
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+    req.on("close", () => signal.removeEventListener("abort", abort));
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 function stripHtml(value: string) {
@@ -128,21 +176,14 @@ function structuredJobText(html: string): string | null {
   return null;
 }
 
-async function fetchPublicPage(start: URL, signal: AbortSignal): Promise<{ response: Response; finalUrl: URL }> {
+async function fetchPublicPage(start: URL, signal: AbortSignal): Promise<{ response: PinnedResponse; finalUrl: URL }> {
   let current = start;
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
-    await assertPublicDns(current);
-    const response = await fetch(current, {
-      redirect: "manual",
-      signal,
-      headers: {
-        "user-agent": "CareerOS-JobAnalyzer/1.0 (+https://amauralabs.com)",
-        accept: "text/html,text/plain;q=0.9,*/*;q=0.1",
-      },
-    });
+    const response = await requestPinned(current, signal);
     if (response.status >= 300 && response.status < 400) {
       if (redirect === MAX_REDIRECTS) throw new Error("Job page redirected too many times.");
-      const location = response.headers.get("location");
+      const header = response.headers.location;
+      const location = Array.isArray(header) ? header[0] : header;
       if (!location) throw new Error("Job page returned an invalid redirect.");
       current = validatePublicJobUrl(new URL(location, current).toString());
       continue;
@@ -158,11 +199,11 @@ export async function extractJobTextFromUrl(rawUrl: string): Promise<{ text: str
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const { response, finalUrl } = await fetchPublicPage(url, controller.signal);
-    if (!response.ok) throw new Error(`Job page returned HTTP ${response.status}.`);
-    const contentType = response.headers.get("content-type") || "";
+    if (response.status < 200 || response.status >= 300) throw new Error(`Job page returned HTTP ${response.status}.`);
+    const rawContentType = response.headers["content-type"];
+    const contentType = Array.isArray(rawContentType) ? rawContentType[0] || "" : rawContentType || "";
     if (!/text\/html|text\/plain|application\/xhtml\+xml/i.test(contentType)) throw new Error("Job URL did not return a readable web page.");
-    const html = await readLimitedBody(response);
-    const text = structuredJobText(html) || stripHtml(html);
+    const text = structuredJobText(response.body) || stripHtml(response.body);
     if (text.length < 120) throw new Error("Could not extract enough job-description text. Paste the job description instead.");
     return { text: text.slice(0, 50_000), finalUrl: finalUrl.toString() };
   } catch (error) {
