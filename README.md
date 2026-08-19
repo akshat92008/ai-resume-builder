@@ -125,3 +125,5 @@ Before a full production launch, verify:
 - [ ] Supabase RLS policies protect user data
 - [ ] Inngest functions process and complete
 - [ ] Error boundaries catch and display errors
+
+<!-- deployment-retrigger: ee288f7bba0b41afce36fbb397ae3767bb748cc1 -->
