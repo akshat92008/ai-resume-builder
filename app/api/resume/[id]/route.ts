@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60; // Max allowed for Vercel Hobby plan
+export const maxDuration = 60;
 import { auditResume } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume, deleteServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
 import { ResumePayloadSchema, mergeResumeContent } from "@/lib/careerpath/types";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { parseJsonBody } from "@/lib/careerpath/api-utils";
+import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
@@ -28,8 +29,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       );
     }
     return NextResponse.json({ resume });
-  } catch (err) {
-    console.error("[api/resume/[id]] GET Error:", err);
+  } catch (error: unknown) {
+    logger.error("[api/resume/[id]] GET failed", { error });
     return NextResponse.json(
       { error: { code: "FETCH_FAILED", message: "Unable to load resume.", recoverable: true } },
       { status: 500 },
@@ -62,7 +63,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ("error" in json && json.error === "INVALID_JSON") {
       return NextResponse.json(
         { error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } },
-        { status: 400 }
+        { status: 400 },
       );
     }
     const parseResult = ResumePayloadSchema.safeParse(json);
@@ -75,6 +76,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       ...resume,
       ...body,
       id: resume.id,
+      userId: resume.userId,
       content: body.content ? mergeResumeContent(resume.content, body.content as Partial<CareerPathResumeContent>) : resume.content,
       updatedAt: new Date().toISOString(),
     };
@@ -84,8 +86,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     await saveServerResume(updated, auth.user.id);
 
     return NextResponse.json({ resume: updated });
-  } catch (err) {
-    console.error("[api/resume/[id]] PATCH Error:", err);
+  } catch (error: unknown) {
+    logger.error("[api/resume/[id]] PATCH failed", { error });
     return NextResponse.json(
       { error: { code: "UPDATE_FAILED", message: "Unable to update resume.", recoverable: true } },
       { status: 500 },
@@ -111,8 +113,8 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     }
     await deleteServerResume(id, auth.user.id);
     return NextResponse.json({ deleted: true });
-  } catch (err) {
-    console.error("[api/resume/[id]] DELETE Error:", err);
+  } catch (error: unknown) {
+    logger.error("[api/resume/[id]] DELETE failed", { error });
     return NextResponse.json(
       { error: { code: "DELETE_FAILED", message: "Unable to delete resume.", recoverable: true } },
       { status: 500 },
