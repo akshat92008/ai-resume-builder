@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
+import { auditResume } from "@/lib/careerpath/agents";
+import { improveResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
@@ -11,10 +13,6 @@ import { isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
-import { handleResumeMessage } from "@/lib/resume/agent";
-import { deriveRenderableResume } from "@/lib/resume/render";
-import { contentToResumeState } from "@/lib/resume/types";
-import { auditResume } from "@/lib/careerpath/agents";
 
 const ImproveRequestSchema = z.object({
   resumeId: z.string().uuid().optional(),
@@ -62,12 +60,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
-    const brain = await handleResumeMessage({
-      userMessage: "Make it ATS friendly and improve bullets without adding unsupported facts.",
-      currentResume: state,
-    });
-    const content = deriveRenderableResume(brain.resume || state);
+    const baselineAudit = resume.audit ?? auditResume(resume.content, resume.targetRole, resume.jobDescription);
+    const content = await improveResumeAgent(
+      resume.content,
+      baselineAudit,
+      resume.targetRole,
+      { userId: auth.user.id, resumeId: resume.id },
+    );
     const audit = auditResume(content, resume.targetRole, resume.jobDescription);
     const updated: CareerPathResume = {
       ...resume,
