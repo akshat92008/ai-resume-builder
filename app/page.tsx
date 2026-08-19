@@ -28,7 +28,7 @@ export default function LandingPage() {
           <div className="relative mx-auto grid max-w-7xl gap-14 px-4 py-16 sm:px-6 md:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:px-8 lg:py-28">
             <div>
               <Badge variant="secondary" className="mb-6 border-indigo-100 bg-white/85 px-3 py-1.5 shadow-sm backdrop-blur">
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Free beta · built around interview outcomes
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Free plan · Pro available · built around interview outcomes
               </Badge>
               <h1 className="max-w-4xl text-5xl font-bold tracking-[-0.055em] text-slate-950 sm:text-6xl lg:text-[72px] lg:leading-[0.98]">
                 Stop sending applications into a <span className="career-text-gradient">black hole.</span>
@@ -38,7 +38,7 @@ export default function LandingPage() {
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button size="lg" asChild>
-                  <Link href="/app">Try CareerOS free <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  <Link href="/app">Start free <ArrowRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild><Link href="/dashboard">View your career hub</Link></Button>
               </div>
@@ -60,7 +60,7 @@ export default function LandingPage() {
                     <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300">APPLY</Badge>
                   </div>
                   <div className="grid gap-3 py-5 sm:grid-cols-3">
-                    {[['Fit','86%'],['Evidence','Strong'],['Risk','Low']].map(([label,value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p></div>)}
+                    {[["Fit","86%"],["Evidence","Strong"],["Risk","Low"]].map(([label,value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p></div>)}
                   </div>
                   <div className="rounded-2xl border border-indigo-400/20 bg-indigo-400/[0.08] p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300">Why CareerOS recommends applying</p>
@@ -118,9 +118,9 @@ export default function LandingPage() {
         <section className="relative overflow-hidden bg-white">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-indigo-50/70 to-transparent" />
           <div className="relative mx-auto max-w-4xl px-4 py-24 text-center sm:px-6 lg:py-32">
-            <Badge variant="secondary">Free beta</Badge>
+            <Badge variant="secondary">Start free · upgrade when you need more</Badge>
             <h2 className="mt-5 text-4xl font-bold tracking-[-0.045em] text-slate-950 sm:text-5xl">Bring one real job. See what CareerOS changes.</h2>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">No feature tour required. Add your career evidence, paste a role you are considering, and use the system on a decision that actually matters.</p>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">Add your career evidence, paste a role you are considering, and use the system on a decision that actually matters. Pro increases the server-enforced usage limits for heavier job-search workflows.</p>
             <Button size="lg" asChild className="mt-8"><Link href="/app">Open CareerOS <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
           </div>
         </section>
