@@ -7,7 +7,7 @@ import { getServerResume, saveResumeMessage } from "@/lib/careerpath/db";
 import { routeCareerCommand } from "@/lib/careerpath/career-os";
 import { inferIntentLLM } from "@/lib/careerpath/orchestrator";
 import { inngest } from "@/inngest/client";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import type { AgentIntent } from "@/lib/careerpath/types";
@@ -26,32 +26,22 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const userId = auth.user.id;
 
-    const raw = await request.text().catch(() => "");
-    if (!raw || Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
+    const parsed = await readJsonLimited(request, MAX_BODY_BYTES, RequestSchema);
+    if (!parsed.ok) {
       return NextResponse.json(
-        { error: { code: "PAYLOAD_TOO_LARGE", message: "Agent requests must be 30 KB or smaller.", recoverable: true } },
-        { status: 413 },
+        {
+          error: {
+            code: parsed.code,
+            message: parsed.code === "PAYLOAD_TOO_LARGE"
+              ? "Agent requests must be 30 KB or smaller."
+              : "Invalid request. Provide a message and a valid resume ID if supplied.",
+            recoverable: true,
+          },
+        },
+        { status: parsed.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
       );
     }
-
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(raw);
-    } catch {
-      return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Provide a valid JSON request.", recoverable: true } },
-        { status: 400 },
-      );
-    }
-
-    const parseResult = RequestSchema.safeParse(decoded);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Invalid request. Provide a message and a valid resume ID if supplied.", recoverable: true } },
-        { status: 400 },
-      );
-    }
-    const { message, resumeId } = parseResult.data;
+    const { message, resumeId } = parsed.data;
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
@@ -118,10 +108,10 @@ export async function POST(request: Request) {
       status: "queued",
       assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
     });
-  } catch (error: unknown) {
-    logger.error("[resume-agent] Error", { error });
+  } catch (error) {
+    logger.error("[api/resume-agent] Failed to queue operation", { error });
     return NextResponse.json(
-      { error: { code: "AGENT_ERROR", message: "Something went wrong while starting the agent. Please try again.", recoverable: true } },
+      { error: { code: "AGENT_START_FAILED", message: "Unable to start the CareerOS agent right now.", recoverable: true } },
       { status: 500 },
     );
   }
