@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
+import { isPwnedPassword } from "@/lib/auth/pwned-password";
 
 const SignupSchema = z.object({
   email: z.string().trim().email().max(254),
@@ -25,6 +26,34 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many signup attempts. Try again later." } },
         { status: 429 },
+      );
+    }
+
+    // Supabase's native leaked-password protection is plan-dependent. Enforce a
+    // free application-layer equivalent for the canonical CareerOS signup path
+    // using HIBP k-anonymity: only five SHA-1 prefix characters leave the server.
+    try {
+      if (await isPwnedPassword(parsed.data.password)) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "COMPROMISED_PASSWORD",
+              message: "Choose a different password. This password appears in known breach data.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+    } catch {
+      logger.warn("[auth/signup] Password safety service unavailable");
+      return NextResponse.json(
+        {
+          error: {
+            code: "PASSWORD_SAFETY_UNAVAILABLE",
+            message: "Password safety checks are temporarily unavailable. Please try again.",
+          },
+        },
+        { status: 503 },
       );
     }
 
