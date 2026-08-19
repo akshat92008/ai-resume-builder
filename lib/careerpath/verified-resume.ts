@@ -56,10 +56,19 @@ export async function verifyResumeCandidate(input: {
       ? "IMPROVE_EXISTING_RESUME"
       : "BUILD_FROM_DATA";
 
+  // The truthfulness validator needs the full source evidence, not only the
+  // latest natural-language command. Otherwise a legitimate metric already in
+  // Career Memory could be removed simply because the current command omitted it.
+  const sourceEvidence = [
+    input.instruction,
+    JSON.stringify(input.legacyProfile),
+    JSON.stringify(evidenceProfile),
+  ].join("\n");
+
   const validation = validateResumeTruthfulness(
     beforeState,
     afterState,
-    input.instruction,
+    sourceEvidence,
     {
       type: validationMode,
       confidence: 1,
