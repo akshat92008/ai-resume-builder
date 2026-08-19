@@ -49,17 +49,44 @@ export type LimitedJsonResult<T> =
   | { ok: true; data: T }
   | { ok: false; code: "PAYLOAD_TOO_LARGE" | "INVALID_JSON" | "VALIDATION_ERROR" };
 
+async function readTextLimited(request: Request, maxBytes: number): Promise<string> {
+  const declaredLengthHeader = request.headers.get("content-length");
+  if (declaredLengthHeader) {
+    const declaredLength = Number(declaredLengthHeader);
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
+    }
+  }
+
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let raw = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel("payload-too-large").catch(() => undefined);
+        throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+    raw += decoder.decode();
+    return raw;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 async function readRawJson<T = unknown>(request: Request, maxBytes: number): Promise<T> {
-  const declaredLength = Number(request.headers.get("content-length") || 0);
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
-  }
-
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > maxBytes) {
-    throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
-  }
-
+  const raw = await readTextLimited(request, maxBytes);
   try {
     return (raw ? JSON.parse(raw) : {}) as T;
   } catch {
@@ -68,10 +95,10 @@ async function readRawJson<T = unknown>(request: Request, maxBytes: number): Pro
 }
 
 /**
- * Reads JSON only after enforcing a byte limit. With a schema, parsing and
- * validation are returned as a discriminated result so routes cannot forget
- * to validate the bounded body. The two-argument form remains backwards
- * compatible for existing callers that validate separately.
+ * Reads JSON through a streaming byte cap so a missing or dishonest
+ * Content-Length header cannot cause the server to buffer an unbounded body.
+ * With a schema, parsing and validation are returned as a discriminated result
+ * so routes cannot accidentally skip validation after enforcing the size cap.
  */
 export async function readJsonLimited<T = unknown>(request: Request, maxBytes?: number): Promise<T>;
 export async function readJsonLimited<S extends z.ZodTypeAny>(
