@@ -29,9 +29,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Supabase's native leaked-password protection is plan-dependent. Enforce a
-    // free application-layer equivalent for the canonical CareerOS signup path
-    // using HIBP k-anonymity: only five SHA-1 prefix characters leave the server.
+    // Supabase's native leaked-password protection is plan-dependent. Add a
+    // free application-layer compensating control on the canonical CareerOS
+    // signup path using HIBP k-anonymity: only five SHA-1 prefix characters
+    // leave the server. Native Supabase protection remains useful defense in depth.
     try {
       if (await isPwnedPassword(parsed.data.password)) {
         return NextResponse.json(
