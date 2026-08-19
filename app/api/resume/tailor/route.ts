@@ -5,7 +5,7 @@ import { auditResume, createResumeRecord } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
-import { checkGlobalAiRateLimit, checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
@@ -55,13 +55,15 @@ export async function POST(request: Request) {
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
-    const globalLimit = await checkGlobalAiRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
-    if (!globalLimit.allowed) {
-      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI usage limit exceeded.", recoverable: true } }, { status: 429 });
-    }
-    const featureLimit = await checkRateLimit(auth.user.id, ipHash, "resume_tailor", entitlements.tailoringPerDay);
-    if (!featureLimit.allowed) {
-      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily tailoring limit exceeded.", recoverable: true } }, { status: 429 });
+    const rateLimit = await checkAiActionRateLimit(
+      auth.user.id,
+      ipHash,
+      entitlements.aiActionsPerDay,
+      "resume_tailor",
+      entitlements.tailoringPerDay,
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI or tailoring limit exceeded.", recoverable: true } }, { status: 429 });
     }
 
     const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
