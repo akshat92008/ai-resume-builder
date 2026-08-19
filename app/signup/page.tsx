@@ -43,11 +43,11 @@ function SignupForm() {
       {!isSupabaseConfigured && <Alert className="mt-5" variant="error">Authentication is not configured on this deployment.</Alert>}
       <form onSubmit={submit} className="mt-6 space-y-5">
         <div className="space-y-2"><Label htmlFor="signup-email">Email</Label><Input id="signup-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} disabled={!isSupabaseConfigured} placeholder="you@example.com" /></div>
-        <div className="space-y-2"><Label htmlFor="signup-password">Password</Label><Input id="signup-password" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="At least 6 characters" /></div>
+        <div className="space-y-2"><Label htmlFor="signup-password">Password</Label><Input id="signup-password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="At least 8 characters" /></div>
         {message && <Alert variant={message.startsWith("Check your email") ? "success" : "error"}>{message}</Alert>}
         <Button type="submit" size="lg" className="w-full" disabled={loading || !isSupabaseConfigured}>{loading ? "Creating account..." : <>Create free account <ArrowRight className="ml-2 h-4 w-4" /></>}</Button>
       </form>
-      <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-400"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />Free beta with fair-use AI limits.</div>
+      <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-400"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />Free plan with server-enforced fair-use AI limits.</div>
       <p className="mt-5 text-center text-sm text-slate-500">Already have an account? <Link href={loginUrl} className="font-semibold text-indigo-600 hover:underline">Sign in</Link></p>
     </div>
   );
