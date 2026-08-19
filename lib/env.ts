@@ -6,6 +6,11 @@ const optionalNonNegativeNumberString = z.string().refine((value) => {
   return Number.isFinite(parsed) && parsed >= 0;
 }, "Must be a non-negative number when configured").optional();
 
+const positiveIntegerString = z.string().refine((value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1;
+}, "Must be a positive integer").optional();
+
 export const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
@@ -34,10 +39,11 @@ export const envSchema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   RATE_LIMIT_SALT: z.string().min(1).optional(),
-  STRIPE_SECRET_KEY: z.string().min(1).optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-  STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  RAZORPAY_KEY_ID: z.string().min(1).optional(),
+  RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(8).optional(),
+  RAZORPAY_PRO_PLAN_ID: z.string().min(1).optional(),
+  RAZORPAY_PRO_TOTAL_COUNT: positiveIntegerString,
   SENTRY_DSN: z.string().url().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
   SENTRY_AUTH_TOKEN: z.string().min(1).optional(),
@@ -63,7 +69,13 @@ const REQUIRED_PRODUCTION_KEYS = [
   "NEXT_PUBLIC_SENTRY_DSN",
 ] as const;
 
-export const BILLING_KEYS = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRO_PRICE_ID"] as const;
+export const BILLING_KEYS = [
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "RAZORPAY_WEBHOOK_SECRET",
+  "RAZORPAY_PRO_PLAN_ID",
+  "RAZORPAY_PRO_TOTAL_COUNT",
+] as const;
 
 function firstPathSegment(issue: { path: PropertyKey[] }): string | null {
   const value = issue.path[0];
@@ -100,9 +112,12 @@ export function validateProductionConfiguration(source: NodeJS.ProcessEnv = proc
   const billingPartial = billingConfiguredCount > 0 && !billingConfigured;
 
   if (billingConfigured) {
-    if (!source.STRIPE_SECRET_KEY?.startsWith("sk_")) invalid.add("STRIPE_SECRET_KEY");
-    if (!source.STRIPE_WEBHOOK_SECRET?.startsWith("whsec_")) invalid.add("STRIPE_WEBHOOK_SECRET");
-    if (!source.STRIPE_PRO_PRICE_ID?.startsWith("price_")) invalid.add("STRIPE_PRO_PRICE_ID");
+    if (!source.RAZORPAY_KEY_ID?.startsWith("rzp_")) invalid.add("RAZORPAY_KEY_ID");
+    if ((source.RAZORPAY_KEY_SECRET || "").length < 8) invalid.add("RAZORPAY_KEY_SECRET");
+    if ((source.RAZORPAY_WEBHOOK_SECRET || "").length < 8) invalid.add("RAZORPAY_WEBHOOK_SECRET");
+    if (!source.RAZORPAY_PRO_PLAN_ID?.startsWith("plan_")) invalid.add("RAZORPAY_PRO_PLAN_ID");
+    const totalCount = Number(source.RAZORPAY_PRO_TOTAL_COUNT);
+    if (!Number.isInteger(totalCount) || totalCount < 1) invalid.add("RAZORPAY_PRO_TOTAL_COUNT");
   }
 
   const invalidKeys = [...invalid].sort();
