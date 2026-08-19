@@ -2,6 +2,11 @@ import { Worker } from "node:worker_threads";
 
 const WORKER_TIMEOUT_MS = 15_000;
 const MAX_PAGES = 25;
+const PDF_WORKER_LIMITS = {
+  maxOldGenerationSizeMb: 96,
+  maxYoungGenerationSizeMb: 32,
+  stackSizeMb: 4,
+} as const;
 
 export type IsolatedPdfResult = {
   text: string;
@@ -43,6 +48,9 @@ export async function parsePdfIsolated(buffer: Buffer): Promise<IsolatedPdfResul
     const worker = new Worker(WORKER_SOURCE, {
       eval: true,
       workerData: { buffer, maxPages: MAX_PAGES },
+      // Worker threads are not an OS/container sandbox, but explicit V8 limits
+      // bound parser memory amplification in addition to upload/page/time caps.
+      resourceLimits: PDF_WORKER_LIMITS,
     });
 
     let settled = false;
