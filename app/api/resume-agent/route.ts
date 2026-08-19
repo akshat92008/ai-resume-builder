@@ -14,10 +14,11 @@ import type { AgentIntent } from "@/lib/careerpath/types";
 
 export const runtime = "nodejs";
 
+const MAX_BODY_BYTES = 30_000;
 const RequestSchema = z.object({
-  message: z.string().min(1).max(20000),
+  message: z.string().trim().min(1).max(20_000),
   resumeId: z.string().uuid().optional(),
-});
+}).strict();
 
 export async function POST(request: Request) {
   try {
@@ -25,11 +26,28 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const userId = auth.user.id;
 
-    const json = await request.json().catch(() => ({}));
-    const parseResult = RequestSchema.safeParse(json);
+    const raw = await request.text().catch(() => "");
+    if (!raw || Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { error: { code: "PAYLOAD_TOO_LARGE", message: "Agent requests must be 30 KB or smaller.", recoverable: true } },
+        { status: 413 },
+      );
+    }
+
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(raw);
+    } catch {
+      return NextResponse.json(
+        { error: { code: "INVALID_JSON", message: "Provide a valid JSON request.", recoverable: true } },
+        { status: 400 },
+      );
+    }
+
+    const parseResult = RequestSchema.safeParse(decoded);
     if (!parseResult.success) {
       return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Invalid request. Provide a message.", recoverable: true } },
+        { error: { code: "INVALID_INPUT", message: "Invalid request. Provide a message and a valid resume ID if supplied.", recoverable: true } },
         { status: 400 },
       );
     }
@@ -54,7 +72,15 @@ export async function POST(request: Request) {
     }
 
     let currentResume = null;
-    if (resumeId) currentResume = await getServerResume(resumeId, userId);
+    if (resumeId) {
+      currentResume = await getServerResume(resumeId, userId);
+      if (!currentResume || currentResume.userId !== userId) {
+        return NextResponse.json(
+          { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
+          { status: 404 },
+        );
+      }
+    }
 
     const command = routeCareerCommand(message, {
       profile: currentResume?.careerProfile,
@@ -76,7 +102,7 @@ export async function POST(request: Request) {
 
     const job = await inngest.send({
       name: "resume/process.intent",
-      data: { intent, message, currentResume, userId, resumeId, command }
+      data: { intent, message, currentResume, userId, resumeId, command },
     });
 
     return NextResponse.json({
@@ -85,10 +111,10 @@ export async function POST(request: Request) {
       status: "queued",
       assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
     });
-  } catch (err) {
-    logger.error("[resume-agent] Error", { error: err });
+  } catch (error: unknown) {
+    logger.error("[resume-agent] Error", { error });
     return NextResponse.json(
-      { error: { code: "AGENT_ERROR", message: `Something went wrong: ${err instanceof Error ? err.message : String(err)}. Please try again.`, recoverable: true } },
+      { error: { code: "AGENT_ERROR", message: "Something went wrong while starting the agent. Please try again.", recoverable: true } },
       { status: 500 },
     );
   }
