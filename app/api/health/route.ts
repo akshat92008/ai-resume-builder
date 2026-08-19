@@ -3,6 +3,7 @@ import { Redis } from "@upstash/redis";
 import { validatePaidProductionConfiguration } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/observability/logger";
+import { getObservabilityBackend, hasCoreObservability } from "@/lib/observability/backend";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -36,8 +37,9 @@ export async function GET() {
   const validation = validatePaidProductionConfiguration();
   const [database, redis] = await Promise.all([checkDatabase(), checkRedis()]);
   const coreConfiguration = validation.missingCore.length === 0 && validation.invalidKeys.length === 0;
-  const observability = Boolean(process.env.SENTRY_DSN && process.env.NEXT_PUBLIC_SENTRY_DSN);
-  const ready = validation.ready && database && redis;
+  const observability = hasCoreObservability();
+  const observabilityBackend = getObservabilityBackend();
+  const ready = validation.ready && database && redis && observability;
 
   return NextResponse.json(
     {
@@ -49,6 +51,7 @@ export async function GET() {
         redis,
         billing: validation.billing,
         observability,
+        observabilityBackend,
       },
       missingCoreCount: validation.missingCore.length,
       missingBillingCount: validation.missingBilling.length,
