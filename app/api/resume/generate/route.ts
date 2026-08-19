@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { createResumeRecord } from "@/lib/careerpath/agents";
-import { writeResumeAgent, auditResumeAgent } from "@/lib/careerpath/orchestrator";
+import { writeResumeAgent } from "@/lib/careerpath/orchestrator";
+import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
 import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
 import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
@@ -48,17 +49,29 @@ export async function POST(request: Request) {
     }
 
     const draft = await writeResumeAgent(session.profile, session.mode, "");
-    const draftAudit = await auditResumeAgent(draft, session.targetRole, "");
+    const targetRole = session.targetRole || "Target Role";
+    const verified = await verifyResumeCandidate({
+      content: draft,
+      currentResume: null,
+      userId: auth.user.id,
+      legacyProfile: session.profile,
+      instruction: `Build a truthful resume for ${targetRole} using only the supplied Career Memory.`,
+      mode: "build",
+      targetRole,
+      metadata: { userId: auth.user.id },
+    });
 
     const resume = createResumeRecord({
       userId: auth.user.id,
       mode: session.mode,
-      targetRole: session.targetRole,
-      content: draft,
+      targetRole,
+      content: verified.content,
       profile: session.profile,
-      title: `${session.targetRole || "CareerPath"} Resume`,
-      audit: draftAudit,
+      title: `${targetRole || "CareerOS"} Resume`,
+      audit: verified.audit,
     });
+    resume.careerProfile = verified.careerProfile;
+    resume.score = verified.score;
 
     session.currentStep = "generated";
     session.resumeId = resume.id;
@@ -70,6 +83,10 @@ export async function POST(request: Request) {
       content: resume.content,
       score: resume.score,
       audit: resume.audit,
+      verification: {
+        removedUnsupportedClaims: verified.provenance.removedClaims,
+        warnings: verified.validation.warnings.length,
+      },
       resume,
     });
   } catch (err) {
