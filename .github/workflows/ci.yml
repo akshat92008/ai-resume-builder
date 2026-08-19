@@ -89,6 +89,10 @@ jobs:
         working-directory: extension
         run: npm ci
 
+      - name: Audit extension dependencies
+        working-directory: extension
+        run: npm audit --audit-level=high
+
       - name: Build Chrome extension beta
         working-directory: extension
         run: npm run build
