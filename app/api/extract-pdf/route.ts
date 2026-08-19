@@ -3,28 +3,13 @@ import { requireAppAccess } from "@/lib/careerpath/auth";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
+import { parsePdfIsolated } from "@/lib/pdf/parse-isolated";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 const MAX_EXTRACTED_CHARS = 120_000;
-
-// Polyfills for pdf-parse / pdfjs-dist in the Next.js Node build environment.
-if (typeof global !== "undefined") {
-  if (typeof global.DOMMatrix === "undefined") {
-    (global as any).DOMMatrix = class DOMMatrix {};
-  }
-  if (typeof global.Path2D === "undefined") {
-    (global as any).Path2D = class Path2D {};
-  }
-  if (typeof global.ImageData === "undefined") {
-    (global as any).ImageData = class ImageData {};
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse");
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +26,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "PDF extraction limit reached. Try again later." } },
         { status: 429 },
+      );
+    }
+
+    const declaredLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PDF_BYTES + 1_000_000) {
+      return NextResponse.json(
+        { error: { code: "FILE_TOO_LARGE", message: "PDF files must be 8 MB or smaller." } },
+        { status: 413 },
       );
     }
 
@@ -77,8 +70,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = await pdfParse(buffer);
-    const text = String(data.text || "").trim().slice(0, MAX_EXTRACTED_CHARS);
+    const parsed = await parsePdfIsolated(buffer);
+    const rawText = parsed.text.trim();
+    const text = rawText.slice(0, MAX_EXTRACTED_CHARS);
     if (!text) {
       return NextResponse.json(
         { error: { code: "NO_TEXT_FOUND", message: "No readable text was found in this PDF." } },
@@ -86,12 +80,17 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ text, truncated: String(data.text || "").length > MAX_EXTRACTED_CHARS });
+    return NextResponse.json({
+      text,
+      truncated: rawText.length > MAX_EXTRACTED_CHARS || parsed.pageLimited,
+      pageLimited: parsed.pageLimited,
+    });
   } catch (error) {
-    logger.error("[extract-pdf] Failed to parse PDF", { error });
+    const timedOut = error instanceof Error && error.message === "PDF_PARSE_TIMEOUT";
+    logger.warn("[extract-pdf] Isolated PDF parse failed", { timedOut });
     return NextResponse.json(
-      { error: { code: "PDF_PARSE_FAILED", message: "Failed to parse PDF." } },
-      { status: 500 },
+      { error: { code: timedOut ? "PDF_PARSE_TIMEOUT" : "PDF_PARSE_FAILED", message: timedOut ? "PDF parsing took too long." : "Failed to parse PDF." } },
+      { status: timedOut ? 422 : 500 },
     );
   }
 }
