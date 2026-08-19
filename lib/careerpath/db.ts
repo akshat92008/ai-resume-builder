@@ -1,11 +1,15 @@
 /**
  * CareerPath AI — Database Layer
- * All persistence through Supabase. No in-memory fallbacks.
+ * All durable persistence goes through Supabase. Product-data reads/writes fail
+ * explicitly on database outages; only observability writes are best-effort.
  */
 import { createServerSupabaseClient, isServerSupabaseConfigured } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/observability/logger";
+import { DatabaseUnavailableError } from "./db-errors";
 import type { BuilderSession, CareerPathResume, ResumeMessage } from "./types";
+
+export { DatabaseUnavailableError } from "./db-errors";
 
 export type ResumeListItem = Pick<CareerPathResume, "id" | "userId" | "title" | "targetRole" | "mode" | "status" | "score" | "version" | "createdAt" | "updatedAt">;
 export type SaveResumeOptions = { expectedVersion?: number };
@@ -28,28 +32,40 @@ export async function getSupabaseUser() {
 
 export async function getSession(id: string): Promise<BuilderSession | null> {
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return null;
-  const { data, error } = await supabase.from("builder_sessions").select("*").eq("id", id).single();
-  if (error || !data) return null;
+  if (!supabase) throw new DatabaseUnavailableError("builder session lookup");
+  const { data, error } = await supabase.from("builder_sessions").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    logger.error("[db/getSession] Error loading session", { error });
+    throw new DatabaseUnavailableError("builder session lookup");
+  }
+  if (!data) return null;
   return { id: data.id, userId: data.user_id, mode: data.mode as BuilderSession["mode"], targetRole: data.target_role, currentStep: data.current_step as BuilderSession["currentStep"], profile: data.profile_json, messages: data.messages_json, missingQuestions: data.missing_questions_json, resumeId: data.resume_id, createdAt: data.created_at, updatedAt: data.updated_at };
 }
 
 export async function saveSession(session: BuilderSession): Promise<void> {
   const supabase = await createServerSupabaseClient();
-  if (!supabase) throw new Error("Supabase not configured");
+  if (!supabase) throw new DatabaseUnavailableError("builder session save");
   const user = await getSupabaseUser();
   const ownerId = user?.id || session.userId;
   if (!ownerId) throw new Error("Cannot save session without an authenticated owner");
   const payload = { id: session.id, user_id: ownerId, mode: session.mode, target_role: session.targetRole, current_step: session.currentStep, profile_json: session.profile, messages_json: session.messages, missing_questions_json: session.missingQuestions, resume_id: session.resumeId, updated_at: new Date().toISOString() };
   const client = user ? supabase : createSupabaseAdminClient();
-  if (!client) throw new Error("Supabase not configured");
+  if (!client) throw new DatabaseUnavailableError("builder session save");
   const { error } = await client.from("builder_sessions").upsert(payload, { onConflict: "id" });
-  if (error) { logger.error("[db/saveSession] Error saving session to Supabase", { error }); throw new Error(`Failed to save session: ${error.message}`); }
+  if (error) {
+    logger.error("[db/saveSession] Error saving session to Supabase", { error });
+    throw new DatabaseUnavailableError("builder session save");
+  }
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  const supabase = await createServerSupabaseClient(); if (!supabase) return;
-  await supabase.from("builder_sessions").delete().eq("id", id);
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) throw new DatabaseUnavailableError("builder session delete");
+  const { error } = await supabase.from("builder_sessions").delete().eq("id", id);
+  if (error) {
+    logger.error("[db/deleteSession] Error deleting session", { error });
+    throw new DatabaseUnavailableError("builder session delete");
+  }
 }
 
 export async function saveServerResume(resume: CareerPathResume, ownerUserId?: string, options: SaveResumeOptions = {}): Promise<void> {
@@ -67,7 +83,7 @@ export async function saveServerResume(resume: CareerPathResume, ownerUserId?: s
     version: resume.version, updated_at: new Date().toISOString(),
   };
   const client = ownerUserId ? createSupabaseAdminClient() : supabase;
-  if (!client) throw new Error("Supabase not configured");
+  if (!client) throw new DatabaseUnavailableError("resume save");
 
   if (options.expectedVersion !== undefined) {
     const { data, error } = await client
@@ -80,94 +96,144 @@ export async function saveServerResume(resume: CareerPathResume, ownerUserId?: s
       .maybeSingle();
     if (error) {
       logger.error("[db/saveServerResume] Conditional update failed", { error });
-      throw new Error(`Failed to save resume: ${error.message}`);
+      throw new DatabaseUnavailableError("conditional resume save");
     }
     if (!data) throw new ResumeConflictError();
     return;
   }
 
   const { error } = await client.from("resumes").upsert(payload, { onConflict: "id" });
-  if (error) { logger.error("[db/saveServerResume] Error saving resume to Supabase", { error }); throw new Error(`Failed to save resume: ${error.message}`); }
+  if (error) {
+    logger.error("[db/saveServerResume] Error saving resume to Supabase", { error });
+    throw new DatabaseUnavailableError("resume save");
+  }
 }
 
 export async function getServerResume(id: string, userId?: string): Promise<CareerPathResume | null> {
   const supabase = userId ? null : await createServerSupabaseClient();
   const user = userId ? null : await getSupabaseUser();
   const ownerId = userId || user?.id;
+  if (!ownerId) return null;
   const client = userId ? createSupabaseAdminClient() : supabase;
-  if (!client || !ownerId) return null;
-  const { data, error } = await client.from("resumes").select("*").eq("id", id).eq("user_id", ownerId).single();
-  if (error || !data) return null;
-  return mapResumeRow(data);
+  if (!client) throw new DatabaseUnavailableError("resume lookup");
+  const { data, error } = await client.from("resumes").select("*").eq("id", id).eq("user_id", ownerId).maybeSingle();
+  if (error) {
+    logger.error("[db/getServerResume] Error loading resume", { error });
+    throw new DatabaseUnavailableError("resume lookup");
+  }
+  return data ? mapResumeRow(data) : null;
 }
 
 export async function listServerResumes(): Promise<CareerPathResume[]> {
-  const supabase = await createServerSupabaseClient(); if (!supabase) return [];
-  const user = await getSupabaseUser(); if (!user) return [];
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) throw new DatabaseUnavailableError("resume listing");
+  const user = await getSupabaseUser();
+  if (!user) return [];
   const { data, error } = await supabase.from("resumes").select("*").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(50);
-  if (error || !data) return [];
-  return data.map(mapResumeRow);
+  if (error) {
+    logger.error("[db/listServerResumes] Error listing resumes", { error });
+    throw new DatabaseUnavailableError("resume listing");
+  }
+  return (data || []).map(mapResumeRow);
 }
 
 export async function listServerResumeSummaries(): Promise<ResumeListItem[]> {
-  const supabase = await createServerSupabaseClient(); if (!supabase) return [];
-  const user = await getSupabaseUser(); if (!user) return [];
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) throw new DatabaseUnavailableError("resume summary listing");
+  const user = await getSupabaseUser();
+  if (!user) return [];
   const { data, error } = await supabase.from("resumes").select(RESUME_LIST_COLUMNS).eq("user_id", user.id).order("updated_at", { ascending: false }).limit(50);
-  if (error || !data) return [];
-  return (data as unknown as Record<string, unknown>[]).map(mapResumeListRow);
+  if (error) {
+    logger.error("[db/listServerResumeSummaries] Error listing resume summaries", { error });
+    throw new DatabaseUnavailableError("resume summary listing");
+  }
+  return ((data || []) as unknown as Record<string, unknown>[]).map(mapResumeListRow);
 }
 
 export async function deleteServerResume(id: string, userId?: string): Promise<void> {
   const supabase = userId ? null : await createServerSupabaseClient();
-  const user = userId ? null : await getSupabaseUser(); const ownerId = userId || user?.id;
+  const user = userId ? null : await getSupabaseUser();
+  const ownerId = userId || user?.id;
   if (!ownerId) throw new Error("Cannot delete resume without an authenticated owner");
-  const client = userId ? createSupabaseAdminClient() : supabase; if (!client) return;
-  await client.from("resumes").delete().eq("id", id).eq("user_id", ownerId);
+  const client = userId ? createSupabaseAdminClient() : supabase;
+  if (!client) throw new DatabaseUnavailableError("resume delete");
+  const { error } = await client.from("resumes").delete().eq("id", id).eq("user_id", ownerId);
+  if (error) {
+    logger.error("[db/deleteServerResume] Error deleting resume", { error });
+    throw new DatabaseUnavailableError("resume delete");
+  }
 }
 
 export async function duplicateServerResume(id: string, userId?: string): Promise<CareerPathResume | null> {
-  const original = await getServerResume(id, userId); if (!original) return null;
+  const original = await getServerResume(id, userId);
+  if (!original) return null;
   const now = new Date().toISOString();
   const copy: CareerPathResume = { ...original, id: crypto.randomUUID(), title: `${original.title} v${original.version + 1}`, version: original.version + 1, createdAt: now, updatedAt: now };
-  await saveServerResume(copy, userId || original.userId); return copy;
+  await saveServerResume(copy, userId || original.userId);
+  return copy;
 }
 
 export async function getLatestResumeForUser(userId: string): Promise<CareerPathResume | null> {
-  const admin = createSupabaseAdminClient(); if (!admin) return null;
-  const { data, error } = await admin.from("resumes").select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(1).single();
-  if (error || !data) return null; return mapResumeRow(data);
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new DatabaseUnavailableError("latest resume lookup");
+  const { data, error } = await admin.from("resumes").select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) {
+    logger.error("[db/getLatestResumeForUser] Error loading latest resume", { error });
+    throw new DatabaseUnavailableError("latest resume lookup");
+  }
+  return data ? mapResumeRow(data) : null;
 }
 
 export async function saveResumeMessage(msg: { userId: string; resumeId: string | null; role: "user" | "assistant" | "system"; content: string; intent?: string; operationId?: string; }): Promise<void> {
-  const client = createSupabaseAdminClient(); if (!client) { logger.error("[db/saveResumeMessage] DB client not available"); return; }
+  const client = createSupabaseAdminClient();
+  if (!client) throw new DatabaseUnavailableError("resume message save");
   const { error } = await client.from("resume_messages").insert({ user_id: msg.userId, resume_id: msg.resumeId, role: msg.role, content: msg.content, intent: msg.intent || null, operation_id: msg.operationId || null });
-  if (error) logger.error("[db/saveResumeMessage] Error", { error });
+  if (error) {
+    logger.error("[db/saveResumeMessage] Error", { error });
+    throw new DatabaseUnavailableError("resume message save");
+  }
 }
 
 export async function getResumeMessages(resumeId: string, userId: string): Promise<ResumeMessage[]> {
-  const admin = createSupabaseAdminClient(); if (!admin) return [];
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new DatabaseUnavailableError("resume message listing");
   const { data, error } = await admin.from("resume_messages").select("*").eq("resume_id", resumeId).eq("user_id", userId).order("created_at", { ascending: true }).limit(200);
-  if (error || !data) return [];
-  return data.map(mapResumeMessageRow);
+  if (error) {
+    logger.error("[db/getResumeMessages] Error listing messages", { error });
+    throw new DatabaseUnavailableError("resume message listing");
+  }
+  return (data || []).map(mapResumeMessageRow);
 }
 
 export async function getLatestMessagesForUser(userId: string, resumeId?: string): Promise<ResumeMessage[]> {
-  const admin = createSupabaseAdminClient(); if (!admin) return [];
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new DatabaseUnavailableError("latest resume message listing");
   let query = admin.from("resume_messages").select("*").eq("user_id", userId).order("created_at", { ascending: true }).limit(200);
   if (resumeId) query = query.or(`resume_id.eq.${resumeId},resume_id.is.null`);
-  const { data, error } = await query; if (error || !data) return [];
-  return data.map(mapResumeMessageRow);
+  const { data, error } = await query;
+  if (error) {
+    logger.error("[db/getLatestMessagesForUser] Error listing messages", { error });
+    throw new DatabaseUnavailableError("latest resume message listing");
+  }
+  return (data || []).map(mapResumeMessageRow);
 }
 
 export async function saveResumeVersion(version: { userId: string; resumeId: string; versionName?: string; resumeJson: unknown; reason?: string; }): Promise<void> {
-  const client = createSupabaseAdminClient(); if (!client) { logger.error("[db/saveResumeVersion] DB client not available"); return; }
+  const client = createSupabaseAdminClient();
+  if (!client) throw new DatabaseUnavailableError("resume version save");
   const { error } = await client.from("resume_versions").insert({ user_id: version.userId, resume_id: version.resumeId, version_name: version.versionName || null, resume_json: version.resumeJson, reason: version.reason || null });
-  if (error) logger.error("[db/saveResumeVersion] Error", { error });
+  if (error) {
+    logger.error("[db/saveResumeVersion] Error", { error });
+    throw new DatabaseUnavailableError("resume version save");
+  }
 }
 
 export async function saveAgentRun(run: { agentName: string; userId?: string; resumeId?: string; sessionId?: string; inputJson?: unknown; outputJson?: unknown; status: string; error?: string; latencyMs?: number; model?: string; }): Promise<void> {
+  // Agent-run telemetry is intentionally best-effort and must never make a
+  // successful product operation fail. Durable product data above is not.
   if (!isServerSupabaseConfigured) return;
-  const client = createSupabaseAdminClient(); if (!client) return;
+  const client = createSupabaseAdminClient();
+  if (!client) return;
   const { error } = await client.from("agent_runs").insert({ id: crypto.randomUUID(), user_id: run.userId || null, resume_id: run.resumeId || null, session_id: run.sessionId || null, agent_name: run.agentName, input_json: run.inputJson || {}, output_json: run.outputJson || {}, status: run.status, error: run.error || null, latency_ms: run.latencyMs || null, model: run.model || null });
   if (error) logger.error("[agent_runs] insert failed", { error });
 }
