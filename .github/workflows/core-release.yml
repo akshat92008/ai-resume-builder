@@ -6,6 +6,7 @@ on:
       deployment_url:
         description: "HTTPS deployment URL to certify"
         required: true
+        default: "https://ai-resume-builder-ivory-nine.vercel.app"
         type: string
 
 permissions:
@@ -46,36 +47,101 @@ jobs:
           node <<'NODE'
           (async () => {
             const base = process.env.E2E_BASE_URL.replace(/\/$/, "");
+            const expected = process.env.EXPECTED_COMMIT_SHA;
+
             const live = await fetch(`${base}/api/health/live`, { redirect: "error" });
+            const livePayload = await live.json().catch(() => ({}));
             if (!live.ok) throw new Error(`Liveness failed: HTTP ${live.status}`);
+            if (livePayload.commit !== expected) {
+              console.error("Liveness SHA mismatch", { expected, deployed: livePayload.commit });
+              process.exit(1);
+            }
 
             const response = await fetch(`${base}/api/health`, { redirect: "error" });
             const payload = await response.json().catch(() => ({}));
-            const expected = process.env.EXPECTED_COMMIT_SHA;
             if (payload.commit !== expected) {
-              console.error("Deployment SHA mismatch", { expected, deployed: payload.commit });
+              console.error("Readiness SHA mismatch", { expected, deployed: payload.commit });
               process.exit(1);
             }
+
+            const backend = payload.checks?.observabilityBackend;
             if (
               !response.ok ||
               payload.status !== "ready" ||
               payload.checks?.coreConfiguration !== true ||
               payload.checks?.database !== true ||
               payload.checks?.redis !== true ||
-              payload.checks?.observability !== true
+              payload.checks?.observability !== true ||
+              !["sentry", "vercel-runtime"].includes(backend)
             ) {
               console.error("Core deployment is not ready", { status: response.status, payload });
               process.exit(1);
             }
-            console.log("Core readiness verified", { commit: payload.commit });
+            console.log("Core readiness verified", { commit: payload.commit, observabilityBackend: backend });
           })().catch((error) => {
             console.error("Core readiness probe failed", error);
             process.exit(1);
           });
           NODE
 
+      - name: Verify compromised-password rejection
+        env:
+          E2E_BASE_URL: ${{ inputs.deployment_url }}
+        run: |
+          node <<'NODE'
+          (async () => {
+            const base = process.env.E2E_BASE_URL.replace(/\/$/, "");
+            const response = await fetch(`${base}/api/auth/signup`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: `release-probe-${Date.now()}@example.com`,
+                password: "password",
+              }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (response.status !== 400 || payload.error?.code !== "COMPROMISED_PASSWORD") {
+              console.error("Compromised-password protection failed", { status: response.status, code: payload.error?.code });
+              process.exit(1);
+            }
+            console.log("Compromised-password protection verified");
+          })().catch((error) => {
+            console.error("Password-safety probe failed", error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Verify first-party browser telemetry endpoint
+        env:
+          E2E_BASE_URL: ${{ inputs.deployment_url }}
+        run: |
+          node <<'NODE'
+          (async () => {
+            const base = process.env.E2E_BASE_URL.replace(/\/$/, "");
+            const response = await fetch(`${base}/api/observability/client-error`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                source: "window-error",
+                errorName: "ReleaseProbeError",
+                fingerprint: "a".repeat(64),
+                route: "/release-probe",
+                digest: `release-${Date.now()}`,
+              }),
+            });
+            if (![202, 204].includes(response.status)) {
+              console.error("Browser telemetry endpoint failed", { status: response.status });
+              process.exit(1);
+            }
+            console.log("Browser telemetry endpoint verified", { status: response.status });
+          })().catch((error) => {
+            console.error("Browser telemetry probe failed", error);
+            process.exit(1);
+          });
+          NODE
+
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run public security smoke and authenticated core flow
         env:
