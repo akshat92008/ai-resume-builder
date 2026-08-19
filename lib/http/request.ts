@@ -32,3 +32,36 @@ export function getClientIp(request: Request) {
 
   return "unknown";
 }
+
+export class RequestBodyError extends Error {
+  constructor(
+    public readonly code: "PAYLOAD_TOO_LARGE" | "INVALID_JSON",
+    message: string,
+  ) {
+    super(message);
+    this.name = "RequestBodyError";
+  }
+}
+
+/**
+ * Reads JSON only after enforcing a byte limit. This prevents request.json()
+ * from allocating arbitrarily large attacker-controlled payloads before
+ * validation runs.
+ */
+export async function readJsonLimited<T = unknown>(request: Request, maxBytes = 50_000): Promise<T> {
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
+  }
+
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > maxBytes) {
+    throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
+  }
+
+  try {
+    return (raw ? JSON.parse(raw) : {}) as T;
+  } catch {
+    throw new RequestBodyError("INVALID_JSON", "Request body must be valid JSON.");
+  }
+}
