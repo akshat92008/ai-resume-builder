@@ -124,10 +124,11 @@ describe("job application validation", () => {
   it("rejects unsupported statuses and unsafe URL schemes", () => {
     expect(CreateJobApplicationSchema.safeParse({ company: "Amaura Labs", role: "AI Engineer", status: "hacked" }).success).toBe(false);
     expect(CreateJobApplicationSchema.safeParse({ company: "Amaura Labs", role: "AI Engineer", jobUrl: "javascript:alert(1)" }).success).toBe(false);
+    expect(CreateJobApplicationSchema.safeParse({ company: "Amaura Labs", role: "AI Engineer", jobUrl: "http://example.com/job" }).success).toBe(false);
   });
 
-  it("strips ownership fields from PATCH payloads", () => {
-    const parsed = UpdateJobApplicationSchema.parse({ status: "interview", id: "attacker-controlled", userId: "attacker-controlled" });
-    expect(parsed).toEqual({ status: "interview" });
+  it("rejects ownership fields from PATCH payloads", () => {
+    const parsed = UpdateJobApplicationSchema.safeParse({ status: "interview", id: "attacker-controlled", userId: "attacker-controlled" });
+    expect(parsed.success).toBe(false);
   });
 });
