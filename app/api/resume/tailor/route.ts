@@ -5,7 +5,7 @@ import { auditResume, createResumeRecord } from "@/lib/careerpath/agents";
 import { getServerResume, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
-import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkGlobalAiRateLimit, checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { requireAiAccess } from "@/lib/careerpath/auth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/server";
@@ -18,10 +18,10 @@ import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
 
 const TailorRequestSchema = z.object({
-  resumeId: z.string().optional(),
+  resumeId: z.string().uuid().optional(),
   resume: ResumePayloadSchema.optional(),
-  jobDescription: z.string().max(15000).optional(),
-});
+  jobDescription: z.string().trim().min(1).max(15000),
+}).strict();
 
 export async function POST(request: Request) {
   try {
@@ -29,57 +29,39 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
 
     const text = await request.text().catch(() => "{}");
-    if (text.length > 100000) {
+    if (new TextEncoder().encode(text).byteLength > 100000) {
       return NextResponse.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Payload too large.", recoverable: true } }, { status: 413 });
     }
     const json = parseJsonBody(text);
     if ("error" in json && json.error === "INVALID_JSON") {
-      return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: { code: "INVALID_JSON", message: "Invalid JSON body.", recoverable: false } }, { status: 400 });
     }
     const parseResult = TailorRequestSchema.safeParse(json);
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Invalid payload or job description too long.", recoverable: true } },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: { code: "INVALID_INPUT", message: "Invalid payload or job description too long.", recoverable: true } }, { status: 400 });
     }
-    const body = parseResult.data as { resumeId?: string; resume?: CareerPathResume; jobDescription?: string };
+    const body = parseResult.data as { resumeId?: string; resume?: CareerPathResume; jobDescription: string };
 
     if (isServerSupabaseConfigured && !body.resumeId) {
-      return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "resumeId is required.", recoverable: true } },
-        { status: 400 },
-      );
-    }
-
-    const ipHash = getClientIp(request);
-    const entitlements = await getCurrentUserEntitlements();
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "resume_tailor", entitlements.tailoringPerDay);
-    
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
-        { status: 429 },
-      );
+      return NextResponse.json({ error: { code: "INVALID_INPUT", message: "resumeId is required.", recoverable: true } }, { status: 400 });
     }
 
     const resume = isServerSupabaseConfigured
       ? await getServerResume(body.resumeId!, auth.user.id)
       : body.resume ?? (body.resumeId ? await getServerResume(body.resumeId, auth.user.id) : null);
     if (!resume) {
-      return NextResponse.json(
-        { error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } }, { status: 404 });
     }
-    if (!body.jobDescription?.trim()) {
-      return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Job description is required.", recoverable: true } },
-        { status: 400 },
-      );
+
+    const ipHash = getClientIp(request);
+    const entitlements = await getCurrentUserEntitlements();
+    const globalLimit = await checkGlobalAiRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
+    if (!globalLimit.allowed) {
+      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI usage limit exceeded.", recoverable: true } }, { status: 429 });
+    }
+    const featureLimit = await checkRateLimit(auth.user.id, ipHash, "resume_tailor", entitlements.tailoringPerDay);
+    if (!featureLimit.allowed) {
+      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily tailoring limit exceeded.", recoverable: true } }, { status: 429 });
     }
 
     const state = contentToResumeState(resume.content, { id: resume.id, targetRole: resume.targetRole });
