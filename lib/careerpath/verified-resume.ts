@@ -24,7 +24,7 @@ export async function verifyResumeCandidate(input: {
   content: CareerPathResumeContent;
   currentResume: CareerPathResume | null;
   userId: string;
-  legacyProfile: CareerPathProfile;
+  legacyProfile?: CareerPathProfile | null;
   careerProfile?: CareerPathResume["careerProfile"] | null;
   instruction: string;
   mode: VerifiedResumeMode;
@@ -32,11 +32,15 @@ export async function verifyResumeCandidate(input: {
   jobDescription?: string;
   metadata?: VerificationMetadata;
 }) {
-  const evidenceProfile = input.careerProfile
-    ? refreshCareerProfileInsights(input.careerProfile)
-    : input.currentResume?.careerProfile
-      ? refreshCareerProfileInsights(input.currentResume.careerProfile)
-      : legacyProfileToCareerProfile(input.legacyProfile, input.userId, input.instruction);
+  const legacyProfile = input.legacyProfile ?? input.currentResume?.profile ?? null;
+  const existingCareerProfile = input.careerProfile ?? input.currentResume?.careerProfile ?? null;
+  if (!legacyProfile && !existingCareerProfile) {
+    throw new Error("Resume verification requires Career Memory evidence.");
+  }
+
+  const evidenceProfile = existingCareerProfile
+    ? refreshCareerProfileInsights(existingCareerProfile)
+    : legacyProfileToCareerProfile(legacyProfile!, input.userId, input.instruction);
 
   const beforeState = input.currentResume
     ? contentToResumeState(input.currentResume.content, {
@@ -56,12 +60,11 @@ export async function verifyResumeCandidate(input: {
       ? "IMPROVE_EXISTING_RESUME"
       : "BUILD_FROM_DATA";
 
-  // The truthfulness validator needs the full source evidence, not only the
-  // latest natural-language command. Otherwise a legitimate metric already in
-  // Career Memory could be removed simply because the current command omitted it.
+  // Validate against all durable Career Memory evidence, not just the latest
+  // command, so supported metrics survive while newly invented claims do not.
   const sourceEvidence = [
     input.instruction,
-    JSON.stringify(input.legacyProfile),
+    legacyProfile ? JSON.stringify(legacyProfile) : "",
     JSON.stringify(evidenceProfile),
   ].join("\n");
 
