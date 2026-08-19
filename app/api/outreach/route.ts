@@ -5,7 +5,7 @@ import { generateOutreachAgent } from "@/lib/careerpath/orchestrator";
 import { getJobApplication } from "@/lib/careerpath/db-jobs";
 import { getServerResume } from "@/lib/careerpath/db";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
-import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkGlobalAiRateLimit, checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import { getClientIp } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
@@ -25,16 +25,6 @@ export async function POST(request: Request) {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const ipHash = getClientIp(request);
-    const entitlements = await getCurrentUserEntitlements();
-    const rateLimit = await checkRateLimit(auth.user.id, ipHash, "outreach_generate", entitlements.outreachPerDay);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded. Please try again later.", recoverable: true } },
-        { status: 429 },
-      );
-    }
-
     const raw = await request.text().catch(() => "");
     if (!raw || new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
       return NextResponse.json(
@@ -47,10 +37,7 @@ export async function POST(request: Request) {
     try {
       decoded = JSON.parse(raw);
     } catch {
-      return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Provide a valid JSON request." } },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: { code: "INVALID_JSON", message: "Provide a valid JSON request." } }, { status: 400 });
     }
 
     const parsed = OutreachRequestSchema.safeParse(decoded);
@@ -64,10 +51,7 @@ export async function POST(request: Request) {
     const { jobId, resumeId, jobDescription } = parsed.data;
     const resume = await getServerResume(resumeId, auth.user.id);
     if (!resume || resume.userId !== auth.user.id) {
-      return NextResponse.json(
-        { error: { code: "NOT_FOUND", message: "Resume not found." } },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Resume not found." } }, { status: 404 });
     }
 
     const profile: CareerProfile = resume.careerProfile || legacyProfileToCareerProfile(resume.profile, auth.user.id);
@@ -78,13 +62,21 @@ export async function POST(request: Request) {
     if (jobId) {
       const job = await getJobApplication(jobId, auth.user.id);
       if (!job || job.userId !== auth.user.id) {
-        return NextResponse.json(
-          { error: { code: "NOT_FOUND", message: "Job not found." } },
-          { status: 404 },
-        );
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job not found." } }, { status: 404 });
       }
       company = job.company;
       role = job.role;
+    }
+
+    const ipHash = getClientIp(request);
+    const entitlements = await getCurrentUserEntitlements();
+    const globalLimit = await checkGlobalAiRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
+    if (!globalLimit.allowed) {
+      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI usage limit exceeded.", recoverable: true } }, { status: 429 });
+    }
+    const featureLimit = await checkRateLimit(auth.user.id, ipHash, "outreach_generate", entitlements.outreachPerDay);
+    if (!featureLimit.allowed) {
+      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily outreach limit exceeded.", recoverable: true } }, { status: 429 });
     }
 
     const outreachPack = await generateOutreachAgent(
@@ -95,7 +87,7 @@ export async function POST(request: Request) {
       { userId: auth.user.id, resumeId },
     );
 
-    return NextResponse.json({ outreachPack });
+    return NextResponse.json({ outreachPack, company, role });
   } catch (error: unknown) {
     logger.error("[api/outreach] Error generating outreach pack", { error });
     return NextResponse.json(

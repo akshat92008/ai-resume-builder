@@ -3,16 +3,17 @@ import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { buildCareerWorkspaceState, extractJobDescription } from "@/lib/careerpath/career-os";
 import { getLatestResumeForUser, getServerResume } from "@/lib/careerpath/db";
-import { checkRateLimit } from "@/lib/careerpath/rate-limit";
-import { getClientIp } from "@/lib/http/request";
+import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
+import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { analyzeCareerLoopJob, buildCareerEvidenceGraph, extractJobTextFromUrl, inferJobSource } from "@/lib/careerloop";
 
 const InputSchema = z.object({
-  jobUrl: z.string().trim().max(2048).optional(),
+  jobUrl: z.string().trim().url().max(2048).refine((value) => value.startsWith("https://"), "Job URL must use HTTPS.").optional(),
   jobDescription: z.string().trim().max(50_000).optional(),
   resumeId: z.string().uuid().optional(),
-}).refine((value) => Boolean(value.jobUrl || value.jobDescription), {
+}).strict().refine((value) => Boolean(value.jobUrl || value.jobDescription), {
   message: "Provide a job URL or job description.",
 });
 
@@ -21,25 +22,27 @@ export async function POST(request: Request) {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
+    const parsedBody = await readJsonLimited(request, 60_000, InputSchema);
+    if (!parsedBody.ok) {
+      return NextResponse.json(
+        { error: { code: parsedBody.code, message: "Provide a valid job URL or job-description text." } },
+        { status: parsedBody.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
+      );
+    }
+    const parsed = parsedBody.data;
+
     const ipHash = getClientIp(request);
-    const rateLimit = await checkRateLimit(auth.user.id, ipHash, "job_analyzer", 15);
+    const entitlements = await getCurrentUserEntitlements();
+    const rateLimit = await checkAiActionRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many job analyses. Please try again later.", recoverable: true } },
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI usage limit reached. Please try again after the quota resets.", recoverable: true } },
         { status: 429 },
       );
     }
 
-    const parsed = InputSchema.safeParse(await request.json().catch(() => ({})));
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Provide a valid job URL or job-description text." } },
-        { status: 400 },
-      );
-    }
-
-    const resume = parsed.data.resumeId
-      ? await getServerResume(parsed.data.resumeId, auth.user.id)
+    const resume = parsed.resumeId
+      ? await getServerResume(parsed.resumeId, auth.user.id)
       : await getLatestResumeForUser(auth.user.id);
     if (!resume) {
       return NextResponse.json(
@@ -48,8 +51,8 @@ export async function POST(request: Request) {
       );
     }
 
-    let jobText = parsed.data.jobDescription?.trim() || "";
-    let finalUrl = parsed.data.jobUrl?.trim() || "";
+    let jobText = parsed.jobDescription?.trim() || "";
+    let finalUrl = parsed.jobUrl?.trim() || "";
     let extractedFromUrl = false;
     if (jobText.length < 120 && finalUrl) {
       try {
