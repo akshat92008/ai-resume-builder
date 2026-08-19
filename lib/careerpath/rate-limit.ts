@@ -4,8 +4,6 @@ import { logger } from "@/lib/observability/logger";
 
 const ratelimiters = new Map<string, Ratelimit>();
 
-// Legacy event names that represent general AI work all map to one shared
-// economic budget. New code should call checkAiActionRateLimit directly.
 const GLOBAL_AI_EVENTS = new Set([
   "builder_message",
   "resume_agent",
@@ -76,8 +74,10 @@ export async function checkGlobalAiRateLimit(
 }
 
 /**
- * Consume the global AI budget, then an optional feature-specific sublimit.
- * A feature cannot bypass the global account budget by owning its own bucket.
+ * Enforce a feature sublimit before consuming the shared AI budget. This keeps
+ * a denied tailoring/outreach request from burning a global AI action as well.
+ * The global bucket still prevents feature-specific endpoints from bypassing
+ * the account-wide economic boundary.
  */
 export async function checkAiActionRateLimit(
   userId: string | null,
@@ -86,10 +86,16 @@ export async function checkAiActionRateLimit(
   featureType?: string,
   featureMaxLimit?: number,
 ): Promise<{ allowed: boolean; remaining: number; error?: string }> {
-  const global = await checkGlobalAiRateLimit(userId, ipHash, globalMaxLimit);
-  if (!global.allowed || !featureType || featureMaxLimit == null) return global;
+  let feature: { allowed: boolean; remaining: number; error?: string } | null = null;
+  if (featureType && featureMaxLimit != null) {
+    feature = await checkRateLimit(userId, ipHash, featureType, featureMaxLimit);
+    if (!feature.allowed) return feature;
+  }
 
-  const feature = await checkRateLimit(userId, ipHash, featureType, featureMaxLimit);
-  if (!feature.allowed) return feature;
-  return { allowed: true, remaining: Math.min(global.remaining, feature.remaining) };
+  const global = await checkGlobalAiRateLimit(userId, ipHash, globalMaxLimit);
+  if (!global.allowed) return global;
+  return {
+    allowed: true,
+    remaining: feature ? Math.min(global.remaining, feature.remaining) : global.remaining,
+  };
 }
