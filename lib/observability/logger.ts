@@ -11,6 +11,7 @@ const MAX_ARRAY_ITEMS = 25;
 const MAX_OBJECT_KEYS = 50;
 const MAX_DEPTH = 5;
 const REDACTED = "[REDACTED]";
+const PRODUCTION_ERROR_MESSAGE = "[REDACTED_ERROR_MESSAGE]";
 
 const SENSITIVE_KEY = /(?:authorization|cookie|set-cookie|password|passwd|secret|token|api[-_]?key|service[-_]?role|signature|credential|session|raw[-_]?body|job[-_]?description|resume[-_]?text|prompt|payload|content|email)/i;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -27,14 +28,19 @@ function sanitizeString(value: string) {
     : redacted;
 }
 
+function safeErrorName(value: string) {
+  const sanitized = sanitizeString(value);
+  return /^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/.test(sanitized) ? sanitized : "Error";
+}
+
 export function sanitizeLogValue(value: unknown, key = "", depth = 0): unknown {
   if (SENSITIVE_KEY.test(key)) return REDACTED;
   if (depth > MAX_DEPTH) return "[MAX_DEPTH]";
 
   if (value instanceof Error) {
     return {
-      name: sanitizeString(value.name),
-      message: sanitizeString(value.message),
+      name: safeErrorName(value.name),
+      message: process.env.NODE_ENV === "production" ? PRODUCTION_ERROR_MESSAGE : sanitizeString(value.message),
       stack: process.env.NODE_ENV === "production" ? undefined : sanitizeString(value.stack || ""),
     };
   }
@@ -68,8 +74,8 @@ function reportErrorToSentry(message: string, context: LogContext) {
   if (!process.env.SENTRY_DSN && !process.env.NEXT_PUBLIC_SENTRY_DSN) return;
   const candidate = context.error;
   if (candidate instanceof Error) {
-    const safeError = new Error(sanitizeString(candidate.message));
-    safeError.name = sanitizeString(candidate.name);
+    const safeError = new Error(process.env.NODE_ENV === "production" ? PRODUCTION_ERROR_MESSAGE : sanitizeString(candidate.message));
+    safeError.name = safeErrorName(candidate.name);
     Sentry.captureException(safeError);
   } else {
     Sentry.captureMessage(sanitizeString(message), "error");
