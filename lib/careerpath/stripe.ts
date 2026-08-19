@@ -12,30 +12,52 @@ export function getStripeClient(): Stripe {
   if (!stripeClient) {
     stripeClient = new Stripe(secretKey, {
       apiVersion: "2026-06-24.dahlia",
-      appInfo: { name: "CareerPath AI", version: "1.0.0" },
+      appInfo: { name: "CareerOS", version: "1.0.0" },
     });
   }
   return stripeClient;
 }
 
 export type SubscriptionPlan = "free" | "pro";
+export type UserSubscriptionState = {
+  plan: SubscriptionPlan;
+  isPro: boolean;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  hasBillingAccount: boolean;
+};
 
-export async function getUserSubscription(): Promise<{ plan: SubscriptionPlan; isPro: boolean }> {
+const FREE_SUBSCRIPTION: UserSubscriptionState = {
+  plan: "free",
+  isPro: false,
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+  hasBillingAccount: false,
+};
+
+export async function getUserSubscription(): Promise<UserSubscriptionState> {
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return { plan: "free", isPro: false };
+  if (!supabase) return FREE_SUBSCRIPTION;
 
   const user = await getSupabaseUser();
-  if (!user) return { plan: "free", isPro: false };
+  if (!user) return FREE_SUBSCRIPTION;
 
   const { data, error } = await supabase
     .from("user_subscriptions")
-    .select("status, current_period_end")
+    .select("status, current_period_end, cancel_at_period_end, stripe_customer_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error || !data) return { plan: "free", isPro: false };
+  if (error || !data) return FREE_SUBSCRIPTION;
 
   const currentPeriodEnd = data.current_period_end ? new Date(data.current_period_end) : null;
-  const isPro = data.status === "pro" && Boolean(currentPeriodEnd && currentPeriodEnd > new Date());
-  return { plan: isPro ? "pro" : "free", isPro };
+  const validPeriod = Boolean(currentPeriodEnd && Number.isFinite(currentPeriodEnd.getTime()) && currentPeriodEnd > new Date());
+  const isPro = data.status === "pro" && validPeriod;
+  return {
+    plan: isPro ? "pro" : "free",
+    isPro,
+    currentPeriodEnd: currentPeriodEnd && Number.isFinite(currentPeriodEnd.getTime()) ? currentPeriodEnd.toISOString() : null,
+    cancelAtPeriodEnd: Boolean(data.cancel_at_period_end),
+    hasBillingAccount: Boolean(data.stripe_customer_id),
+  };
 }
