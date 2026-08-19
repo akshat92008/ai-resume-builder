@@ -20,6 +20,7 @@ const validProductionEnv: NodeJS.ProcessEnv = {
   RATE_LIMIT_SALT: "a-long-random-salt-value",
   SENTRY_DSN: "https://public@example.ingest.sentry.io/1",
   NEXT_PUBLIC_SENTRY_DSN: "https://public@example.ingest.sentry.io/1",
+  NEXT_PUBLIC_SUPPORT_EMAIL: "support@example.com",
 };
 
 const paidProductionEnv: NodeJS.ProcessEnv = {
@@ -36,6 +37,14 @@ describe("production configuration", () => {
     const result = validateProductionConfiguration(validProductionEnv);
     expect(result.ready).toBe(true);
     expect(result.billing).toBe("disabled");
+  });
+
+  it("requires a real support contact before commercial core readiness", () => {
+    const withoutSupport = { ...validProductionEnv };
+    delete withoutSupport.NEXT_PUBLIC_SUPPORT_EMAIL;
+    const result = validateProductionConfiguration(withoutSupport);
+    expect(result.ready).toBe(false);
+    expect(result.missingCore).toContain("NEXT_PUBLIC_SUPPORT_EMAIL");
   });
 
   it("does not call a billing-disabled deployment paid-ready", () => {
