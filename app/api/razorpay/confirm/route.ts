@@ -6,7 +6,7 @@ import { persistRazorpaySubscriptionState, razorpayReconciliationEventId } from 
 import { razorpaySubscriptionSnapshot } from "@/lib/careerpath/razorpay-state";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { isBillingConfigured } from "@/lib/env";
 import { logger } from "@/lib/observability/logger";
 
@@ -14,7 +14,7 @@ const ConfirmSchema = z.object({
   paymentId: z.string().trim().min(8).max(255),
   subscriptionId: z.string().trim().min(8).max(255),
   signature: z.string().trim().regex(/^[a-f0-9]{32,128}$/i),
-});
+}).strict();
 
 export async function POST(request: Request) {
   try {
@@ -36,11 +36,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const parsed = ConfirmSchema.safeParse(await request.json().catch(() => ({})));
-    if (!parsed.success) {
+    const parsed = await readJsonLimited(request, 8_000, ConfirmSchema);
+    if (!parsed.ok) {
       return NextResponse.json(
-        { error: { code: "INVALID_PAYMENT_CONFIRMATION", message: "A valid payment confirmation is required." } },
-        { status: 400 },
+        { error: { code: parsed.code, message: "A valid payment confirmation is required." } },
+        { status: parsed.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
       );
     }
 
