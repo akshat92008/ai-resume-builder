@@ -2,14 +2,12 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
-
-import { createResumeRecord } from "@/lib/careerpath/agents";
+import { auditResume, createId, createResumeRecord } from "@/lib/careerpath/agents";
 import { getSession, saveServerResume, saveSession } from "@/lib/careerpath/db";
 import type { BuilderSession, CareerPathResume } from "@/lib/careerpath/types";
-import { createId } from "@/lib/careerpath/agents";
-import { checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 import {
@@ -17,38 +15,33 @@ import {
   extractProfileDataAgent,
   detectGapsAgent,
   writeResumeAgent,
-  auditResumeAgent,
-  improveResumeAgent,
   tailorResumeAgent,
 } from "@/lib/careerpath/orchestrator";
-
 import { requireAiAccess } from "@/lib/careerpath/auth";
 
 const MessageRequestSchema = z.object({
   sessionId: z.string().uuid(),
-  message: z.string().max(20000),
-});
+  message: z.string().trim().min(1).max(20_000),
+}).strict();
 
 export async function POST(request: Request) {
   try {
     const auth = await requireAiAccess();
     if (!auth.ok) return auth.response;
 
-    const json = await request.json().catch(() => ({}));
-    const parseResult = MessageRequestSchema.safeParse(json);
-    
-    if (!parseResult.success) {
+    const parsedBody = await readJsonLimited(request, 30_000, MessageRequestSchema);
+    if (!parsedBody.ok) {
+      const status = parsedBody.code === "PAYLOAD_TOO_LARGE" ? 413 : 400;
       return NextResponse.json(
-        { error: { code: "INVALID_INPUT", message: "Invalid payload or size exceeded.", recoverable: true } },
-        { status: 400 },
+        { error: { code: parsedBody.code, message: "Invalid builder request.", recoverable: true } },
+        { status },
       );
     }
-    const body = parseResult.data;
+    const body = parsedBody.data;
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
-    const rateLimit = await checkRateLimit(auth.user?.id || null, ipHash, "builder_message", entitlements.aiActionsPerDay);
-    
+    const rateLimit = await checkAiActionRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMIT_EXCEEDED", message: "Usage limit exceeded.", recoverable: true } },
@@ -64,7 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userMessage = body.message.trim();
+    const userMessage = body.message;
     session.messages.push({
       id: createId(),
       role: "user",
@@ -111,7 +104,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
     session.targetRole = intent.targetRole || userMessage.replace(/[.?!]/g, "").trim();
     session.profile.target.role = session.targetRole;
     session.profile.target.industry = session.profile.target.industry || "Software";
-    session.currentStep = session.mode === "tailor" ? "collect_profile" : "collect_profile";
+    session.currentStep = "collect_profile";
     const assistantMessage =
       session.mode === "tailor"
         ? "Great. Paste your current resume text first. After that I will ask for the job description."
@@ -138,12 +131,9 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
   }
 
   session.profile = await extractProfileDataAgent(userMessage, session.profile, session.targetRole, { userId, sessionId: session.id, resumeId: session.resumeId });
-  if (!session.targetRole && session.profile.target.role) {
-    session.targetRole = session.profile.target.role;
-  }
+  if (!session.targetRole && session.profile.target.role) session.targetRole = session.profile.target.role;
 
   const hasAlreadyAskedQuestions = session.currentStep === "needs_info";
-
   if (!hasAlreadyAskedQuestions) {
     const gapReport = await detectGapsAgent(session.profile, session.mode, { userId, sessionId: session.id, resumeId: session.resumeId });
     if (gapReport.questionsToAsk.length) {
@@ -164,7 +154,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
   const resume = await generateFinalResume(session, "", userId);
   session.currentStep = "generated";
   session.resumeId = resume.id;
-  const assistantMessage = `Your resume is ready! Use the "Gap analysis for my target role" or "Show ATS view" buttons to get feedback.`;
+  const assistantMessage = "Your resume is ready and has passed the built-in audit. Use the Gap analysis or ATS view for additional feedback.";
   session.messages.push(systemMessage(assistantMessage));
   return { session, assistantMessage, resume };
 }
@@ -172,7 +162,7 @@ async function runSessionTurn(session: BuilderSession, userMessage: string, user
 async function generateFinalResume(session: BuilderSession, jobDescription = "", userId?: string) {
   const metadata = { userId, sessionId: session.id, resumeId: session.resumeId };
   const draft = await writeResumeAgent(session.profile, session.mode, jobDescription, metadata);
-  
+
   const resume = createResumeRecord({
     userId: userId || session.userId,
     mode: session.mode,
@@ -187,11 +177,11 @@ async function generateFinalResume(session: BuilderSession, jobDescription = "",
     const tailoring = await tailorResumeAgent(resume.content, session.targetRole, jobDescription, metadata);
     resume.content = tailoring.tailoredResume;
     resume.tailoring = tailoring;
-    // Skip synchronous audit to prevent Vercel timeout
-  } else {
-    // Skip synchronous audit to prevent Vercel timeout
   }
 
+  const audit = auditResume(resume.content, session.targetRole, jobDescription);
+  resume.audit = audit;
+  resume.score = audit.score;
   return resume;
 }
 
