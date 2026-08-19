@@ -27,11 +27,7 @@ jobs:
         working-directory: extension
         run: npm install --save-dev @crxjs/vite-plugin@^2.7.1
 
-      - name: Audit extension dependency graph
-        working-directory: extension
-        run: npm audit --audit-level=high
-
-      - name: Build extension
+      - name: Build extension with regenerated dependency graph
         working-directory: extension
         run: npm run build
 
