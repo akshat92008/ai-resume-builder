@@ -8,11 +8,11 @@ This document defines **release evidence**, not aspirations. A code merge, a gre
 
 Eligible only when all of the following are true:
 
-1. Standard CI is green on the exact commit.
+1. Standard CI is green on the exact source tree being released.
 2. Clean Supabase migration replay succeeds from zero.
 3. Production configuration is valid.
 4. `/api/health/live` reports the exact deployed Git SHA.
-5. `/api/health` reports core configuration, database, Redis, and required observability ready.
+5. `/api/health` reports core configuration, database, Redis, and a supported observability backend ready.
 6. Authenticated deployed E2E passes for two independent users.
 7. At least one real deployed Career Memory -> AI resume -> persistence flow completes through Inngest.
 8. AI-generated resume persistence is proven to pass through truthfulness + provenance enforcement.
@@ -22,7 +22,7 @@ Eligible only when all of the following are true:
 
 ### Core public production
 
-Requires the controlled-free-beta gate plus a completed staging checklist for provider health, Inngest execution, PDF ingestion/export, abuse limits, rollback, and operational ownership.
+Requires the controlled-free-beta gate plus a completed staging checklist for provider health, Inngest execution, PDF ingestion/export, abuse limits, rollback, external alerting, and operational ownership.
 
 ### Paid public production / GA
 
@@ -34,7 +34,7 @@ Requires the core public-production gate **and** a separately completed Razorpay
 
 The canonical environment contract is `.env.example` and validation logic lives in `lib/env.ts`.
 
-Required core values include:
+Required functional core values include:
 
 ```text
 NEXT_PUBLIC_APP_URL
@@ -47,10 +47,10 @@ INNGEST_SIGNING_KEY
 UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
 RATE_LIMIT_SALT
-SENTRY_DSN
-NEXT_PUBLIC_SENTRY_DSN
 NEXT_PUBLIC_SUPPORT_EMAIL
 ```
+
+Observability is a separate readiness check rather than a hard-coded Sentry credential requirement. A controlled Vercel beta may use Vercel Runtime Logs plus CareerOS's privacy-safe browser-error fingerprint endpoint. Sentry remains supported when both `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are configured. Broad public/paid GA should use an external alerting backend such as Sentry or an equivalent.
 
 Production rules:
 
@@ -91,11 +91,16 @@ Deployed qualification must prove:
 - protected API routes fail closed when unauthenticated;
 - signup rejects malformed/oversized input;
 - signup abuse rate limiting is active;
+- the canonical signup route rejects compromised passwords using the HIBP Pwned Passwords k-anonymity range API;
 - user B cannot retrieve user A's data by guessing identifiers.
 
-External Supabase setting to verify manually or through the management API before broad public launch:
+CareerOS's application-layer compromised-password check sends only the first five characters of a SHA-1 password hash, requests padded HIBP responses, and fails closed if the password-safety service is unavailable. It never sends the full password or full hash to HIBP.
 
-- leaked-password protection enabled.
+External Supabase defense-in-depth setting to enable before broad public launch when the project plan supports it:
+
+- native leaked-password protection.
+
+The application-layer check does **not** pretend to enable the Supabase account-level feature and does not eliminate the value of that native control for broad GA.
 
 ---
 
@@ -264,6 +269,10 @@ Verify production logging continues to sanitize authorization, cookies, password
 
 Database telemetry must not retain raw agent input/output where the privacy guard intentionally empties it.
 
+For a controlled Vercel beta, CareerOS may use the `vercel-runtime` backend reported by `/api/health`: server errors are emitted through the structured sanitized logger and browser failures are reduced client-side to SHA-256 fingerprints plus coarse error metadata before being sent to the bounded/rate-limited `/api/observability/client-error` endpoint. Raw browser error messages and stacks are not sent through this first-party path.
+
+For broad public or paid GA, configure external alerting (for example Sentry or an equivalent), deliberately trigger server and browser test errors, and verify that alerts arrive without resume/job content or other PII.
+
 Privacy documentation must accurately disclose that career/resume content may be processed by configured third-party infrastructure such as the LLM provider and async orchestration provider.
 
 ---
@@ -279,7 +288,9 @@ The standard CI pipeline must pass:
 - production Next.js build;
 - Chromium browser smoke;
 - extension dependency audit/build/package verification;
-- clean Supabase migration replay.
+- clean Supabase migration replay;
+- local database lint;
+- pgTAP RLS/security invariants.
 
 The release workflow must then bind the deployment to the exact Git SHA and run authenticated deployed E2E.
 
