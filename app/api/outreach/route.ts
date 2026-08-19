@@ -5,9 +5,9 @@ import { generateOutreachAgent } from "@/lib/careerpath/orchestrator";
 import { getJobApplication } from "@/lib/careerpath/db-jobs";
 import { getServerResume } from "@/lib/careerpath/db";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
-import { checkGlobalAiRateLimit, checkRateLimit } from "@/lib/careerpath/rate-limit";
+import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
-import { getClientIp } from "@/lib/http/request";
+import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import type { CareerProfile } from "@/lib/careerpath/types";
 
@@ -25,26 +25,11 @@ export async function POST(request: Request) {
     const auth = await requireAppAccess();
     if (!auth.ok) return auth.response;
 
-    const raw = await request.text().catch(() => "");
-    if (!raw || new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
+    const parsed = await readJsonLimited(request, MAX_BODY_BYTES, OutreachRequestSchema);
+    if (!parsed.ok) {
       return NextResponse.json(
-        { error: { code: "PAYLOAD_TOO_LARGE", message: "Outreach requests must be 60 KB or smaller." } },
-        { status: 413 },
-      );
-    }
-
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(raw);
-    } catch {
-      return NextResponse.json({ error: { code: "INVALID_JSON", message: "Provide a valid JSON request." } }, { status: 400 });
-    }
-
-    const parsed = OutreachRequestSchema.safeParse(decoded);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Provide a valid resume, optional job, and job description." } },
-        { status: 400 },
+        { error: { code: parsed.code, message: parsed.code === "PAYLOAD_TOO_LARGE" ? "Outreach requests must be 60 KB or smaller." : "Provide a valid resume, optional job, and job description." } },
+        { status: parsed.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
       );
     }
 
@@ -70,13 +55,18 @@ export async function POST(request: Request) {
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
-    const globalLimit = await checkGlobalAiRateLimit(auth.user.id, ipHash, entitlements.aiActionsPerDay);
-    if (!globalLimit.allowed) {
-      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI usage limit exceeded.", recoverable: true } }, { status: 429 });
-    }
-    const featureLimit = await checkRateLimit(auth.user.id, ipHash, "outreach_generate", entitlements.outreachPerDay);
-    if (!featureLimit.allowed) {
-      return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily outreach limit exceeded.", recoverable: true } }, { status: 429 });
+    const rateLimit = await checkAiActionRateLimit(
+      auth.user.id,
+      ipHash,
+      entitlements.aiActionsPerDay,
+      "outreach_generate",
+      entitlements.outreachPerDay,
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI or outreach usage limit exceeded.", recoverable: true } },
+        { status: 429 },
+      );
     }
 
     const outreachPack = await generateOutreachAgent(
