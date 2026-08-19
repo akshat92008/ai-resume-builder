@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   paid-release:
-    name: Paid staging health → auth → entitlement → portal
+    name: Paid staging health → auth → Razorpay entitlement
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,7 +35,7 @@ jobs:
       - name: Require paid-ready deployment health
         env:
           E2E_BASE_URL: ${{ inputs.staging_url }}
-        run: node -e 'fetch(`${process.env.E2E_BASE_URL}/api/health`, {cache:"no-store"}).then(async r=>{const j=await r.json(); if(!r.ok||j.paidReady!==true) throw new Error(`Deployment is not paid-ready: ${JSON.stringify(j)}`); console.log("paidReady=true")})'
+        run: node -e 'fetch(`${process.env.E2E_BASE_URL}/api/health`, {cache:"no-store"}).then(async r=>{const j=await r.json(); if(!r.ok||j.paidReady!==true||j.checks?.billing!=="ready") throw new Error(`Deployment is not paid-ready: ${JSON.stringify(j)}`); console.log("paidReady=true; billing=ready")})'
 
       - name: Require paid test credentials
         env:
@@ -46,7 +46,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify authenticated persistence and paid entitlements
+      - name: Verify authenticated persistence and Razorpay paid entitlements
         env:
           CI: true
           E2E_BASE_URL: ${{ inputs.staging_url }}
