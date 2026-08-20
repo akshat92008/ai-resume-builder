@@ -40,11 +40,13 @@ function keepAchievement(item: AchievementItem, evidence: string): AchievementIt
 }
 
 function keepEducation(item: EducationItem, evidence: string): EducationItem | null {
-  if (!textSupportedByEvidence(item.institution, evidence) && !textSupportedByEvidence(item.degree || "", evidence)) return null;
+  const institution = keep(item.institution, evidence);
+  const degree = keep(item.degree, evidence);
+  if (!institution && !degree) return null;
   return {
     ...item,
-    institution: keep(item.institution, evidence) || item.institution,
-    degree: keep(item.degree, evidence),
+    institution: institution || "",
+    degree,
     field: keep(item.field, evidence),
     branch: keep(item.branch, evidence),
     startDate: keep(item.startDate, evidence),
@@ -60,12 +62,14 @@ function keepEducation(item: EducationItem, evidence: string): EducationItem | n
 }
 
 function keepExperience(item: ExperienceItem, evidence: string): ExperienceItem | null {
-  if (!textSupportedByEvidence(item.company, evidence) && !textSupportedByEvidence(item.title, evidence)) return null;
+  const company = keep(item.company, evidence);
+  const title = keep(item.title, evidence);
+  if (!company && !title) return null;
   const achievements = item.achievements.map((achievement) => keepAchievement(achievement, evidence)).filter(Boolean) as AchievementItem[];
   return {
     ...item,
-    company: keep(item.company, evidence) || item.company,
-    title: keep(item.title, evidence) || item.title,
+    company: company || "",
+    title: title || "",
     location: keep(item.location, evidence),
     startDate: keep(item.startDate, evidence),
     endDate: keep(item.endDate, evidence),
@@ -85,10 +89,10 @@ function keepLink(item: LinkItem, evidence: string): LinkItem | null {
 }
 
 function keepDocument(item: CareerDocument, evidence: string): CareerDocument | null {
-  const supported = textSupportedByEvidence(item.name, evidence)
-    || Boolean(item.url && textSupportedByEvidence(item.url, evidence));
-  if (!supported) return null;
-  return { ...item, notes: keep(item.notes, evidence), url: keep(item.url, evidence) };
+  const name = keep(item.name, evidence);
+  const url = keep(item.url, evidence);
+  if (!name && !url) return null;
+  return { ...item, name: name || "Document", notes: keep(item.notes, evidence), url };
 }
 
 function keepProject(item: ProjectItem, evidence: string): ProjectItem | null {
