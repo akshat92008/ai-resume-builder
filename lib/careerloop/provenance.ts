@@ -284,17 +284,32 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
       });
       return [];
     }
+
     const sourceText = sourceTextForExperience(source);
-    const identityClaim = [item.role, item.company, item.dates, item.location].filter(Boolean).join(" | ");
+    const identityClaim = [item.role, item.company].filter(Boolean).join(" | ");
     const identity = assessClaim(identityClaim, sourceText, 0.35);
     entries.push({ section: "experience", item: `${item.role} @ ${item.company}`, claim: identityClaim, sourceId: source.id, ...identity });
     if (!identity.supported) return [];
+
+    const sanitizeField = (label: string, value: string | undefined) => {
+      if (!value) return value;
+      const assessment = exactClaimAssessment(value, sourceText, `${label} is not represented in the matching Career Memory experience.`);
+      entries.push({ section: "experience", item: `${item.role} @ ${item.company}`, claim: value, sourceId: source.id, ...assessment });
+      return assessment.supported ? value : undefined;
+    };
+
     const bullets = item.bullets.filter((claim) => {
       const assessment = assessClaim(claim, sourceText);
       entries.push({ section: "experience", item: `${item.role} @ ${item.company}`, claim, sourceId: source.id, ...assessment });
       return assessment.supported;
     });
-    return [{ ...item, bullets }];
+
+    return [{
+      ...item,
+      dates: sanitizeField("Experience dates", item.dates),
+      location: sanitizeField("Experience location", item.location),
+      bullets,
+    }];
   });
 
   const projects = content.projects.flatMap((item) => {
@@ -303,17 +318,32 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
       entries.push({ section: "project", item: item.name, claim: item.name, supported: false, confidence: "low", reasons: ["No matching Career Memory project source."] });
       return [];
     }
+
     const sourceText = sourceTextForProject(source);
-    const identityClaim = [item.name, ...(item.techStack || []), item.link].filter(Boolean).join(" | ");
-    const identity = assessClaim(identityClaim, sourceText, 0.35);
-    entries.push({ section: "project", item: item.name, claim: identityClaim, sourceId: source.id, ...identity });
+    const identity = exactClaimAssessment(item.name, sourceText, "Project name is not represented in Career Memory evidence.");
+    entries.push({ section: "project", item: item.name, claim: item.name, sourceId: source.id, ...identity });
     if (!identity.supported) return [];
+
+    const techStack = (item.techStack || []).filter((claim) => {
+      const assessment = exactClaimAssessment(claim, sourceText, "Project technology is not represented in the matching Career Memory project.");
+      entries.push({ section: "project", item: item.name, claim, sourceId: source.id, ...assessment });
+      return assessment.supported;
+    });
+
+    let link = item.link;
+    if (link) {
+      const assessment = exactClaimAssessment(link, sourceText, "Project link is not represented in the matching Career Memory project.");
+      entries.push({ section: "project", item: item.name, claim: link, sourceId: source.id, ...assessment });
+      if (!assessment.supported) link = undefined;
+    }
+
     const bullets = item.bullets.filter((claim) => {
       const assessment = assessClaim(claim, sourceText);
       entries.push({ section: "project", item: item.name, claim, sourceId: source.id, ...assessment });
       return assessment.supported;
     });
-    return [{ ...item, bullets }];
+
+    return [{ ...item, techStack, link, bullets }];
   });
 
   const education = content.education.flatMap((item) => {
@@ -322,10 +352,26 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
       entries.push({ section: "education", item: item.institution || item.degree, claim: [item.institution, item.degree].filter(Boolean).join(" | "), supported: false, confidence: "low", reasons: ["No matching Career Memory education source."] });
       return [];
     }
-    const claim = [item.institution, item.degree, item.dates, item.score, item.location].filter(Boolean).join(" | ");
-    const assessment = assessClaim(claim, sourceTextForEducation(source), 0.3);
-    entries.push({ section: "education", item: item.institution || item.degree, claim, sourceId: source.id, ...assessment });
-    return assessment.supported ? [item] : [];
+
+    const sourceText = sourceTextForEducation(source);
+    const identityClaim = [item.institution, item.degree].filter(Boolean).join(" | ");
+    const identity = assessClaim(identityClaim, sourceText, 0.3);
+    entries.push({ section: "education", item: item.institution || item.degree, claim: identityClaim, sourceId: source.id, ...identity });
+    if (!identity.supported) return [];
+
+    const sanitizeField = (label: string, value: string | undefined) => {
+      if (!value) return value;
+      const assessment = exactClaimAssessment(value, sourceText, `${label} is not represented in the matching Career Memory education entry.`);
+      entries.push({ section: "education", item: item.institution || item.degree, claim: value, sourceId: source.id, ...assessment });
+      return assessment.supported ? value : undefined;
+    };
+
+    return [{
+      ...item,
+      dates: sanitizeField("Education dates", item.dates),
+      score: sanitizeField("Education score", item.score),
+      location: sanitizeField("Education location", item.location),
+    }];
   });
 
   const certifications = content.certifications.flatMap((item) => {
@@ -334,10 +380,25 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
       entries.push({ section: "certification", item: item.name, claim: item.name, supported: false, confidence: "low", reasons: ["No matching Career Memory certification source."] });
       return [];
     }
-    const claim = [item.name, item.issuer, item.date, item.link].filter(Boolean).join(" | ");
-    const assessment = assessClaim(claim, sourceTextForCertification(source), 0.3);
-    entries.push({ section: "certification", item: item.name, claim, sourceId: source.id, ...assessment });
-    return assessment.supported ? [item] : [];
+
+    const sourceText = sourceTextForCertification(source);
+    const identity = exactClaimAssessment(item.name, sourceText, "Certification name is not represented in Career Memory evidence.");
+    entries.push({ section: "certification", item: item.name, claim: item.name, sourceId: source.id, ...identity });
+    if (!identity.supported) return [];
+
+    const sanitizeField = (label: string, value: string | undefined) => {
+      if (!value) return value;
+      const assessment = exactClaimAssessment(value, sourceText, `${label} is not represented in the matching Career Memory certification.`);
+      entries.push({ section: "certification", item: item.name, claim: value, sourceId: source.id, ...assessment });
+      return assessment.supported ? value : undefined;
+    };
+
+    return [{
+      ...item,
+      issuer: sanitizeField("Certification issuer", item.issuer),
+      date: sanitizeField("Certification date", item.date),
+      link: sanitizeField("Certification link", item.link),
+    }];
   });
 
   const achievementSource = normalize(profile.achievements.flatMap((item) => [item.text, item.metric, item.context, item.impact, item.evidence]).filter(Boolean).join(" "));
