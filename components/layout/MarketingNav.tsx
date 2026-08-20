@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Sparkles } from "lucide-react";
+import { ArrowUpRight, Play, Sparkles } from "lucide-react";
 
 export function MarketingNav() {
   return (
@@ -20,7 +20,7 @@ export function MarketingNav() {
           <Link href="/#product" className="transition hover:text-white">Product</Link>
           <Link href="/#how-it-works" className="transition hover:text-white">How it works</Link>
           <Link href="/#trust" className="transition hover:text-white">Trust</Link>
-          <Link href="/#film" className="transition hover:text-white">Product film</Link>
+          <Link href="/#cinematic-demo" className="inline-flex items-center gap-1.5 transition hover:text-white"><Play className="h-3 w-3 fill-current" />Live demo</Link>
         </nav>
 
         <div className="flex items-center gap-1.5">

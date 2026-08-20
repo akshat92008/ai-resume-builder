@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { MarketingNav } from "@/components/layout/MarketingNav";
 import { UltraPremiumLanding } from "@/components/marketing/UltraPremiumLanding";
+import { ImmersiveShowcase } from "@/components/marketing/ImmersiveShowcase";
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#06070b] text-white">
       <MarketingNav />
       <UltraPremiumLanding />
+      <ImmersiveShowcase />
       <footer className="border-t border-white/[0.07] bg-[#05060a] px-4 py-10 text-sm text-white/30">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>

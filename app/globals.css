@@ -148,6 +148,23 @@
   scrollbar-width: none;
 }
 
+/* Dark intelligence-rail helpers reuse the existing summary components. */
+.workspace-dark-summary .text-slate-400 {
+  color: rgba(255, 255, 255, 0.27) !important;
+}
+
+.workspace-dark-summary .text-slate-600 {
+  color: rgba(255, 255, 255, 0.48) !important;
+}
+
+.workspace-dark-summary .text-slate-900 {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.workspace-dark-summary .bg-indigo-400 {
+  background-color: rgb(165 180 252) !important;
+}
+
 /* ------------------------------------------------------------------ */
 /* Print stylesheet — ensures clean resume PDF via browser print       */
 /* ------------------------------------------------------------------ */

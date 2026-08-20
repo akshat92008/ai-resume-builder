@@ -55,8 +55,18 @@ export async function POST(request: Request) {
 
     const safetyCheck = await checkPromptInjection(message);
     if (!safetyCheck.isSafe) {
+      logger.warn("[api/resume-agent] Prompt injection blocked", {
+        userId,
+        reason: safetyCheck.reason,
+      });
       return NextResponse.json(
-        { error: { code: "UNSAFE_INPUT", message: "Your input triggered our safety filters. Please try rephrasing.", recoverable: true } },
+        {
+          error: {
+            code: "UNSAFE_INPUT",
+            message: "CareerOS blocked a likely instruction to override or reveal protected system rules. Resume text, career facts and job descriptions are allowed — remove phrases asking the assistant to ignore, reveal, bypass or override its safeguards, then try again.",
+            recoverable: true,
+          },
+        },
         { status: 400 },
       );
     }
