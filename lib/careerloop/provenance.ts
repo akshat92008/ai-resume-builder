@@ -306,7 +306,7 @@ export function enforceResumeClaimProvenance(content: CareerPathResumeContent, p
 
     return [{
       ...item,
-      dates: sanitizeField("Experience dates", item.dates),
+      dates: sanitizeField("Experience dates", item.dates) || "",
       location: sanitizeField("Experience location", item.location),
       bullets,
     }];
