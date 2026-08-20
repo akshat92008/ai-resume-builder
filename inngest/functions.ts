@@ -9,6 +9,8 @@ import { inngest } from "./client";
 import { getServerResume, saveResumeMessage } from "@/lib/careerpath/db";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { answerCareerQuestionAgent } from "@/lib/careerpath/orchestrator";
+import { safeErrorSummary } from "@/lib/careerpath/telemetry";
+import { logger } from "@/lib/observability/logger";
 import {
   handleCreateResume,
   handleImproveResume,
@@ -75,14 +77,29 @@ export const processResumeIntent = (inngest as any).createFunction(
       const latestResume = resumeId
         ? await getServerResume(resumeId, userId)
         : currentResume;
-      return processIntent(
-        intent,
-        message,
-        latestResume,
-        userId,
-        resumeId,
-        command,
-      );
+
+      try {
+        return await processIntent(
+          intent,
+          message,
+          latestResume,
+          userId,
+          resumeId,
+          command,
+        );
+      } catch (error) {
+        logger.warn("[process-resume-intent] Operation failed cleanly", {
+          intent,
+          operationId,
+          error: safeErrorSummary(error),
+        });
+        return {
+          assistantMessage: "CareerOS could not finish this run within the execution window. Your last saved workspace state is still available. Please retry once.",
+          resume: latestResume,
+          resumeId: latestResume?.id || resumeId || null,
+          workspace: buildCareerWorkspaceState(latestResume),
+        };
+      }
     });
 
     await step.run("save-message", async () => {
