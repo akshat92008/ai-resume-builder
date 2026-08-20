@@ -32,6 +32,16 @@ test.describe("CareerOS public launch smoke", () => {
     await expect(page.getByRole("button", { name: /Sign in/i })).toBeVisible();
   });
 
+  test("signup route renders immediate beta onboarding instead of a dead email-confirmation state", async ({ page }) => {
+    await page.goto("/signup");
+
+    await expect(page.getByRole("heading", { name: /Build your career operating system/i })).toBeVisible();
+    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Create free account/i })).toBeVisible();
+    await expect(page.getByText(/No inbox detour during the controlled beta/i)).toBeVisible();
+  });
+
   test("legal pages are reachable from the public site", async ({ page }) => {
     await page.goto("/");
 
