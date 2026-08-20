@@ -4,21 +4,42 @@ import { requireAppAccess } from "@/lib/careerpath/auth";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { checkPromptInjection } from "@/lib/careerpath/guardrails";
 import { getServerResume, saveResumeMessage } from "@/lib/careerpath/db";
-import { routeCareerCommand } from "@/lib/careerpath/career-os";
+import { buildCareerWorkspaceState, routeCareerCommand } from "@/lib/careerpath/career-os";
 import { inferIntentLLM } from "@/lib/careerpath/orchestrator";
-import { inngest } from "@/inngest/client";
+import { processCareerIntent } from "@/lib/careerpath/process-intent";
+import { safeErrorSummary } from "@/lib/careerpath/telemetry";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import type { AgentIntent } from "@/lib/careerpath/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const MAX_BODY_BYTES = 30_000;
 const RequestSchema = z.object({
   message: z.string().trim().min(1).max(20_000),
   resumeId: z.string().uuid().optional(),
 }).strict();
+
+async function respondWithResult<T extends { assistantMessage: string; resumeId?: string | null }>(input: {
+  result: T;
+  userId: string;
+  intent: AgentIntent;
+  operationId: string;
+  fallbackResumeId?: string | null;
+}) {
+  await saveResumeMessage({
+    userId: input.userId,
+    resumeId: input.result.resumeId || input.fallbackResumeId || null,
+    role: "assistant",
+    content: input.result.assistantMessage,
+    intent: input.intent,
+    operationId: input.operationId,
+  });
+
+  return NextResponse.json({ ...input.result, operationId: input.operationId });
+}
 
 export async function POST(request: Request) {
   try {
@@ -107,21 +128,44 @@ export async function POST(request: Request) {
       operationId,
     });
 
-    const job = await inngest.send({
-      name: "resume/process.intent",
-      data: { intent, message, currentResume, userId, resumeId, command, operationId },
-    });
+    // Interactive CareerOS actions execute in the request instead of waiting on
+    // a background queue. Provider calls are hard-bounded in llm.ts, making the
+    // latency predictable while preserving the same verified-resume pipeline.
+    let result;
+    try {
+      result = await processCareerIntent(
+        intent,
+        message,
+        currentResume,
+        userId,
+        resumeId,
+        command,
+      );
+    } catch (error) {
+      logger.warn("[api/resume-agent] Interactive operation failed cleanly", {
+        intent,
+        operationId,
+        error: safeErrorSummary(error),
+      });
+      result = {
+        assistantMessage: "CareerOS could not finish this run within the execution window. Your last saved workspace state is still available. Please retry once.",
+        resume: currentResume,
+        resumeId: currentResume?.id || resumeId || null,
+        workspace: buildCareerWorkspaceState(currentResume),
+      };
+    }
 
-    return NextResponse.json({
-      jobId: job.ids[0],
+    return respondWithResult({
+      result,
+      userId,
+      intent,
       operationId,
-      status: "queued",
-      assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
+      fallbackResumeId: resumeId,
     });
   } catch (error) {
-    logger.error("[api/resume-agent] Failed to queue operation", { error });
+    logger.error("[api/resume-agent] Failed to execute operation", { error });
     return NextResponse.json(
-      { error: { code: "AGENT_START_FAILED", message: "Unable to start the CareerOS agent right now.", recoverable: true } },
+      { error: { code: "AGENT_START_FAILED", message: "Unable to run the CareerOS agent right now.", recoverable: true } },
       { status: 500 },
     );
   }

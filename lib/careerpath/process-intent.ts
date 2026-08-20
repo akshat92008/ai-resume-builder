@@ -1,0 +1,132 @@
+import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
+import { answerCareerQuestionAgent } from "@/lib/careerpath/orchestrator";
+import {
+  handleCreateResume,
+  handleImproveResume,
+  handleTailorToJob,
+  handleAddInformation,
+  handleRewriteSection,
+  handleGenerateResumeVersion,
+  handleGenerateApplicationPack,
+  handleTrackJobApplication,
+  handleAnalyzeJobSearch,
+  handleStarInterview,
+  handleHumanizeResume,
+  handleEstimateImpact,
+  handleGapAnalysis,
+  handleMultiPersona,
+  handleVisualizeATS,
+  handleGenerateOutreach,
+} from "@/inngest/handlers";
+import type {
+  AgentIntent,
+  CareerPathResume,
+  CareerWorkspaceState,
+} from "@/lib/careerpath/types";
+
+export type CareerIntentResult = {
+  assistantMessage: string;
+  resume: CareerPathResume | null;
+  resumeId: string | null;
+  missingFields?: string[];
+  versionCreated?: boolean;
+  workspace?: CareerWorkspaceState;
+};
+
+export async function processCareerIntent(
+  intent: AgentIntent,
+  message: string,
+  currentResume: CareerPathResume | null,
+  userId: string,
+  resumeId?: string,
+  command?: unknown,
+): Promise<CareerIntentResult> {
+  const metadata = { userId, resumeId };
+
+  switch (intent) {
+    case "CREATE_RESUME":
+      return handleCreateResume(message, userId, metadata);
+    case "IMPROVE_RESUME":
+      return handleImproveResume(message, currentResume, userId, metadata);
+    case "TAILOR_TO_JOB":
+      return handleTailorToJob(message, currentResume, userId, metadata);
+    case "ADD_INFORMATION":
+      return handleAddInformation(message, currentResume, userId, metadata);
+    case "REWRITE_SECTION":
+      return handleRewriteSection(message, currentResume, userId, metadata);
+    case "GENERATE_RESUME_VERSION":
+      return handleGenerateResumeVersion(message, currentResume);
+    case "GENERATE_APPLICATION_PACK":
+      return handleGenerateApplicationPack(message, currentResume, userId, metadata);
+    case "TRACK_JOB_APPLICATION":
+      return handleTrackJobApplication(message, currentResume, userId);
+    case "ANALYZE_JOB_SEARCH":
+      return handleAnalyzeJobSearch(currentResume);
+    case "STAR_INTERVIEW":
+      return handleStarInterview(currentResume, userId, metadata);
+    case "HUMANIZE_RESUME":
+      return handleHumanizeResume(currentResume, userId, metadata);
+    case "ESTIMATE_IMPACT":
+      return handleEstimateImpact(currentResume, userId, metadata);
+    case "GAP_ANALYSIS":
+      return handleGapAnalysis(message, currentResume, userId, metadata);
+    case "MULTI_PERSONA":
+      return handleMultiPersona(currentResume, userId, metadata);
+    case "VISUALIZE_ATS":
+      return handleVisualizeATS(currentResume, userId, metadata);
+    case "GENERATE_OUTREACH":
+      return handleGenerateOutreach(message, currentResume, userId, metadata);
+    case "ASK_MISSING_INFO":
+      return {
+        assistantMessage: "What information would you like to provide? You can share your education, skills, projects, experience, or any career details.",
+        resume: currentResume,
+        resumeId: currentResume?.id || null,
+        workspace: buildCareerWorkspaceState(currentResume),
+      };
+    case "GENERATE_PDF":
+      return {
+        assistantMessage: "To download your resume as PDF, click the **PDF** button in the top bar. It will open the browser print dialog so you can save the verified resume as a PDF.",
+        resume: currentResume,
+        resumeId: currentResume?.id || null,
+        workspace: buildCareerWorkspaceState(currentResume),
+      };
+    case "GENERAL_HELP": {
+      if (
+        command &&
+        typeof command === "object" &&
+        "intent" in command &&
+        (command as { intent?: string }).intent === "optimize_linkedin"
+      ) {
+        const workspace = buildCareerWorkspaceState(currentResume);
+        const linkedIn = workspace.linkedInOptimization;
+        return {
+          assistantMessage: linkedIn
+            ? `LinkedIn optimization is ready.\n\nHeadline: ${linkedIn.headline}\n\nAbout: ${linkedIn.about}\n\nTop skills: ${linkedIn.skills.slice(0, 8).join(", ") || "Add more skills to Career Memory."}`
+            : "Build Career Memory first, then I can generate LinkedIn headline, About, experience updates, skills, Featured items, and SEO keywords.",
+          resume: currentResume,
+          resumeId: currentResume?.id || null,
+          workspace,
+        };
+      }
+
+      const workspace = buildCareerWorkspaceState(currentResume);
+      const answer = await answerCareerQuestionAgent(message, workspace, {
+        ...metadata,
+        fast: true,
+      });
+      return {
+        assistantMessage: answer,
+        resume: currentResume,
+        resumeId: currentResume?.id || null,
+        workspace,
+      };
+    }
+    default:
+      return {
+        assistantMessage: "Tell me what to store or generate: build Career Memory, tailor to a job description, audit the resume, write a cover letter, optimize LinkedIn, track an application, or log a new achievement.",
+        resume: currentResume,
+        resumeId: currentResume?.id || null,
+        workspace: buildCareerWorkspaceState(currentResume),
+      };
+  }
+}
