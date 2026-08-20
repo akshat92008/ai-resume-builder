@@ -85,7 +85,9 @@ export async function processCareerIntent(
       };
     case "GENERATE_PDF":
       return {
-        assistantMessage: "To download your resume as PDF, click the **PDF** button in the top bar. It will open the browser print dialog so you can save the verified resume as a PDF.",
+        assistantMessage: currentResume
+          ? "Click the **PDF** button in the top bar. CareerOS will generate the canonical server PDF, re-parse it, verify the ATS artifact, and only then download it."
+          : "Build or open a resume first. Then the **PDF** button will generate and verify the canonical ATS-safe artifact before download.",
         resume: currentResume,
         resumeId: currentResume?.id || null,
         workspace: buildCareerWorkspaceState(currentResume),
