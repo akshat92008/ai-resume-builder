@@ -21,7 +21,11 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: "npm run dev -- --hostname 127.0.0.1",
+        // CI runs after `next build`, so smoke the actual production server.
+        // Development mode cannot reproduce production-only CSP/static-rendering bugs.
+        command: process.env.CI
+          ? "npm run start -- --hostname 127.0.0.1"
+          : "npm run dev -- --hostname 127.0.0.1",
         url: "http://127.0.0.1:3000",
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
