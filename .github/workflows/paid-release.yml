@@ -94,7 +94,7 @@ jobs:
         run: node -e 'if(!process.env.E2E_EMAIL||!process.env.E2E_PASSWORD) throw new Error("PAID_E2E_EMAIL and PAID_E2E_PASSWORD secrets are required")'
 
       - name: Install Chromium
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Verify paid entitlement and refresh persistence
         env:
