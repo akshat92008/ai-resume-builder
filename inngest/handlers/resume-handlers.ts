@@ -247,7 +247,10 @@ export async function applyBrainToResume(input: {
         score: verified.score,
         audit: verified.audit,
         jobDescription: verified.validation.cleanedResume.target.jobDescription || input.currentResume.jobDescription,
-        version: input.currentResume.version + (input.mode === "build" ? 0 : 1),
+        // Version is the optimistic-concurrency token for the whole persisted
+        // resume aggregate, not only visible document revisions. Every mutation
+        // must advance it so two concurrent writes cannot both succeed.
+        version: input.currentResume.version + 1,
         updatedAt: now,
       }
     : createResumeRecord({
