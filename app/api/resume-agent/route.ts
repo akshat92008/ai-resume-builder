@@ -5,16 +5,16 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { checkPromptInjection } from "@/lib/careerpath/guardrails";
 import { getServerResume, saveResumeMessage } from "@/lib/careerpath/db";
 import { buildCareerWorkspaceState, routeCareerCommand } from "@/lib/careerpath/career-os";
-import { answerCareerQuestionAgent, inferIntentLLM } from "@/lib/careerpath/orchestrator";
-import { handleAnalyzeJobSearch, handleTrackJobApplication } from "@/inngest/handlers/career-handlers";
-import { handleGenerateResumeVersion } from "@/inngest/handlers/resume-handlers";
-import { inngest } from "@/inngest/client";
+import { inferIntentLLM } from "@/lib/careerpath/orchestrator";
+import { processCareerIntent } from "@/lib/careerpath/process-intent";
+import { safeErrorSummary } from "@/lib/careerpath/telemetry";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 import { getCurrentUserEntitlements } from "@/lib/careerpath/entitlements";
 import type { AgentIntent } from "@/lib/careerpath/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const MAX_BODY_BYTES = 30_000;
 const RequestSchema = z.object({
@@ -22,7 +22,7 @@ const RequestSchema = z.object({
   resumeId: z.string().uuid().optional(),
 }).strict();
 
-async function respondWithImmediateResult<T extends { assistantMessage: string; resumeId?: string | null }>(input: {
+async function respondWithResult<T extends { assistantMessage: string; resumeId?: string | null }>(input: {
   result: T;
   userId: string;
   intent: AgentIntent;
@@ -39,15 +39,6 @@ async function respondWithImmediateResult<T extends { assistantMessage: string; 
   });
 
   return NextResponse.json({ ...input.result, operationId: input.operationId });
-}
-
-function isOptimizeLinkedInCommand(command: unknown) {
-  return Boolean(
-    command &&
-    typeof command === "object" &&
-    "intent" in command &&
-    (command as { intent?: string }).intent === "optimize_linkedin",
-  );
 }
 
 export async function POST(request: Request) {
@@ -137,108 +128,44 @@ export async function POST(request: Request) {
       operationId,
     });
 
-    // Fast, deterministic and single-call intents should never wait behind a background queue.
-    // These paths complete inline so tracking a job or asking a career question feels interactive.
-    if (intent === "TRACK_JOB_APPLICATION") {
-      return respondWithImmediateResult({
-        result: await handleTrackJobApplication(message, currentResume, userId),
+    // Interactive CareerOS actions execute in the request instead of waiting on
+    // a background queue. Provider calls are hard-bounded in llm.ts, making the
+    // latency predictable while preserving the same verified-resume pipeline.
+    let result;
+    try {
+      result = await processCareerIntent(
+        intent,
+        message,
+        currentResume,
         userId,
+        resumeId,
+        command,
+      );
+    } catch (error) {
+      logger.warn("[api/resume-agent] Interactive operation failed cleanly", {
         intent,
         operationId,
-        fallbackResumeId: resumeId,
+        error: safeErrorSummary(error),
       });
+      result = {
+        assistantMessage: "CareerOS could not finish this run within the execution window. Your last saved workspace state is still available. Please retry once.",
+        resume: currentResume,
+        resumeId: currentResume?.id || resumeId || null,
+        workspace: buildCareerWorkspaceState(currentResume),
+      };
     }
 
-    if (intent === "ANALYZE_JOB_SEARCH") {
-      return respondWithImmediateResult({
-        result: await handleAnalyzeJobSearch(currentResume),
-        userId,
-        intent,
-        operationId,
-        fallbackResumeId: resumeId,
-      });
-    }
-
-    if (intent === "GENERATE_RESUME_VERSION") {
-      return respondWithImmediateResult({
-        result: await handleGenerateResumeVersion(message, currentResume),
-        userId,
-        intent,
-        operationId,
-        fallbackResumeId: resumeId,
-      });
-    }
-
-    if (intent === "ASK_MISSING_INFO") {
-      return respondWithImmediateResult({
-        result: {
-          assistantMessage: "What information would you like to provide? You can share your education, skills, projects, experience, or any career details.",
-          resume: currentResume,
-          resumeId: currentResume?.id || null,
-          workspace: buildCareerWorkspaceState(currentResume),
-        },
-        userId,
-        intent,
-        operationId,
-        fallbackResumeId: resumeId,
-      });
-    }
-
-    if (intent === "GENERATE_PDF") {
-      return respondWithImmediateResult({
-        result: {
-          assistantMessage: "To download your resume as PDF, click the **PDF** button in the top bar. It will open the browser print dialog so you can save the verified resume as a PDF.",
-          resume: currentResume,
-          resumeId: currentResume?.id || null,
-          workspace: buildCareerWorkspaceState(currentResume),
-        },
-        userId,
-        intent,
-        operationId,
-        fallbackResumeId: resumeId,
-      });
-    }
-
-    if (intent === "GENERAL_HELP") {
-      const workspace = buildCareerWorkspaceState(currentResume);
-      const linkedIn = workspace.linkedInOptimization;
-      const assistantMessage = isOptimizeLinkedInCommand(command)
-        ? linkedIn
-          ? `LinkedIn optimization is ready.\n\nHeadline: ${linkedIn.headline}\n\nAbout: ${linkedIn.about}\n\nTop skills: ${linkedIn.skills.slice(0, 8).join(", ") || "Add more skills to Career Memory."}`
-          : "Build Career Memory first, then I can generate LinkedIn headline, About, experience updates, skills, Featured items, and SEO keywords."
-        : await answerCareerQuestionAgent(message, workspace, { userId, resumeId, fast: true });
-
-      return respondWithImmediateResult({
-        result: {
-          assistantMessage,
-          resume: currentResume,
-          resumeId: currentResume?.id || null,
-          workspace,
-        },
-        userId,
-        intent,
-        operationId,
-        fallbackResumeId: resumeId,
-      });
-    }
-
-    // Multi-step resume creation / improvement stays durable in Inngest, but every
-    // provider call now has a hard deadline so a stalled model cannot hang a run forever.
-    const job = await inngest.send({
-      name: "resume/process.intent",
-      data: { intent, message, currentResume, userId, resumeId, command, operationId },
-    });
-
-    return NextResponse.json({
-      jobId: job.ids[0],
+    return respondWithResult({
+      result,
+      userId,
+      intent,
       operationId,
-      status: "queued",
-      assistantMessage: "I’m working on it now. I’ll update this chat as soon as the agent finishes.",
+      fallbackResumeId: resumeId,
     });
   } catch (error) {
-    logger.error("[api/resume-agent] Failed to start operation", { error });
+    logger.error("[api/resume-agent] Failed to execute operation", { error });
     return NextResponse.json(
-      { error: { code: "AGENT_START_FAILED", message: "Unable to start the CareerOS agent right now.", recoverable: true } },
+      { error: { code: "AGENT_START_FAILED", message: "Unable to run the CareerOS agent right now.", recoverable: true } },
       { status: 500 },
     );
   }
