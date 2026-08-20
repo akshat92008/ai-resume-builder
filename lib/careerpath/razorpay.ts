@@ -114,7 +114,7 @@ export function verifyRazorpayPaymentSignature(input: {
   return safeHexEqual(expected, input.signature);
 }
 
-export function verifyRazorpayWebhookSignature(rawBody: string, signature: string) {
+export function verifyRazorpayWebhookSignature(rawBody: string | Uint8Array, signature: string) {
   const secret = env.RAZORPAY_WEBHOOK_SECRET;
   if (!secret) return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
