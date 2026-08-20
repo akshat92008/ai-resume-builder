@@ -43,6 +43,9 @@ export async function verifyResumeCandidate(input: {
   const legacyProfile = rawLegacyProfile
     ? enforceCareerPathProfileEvidence(rawLegacyProfile)
     : null;
+  // Keep callers from subsequently persisting the pre-gate extractor object.
+  if (rawLegacyProfile && legacyProfile) Object.assign(rawLegacyProfile, legacyProfile);
+
   const rawSourceEvidence = [
     input.instruction,
     legacyProfile?.rawNotes || "",
