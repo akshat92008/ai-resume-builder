@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
-import { getLatestResumeForUser, saveServerResume } from "@/lib/careerpath/db";
+import { getLatestResumeForUser, ResumeConflictError, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerProfile } from "@/lib/careerpath/types";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
@@ -22,7 +22,8 @@ const EditableCareerProfileSchema = z.object({
   achievements: z.array(z.unknown()).max(200).optional(),
   documents: z.array(z.unknown()).max(100).optional(),
   links: z.array(z.unknown()).max(100).optional(),
-  rawInputs: z.array(z.unknown()).max(200).optional(),
+  // rawInputs is deliberately not client-editable. The server appends the exact
+  // authenticated manual mutation below so provenance history cannot be forged.
   gaps: z.array(z.unknown()).max(200).optional(),
   strengths: z.array(z.unknown()).max(200).optional(),
   weaknesses: z.array(z.unknown()).max(200).optional(),
@@ -52,6 +53,9 @@ export async function PUT(req: Request) {
     }
 
     let resume = await getLatestResumeForUser(userId);
+    const existingResume = resume;
+    const expectedVersion = existingResume?.version;
+    const now = new Date().toISOString();
     if (!resume) {
       resume = {
         id: crypto.randomUUID(),
@@ -62,8 +66,8 @@ export async function PUT(req: Request) {
         status: "draft",
         version: 1,
         content: { header: { name: "User", email: "", phone: "", location: "", links: {} } } as unknown as import("@/lib/careerpath/types").CareerPathResumeContent,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
       };
     }
 
@@ -75,23 +79,42 @@ export async function PUT(req: Request) {
       preferences: {},
       education: [], experience: [], projects: [], skills: [], certifications: [], achievements: [],
       documents: [], links: [], rawInputs: [], gaps: [], strengths: [], weaknesses: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const manualEvidence = {
+      id: crypto.randomUUID(),
+      content: JSON.stringify(parsed.data),
+      source: "manual" as const,
+      createdAt: now,
     };
 
     resume.careerProfile = {
       ...existingProfile,
       ...parsed.data,
+      rawInputs: [...(existingProfile.rawInputs || []), manualEvidence].slice(-200),
       id: existingProfile.id || crypto.randomUUID(),
       userId,
-      createdAt: existingProfile.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: existingProfile.createdAt || now,
+      updatedAt: now,
     } as CareerProfile;
-    resume.updatedAt = new Date().toISOString();
+    resume.updatedAt = now;
+    if (expectedVersion !== undefined) resume.version = expectedVersion + 1;
 
-    await saveServerResume(resume, userId);
-    return NextResponse.json({ success: true, careerProfile: resume.careerProfile });
+    await saveServerResume(
+      resume,
+      userId,
+      expectedVersion !== undefined ? { expectedVersion } : {},
+    );
+    return NextResponse.json({ success: true, careerProfile: resume.careerProfile, resumeVersion: resume.version });
   } catch (error) {
+    if (error instanceof ResumeConflictError) {
+      return NextResponse.json(
+        { error: { code: "RESUME_CONFLICT", message: "Career Memory changed while your update was being saved. Reload and retry.", recoverable: true } },
+        { status: 409 },
+      );
+    }
     logger.error("[memory-put] Failed to update career memory", { error });
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: "Failed to update Career Memory." } },

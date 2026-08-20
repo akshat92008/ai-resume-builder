@@ -151,7 +151,8 @@ export default function AppWorkspace() {
   }
 
   function handleDownloadPdf() {
-    window.print();
+    if (!currentResume?.id) return;
+    window.location.assign(`/api/resume/${encodeURIComponent(currentResume.id)}/pdf`);
   }
 
   function useCommand(command: string) {

@@ -41,12 +41,23 @@ function looksLikeCareerDocument(input: string) {
  * Guard only direct attempts to control/subvert the assistant.
  * Resume/JD content is untrusted data downstream and should not be rejected
  * simply because it contains security-adjacent or technical language.
+ *
+ * Callers that have already routed a deterministic product command can disable
+ * the semantic classifier. Explicit injection/reveal/bypass patterns remain
+ * enforced without spending an AI action on deterministic workflows.
  */
-export async function checkPromptInjection(input: string): Promise<{ isSafe: boolean; reason?: string }> {
+export async function checkPromptInjection(
+  input: string,
+  options: { semantic?: boolean } = {},
+): Promise<{ isSafe: boolean; reason?: string }> {
   const truncated = input.slice(0, 4000);
   const deterministicMatch = blockedByDeterministicRule(truncated);
   if (deterministicMatch) {
     return { isSafe: false, reason: `Blocked by deterministic injection rule: ${deterministicMatch.source.slice(0, 80)}` };
+  }
+
+  if (options.semantic === false) {
+    return { isSafe: true };
   }
 
   // Long, structured career payloads are data. Deterministic rules above still

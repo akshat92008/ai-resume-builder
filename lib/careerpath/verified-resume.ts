@@ -1,9 +1,8 @@
 import { auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { enforceResumeClaimProvenance } from "@/lib/careerloop/provenance";
-import {
-  legacyProfileToCareerProfile,
-  refreshCareerProfileInsights,
-} from "@/lib/careerpath/career-os";
+import { enforceCareerProfileSourceEvidence } from "@/lib/careerloop/profile-source";
+import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
+import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
 import { validateResumeTruthfulness } from "@/lib/resume/validator";
@@ -32,15 +31,31 @@ export async function verifyResumeCandidate(input: {
   jobDescription?: string;
   metadata?: VerificationMetadata;
 }) {
-  const legacyProfile = input.legacyProfile ?? input.currentResume?.profile ?? null;
+  const rawLegacyProfile = input.legacyProfile ?? input.currentResume?.profile ?? null;
   const existingCareerProfile = input.careerProfile ?? input.currentResume?.careerProfile ?? null;
-  if (!legacyProfile && !existingCareerProfile) {
+  if (!rawLegacyProfile && !existingCareerProfile) {
     throw new Error("Resume verification requires Career Memory evidence.");
   }
 
-  const evidenceProfile = existingCareerProfile
-    ? refreshCareerProfileInsights(existingCareerProfile)
-    : legacyProfileToCareerProfile(legacyProfile!, input.userId, input.instruction);
+  // The LLM-normalized legacy profile is not itself evidence. Reconcile every
+  // factual field against cumulative raw user notes before conversion, then run
+  // the richer CareerProfile through the same raw-input evidence boundary.
+  const legacyProfile = rawLegacyProfile
+    ? enforceCareerPathProfileEvidence(rawLegacyProfile)
+    : null;
+  // Keep callers from subsequently persisting the pre-gate extractor object.
+  if (rawLegacyProfile && legacyProfile) Object.assign(rawLegacyProfile, legacyProfile);
+
+  const rawSourceEvidence = [
+    input.instruction,
+    legacyProfile?.rawNotes || "",
+    legacyProfile?.existingResumeText || "",
+    ...(existingCareerProfile?.rawInputs || []).map((item) => item.content),
+  ].filter(Boolean).join("\n\n");
+
+  const candidateEvidenceProfile = existingCareerProfile
+    || legacyProfileToCareerProfile(legacyProfile!, input.userId, input.instruction);
+  const evidenceProfile = enforceCareerProfileSourceEvidence(candidateEvidenceProfile, rawSourceEvidence);
 
   const beforeState = input.currentResume
     ? contentToResumeState(input.currentResume.content, {
@@ -60,10 +75,10 @@ export async function verifyResumeCandidate(input: {
       ? "IMPROVE_EXISTING_RESUME"
       : "BUILD_FROM_DATA";
 
-  // Validate against all durable Career Memory evidence, not just the latest
-  // command, so supported metrics survive while newly invented claims do not.
+  // Only raw user-authored sources plus the source-gated Career Memory projection
+  // are allowed to support a persisted resume claim.
   const sourceEvidence = [
-    input.instruction,
+    rawSourceEvidence,
     legacyProfile ? JSON.stringify(legacyProfile) : "",
     JSON.stringify(evidenceProfile),
   ].join("\n");
@@ -98,6 +113,7 @@ export async function verifyResumeCandidate(input: {
     audit,
     score: audit.score,
     careerProfile: evidenceProfile,
+    legacyProfile,
     validation,
     provenance: provenance.report,
   };

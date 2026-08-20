@@ -14,7 +14,7 @@ This checklist distinguishes a **controlled free beta** from broad public/paid G
 - [ ] Chrome extension dependency audit + beta build pass
 - [ ] clean Supabase migration replay succeeds from zero
 - [ ] `supabase db lint --local` passes
-- [ ] pgTAP RLS/security invariants pass
+- [ ] pgTAP RLS/security and Razorpay state-machine invariants pass
 - [ ] GitHub Actions is green on the exact source tree being released
 
 ## Database — controlled beta blocker
@@ -25,6 +25,7 @@ This checklist distinguishes a **controlled free beta** from broad public/paid G
 - [ ] same-tenant foreign-key constraints exist for service-role write paths
 - [ ] RLS denies cross-user reads and writes with two real users
 - [ ] service-role key remains server-only
+- [ ] every mutation of the persisted resume aggregate advances the optimistic `version` token
 
 Before broad GA, also verify backup/PITR and a documented restore procedure appropriate for the production plan.
 
@@ -54,8 +55,8 @@ The application-layer HIBP check is a real controlled-beta protection, but it is
 - [ ] Redis readiness is true
 - [ ] observability readiness is true
 - [ ] when using `vercel-runtime`, a synthetic browser error fingerprint is visible in sanitized Runtime Logs
-- [ ] Inngest processes a real production AI job
-- [ ] NVIDIA NIM completes a real generation through the deployed product path
+- [ ] synchronous `/api/resume-agent` completes a real production NVIDIA NIM generation within the bounded provider execution window
+- [ ] the optional Inngest worker remains deployable for durable/background execution, but normal interactive completion does not depend on queue polling
 - [ ] Upstash deliberately returns a controlled 429 at the configured boundary
 - [ ] production origin is HTTPS
 - [ ] CSP, HSTS, frame denial, referrer policy, permissions policy, and nosniff headers are present
@@ -84,28 +85,46 @@ RAZORPAY_PRO_PLAN_ID
 RAZORPAY_PRO_TOTAL_COUNT
 ```
 
-- [ ] checkout completes in provider test/staging mode
-- [ ] active Pro user cannot accidentally create a duplicate subscription
-- [ ] checkout confirmation signature is verified
-- [ ] duplicate webhook replay is idempotent
-- [ ] stale/out-of-order webhook cannot overwrite newer subscription state
+- [ ] a **fresh Razorpay TEST subscription** completes checkout/payment
+- [ ] checkout confirmation signature is verified over the exact payment/subscription identifiers
+- [ ] public webhook signature is verified over the exact raw, stream-bounded bytes
 - [ ] provider subscription is re-fetched before granting entitlement
 - [ ] configured Razorpay plan is verified before granting Pro
-- [ ] cancellation/downgrade updates entitlement correctly
+- [ ] active Pro user cannot accidentally create a duplicate subscription
+- [ ] duplicate webhook replay is idempotent
+- [ ] stale/out-of-order webhook cannot overwrite newer subscription state
+- [ ] scheduled cancellation preserves Pro through the current period
+- [ ] final cancellation/downgrade updates entitlement to Free
 - [ ] persistence failure produces a retryable non-2xx webhook response
 - [ ] public webhook and confirmation request-size boundaries are verified
+- [ ] `Paid Release Gate` is run against the exact staging SHA and includes a non-secret reference to the fresh provider lifecycle evidence
 - [ ] only after the full lifecycle passes are live credentials/public paid traffic enabled
+
+An already-Pro account is useful for entitlement persistence testing, but **is not** sufficient Paid GA certification.
+
+## Career Memory / truth boundary — controlled beta blocker
+
+- [ ] LLM extractor output is reconciled against cumulative raw user notes before it becomes factual Career Memory
+- [ ] structured Career Memory facts are rechecked against `rawInputs` before they can support a persisted resume claim
+- [ ] authenticated manual Career Memory edits append server-generated source evidence
+- [ ] clients cannot directly forge the `rawInputs` provenance log
+- [ ] unsupported extractor-only skills, employers and metrics are removed in regression tests
 
 ## Critical web flows — controlled beta blocker
 
 - [ ] sign up → login → logout → password reset
 - [ ] upload valid PDF; reject invalid/oversized files
-- [ ] build Career Memory and generate a resume through the async CareerOS agent
-- [ ] operation polling returns only the matching `operationId`
-- [ ] concurrent stale resume mutation returns 409 instead of overwriting newer data
+- [ ] build Career Memory and generate a resume through the synchronous CareerOS agent
+- [ ] interactive response returns machine-readable `status` and UUID `operationId`
+- [ ] status compatibility lookup returns only the matching tenant-bound `operationId`
+- [ ] deterministic product commands do not consume an AI action solely for routing
+- [ ] concurrent stale resume/Career Memory/Power Tool mutation returns 409 instead of overwriting newer data
 - [ ] refresh and confirm Career Memory/resume/application data persists
 - [ ] tailor to a job without inventing unsupported skills or metrics
+- [ ] Humanize cannot bypass the canonical truth/provenance boundary
+- [ ] application-pack tailoring cannot bypass the canonical truth/provenance boundary
 - [ ] adversarial unsupported claims are removed by the canonical verification pipeline
+- [ ] visible PDF action downloads the canonical server-generated artifact
 - [ ] ATS audit + generated PDF round-trip remain parseable
 - [ ] Apply/Skip works from pasted JD and a supported public HTTPS URL
 - [ ] Career Twin evidence graph renders from real memory
@@ -124,4 +143,4 @@ Until the second item is proven, the Chrome extension remains **beta** and is no
 
 ## Launch decision
 
-A controlled free beta requires green CI, current production migrations, ready health checks, exact deployed-SHA binding, and the deployed authenticated core E2E gate. Broad public production additionally requires repository protection, native account/auth hardening where available, active external alerting, backup/restore verification, and operational ownership. Paid GA additionally requires the complete Razorpay lifecycle gate above.
+A controlled free beta requires green CI, current production migrations, ready health checks, exact deployed-SHA binding, and the deployed authenticated synchronous core E2E gate. Broad public production additionally requires repository protection, native account/auth hardening where available, active external alerting, backup/restore verification, and operational ownership. Paid GA additionally requires the complete Razorpay lifecycle gate above.

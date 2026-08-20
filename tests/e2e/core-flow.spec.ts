@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type BrowserContext } from "@playwright/test";
+import { test, expect, type BrowserContext } from "@playwright/test";
 
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
@@ -19,19 +19,6 @@ async function login(context: BrowserContext, username: string, secret: string) 
   await page.getByRole("button", { name: /login/i }).click();
   await page.waitForURL(/\/app(?:$|\?)/, { timeout: 30_000 });
   return page;
-}
-
-async function pollOperation(request: APIRequestContext, operationId: string, resumeId?: string) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const params = new URLSearchParams({ operationId });
-    if (resumeId) params.set("resumeId", resumeId);
-    const response = await request.get(`/api/resume-agent/status?${params.toString()}`);
-    expect(response.status()).toBe(200);
-    const payload = await response.json();
-    if (payload.done) return payload;
-    await new Promise((resolve) => setTimeout(resolve, attempt < 5 ? 1_500 : 2_500));
-  }
-  throw new Error(`CareerOS operation ${operationId} did not complete within the release timeout.`);
 }
 
 function stringifyResumeContent(value: unknown) {
@@ -114,9 +101,9 @@ test.describe("authenticated CareerOS release flow", () => {
     await refreshedContextA.close();
   });
 
-  test("real Career Memory → Inngest AI → verified improve/tailor → PDF with exact operation isolation", async ({ browser }) => {
+  test("real Career Memory → synchronous AI → verified humanize/improve/tailor → PDF with exact operation isolation", async ({ browser }) => {
     test.skip(!runRealAiE2E, "Set RUN_REAL_AI_E2E=true only for the deployed release gate.");
-    test.setTimeout(210_000);
+    test.setTimeout(360_000);
 
     const contextA = await browser.newContext();
     const pageA = await login(contextA, email!, password!);
@@ -128,24 +115,28 @@ test.describe("authenticated CareerOS release flow", () => {
       },
     });
     expect(createAgent.status()).toBe(200);
-    const queued = await createAgent.json();
-    expect(queued.status).toBe("queued");
-    expect(queued.operationId).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(queued.jobId).toBeTruthy();
-
-    const completed = await pollOperation(pageA.request, queued.operationId);
-    expect(completed.done).toBe(true);
-    expect(completed.latestAssistant?.content).toBeTruthy();
+    const completed = await createAgent.json();
+    expect(completed.status).toBe("completed");
+    expect(completed.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(completed.assistantMessage).toBeTruthy();
     const resumeId = completed.resumeId as string;
     expect(resumeId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(completed.resume?.careerProfile).toBeTruthy();
     expect(stringifyResumeContent(completed.resume?.content)).toContain("react");
     expect(stringifyResumeContent(completed.resume?.content)).toContain("120");
 
+    // The compatibility status endpoint still resolves the saved assistant result
+    // immediately, but the interactive API no longer depends on queue polling.
+    const ownStatus = await pageA.request.get(`/api/resume-agent/status?operationId=${completed.operationId}&resumeId=${resumeId}`);
+    expect(ownStatus.status()).toBe(200);
+    const ownStatusPayload = await ownStatus.json();
+    expect(ownStatusPayload.done).toBe(true);
+    expect(ownStatusPayload.resumeId).toBe(resumeId);
+
     // Operation correlation is tenant-bound: User B cannot discover User A's completion.
     const contextB = await browser.newContext();
     const pageB = await login(contextB, userBEmail!, userBPassword!);
-    const userBStatus = await pageB.request.get(`/api/resume-agent/status?operationId=${queued.operationId}&resumeId=${resumeId}`);
+    const userBStatus = await pageB.request.get(`/api/resume-agent/status?operationId=${completed.operationId}&resumeId=${resumeId}`);
     expect(userBStatus.status()).toBe(200);
     expect((await userBStatus.json()).done).toBe(false);
     expect((await pageB.request.get(`/api/resume/${resumeId}`)).status()).toBe(404);
@@ -153,7 +144,7 @@ test.describe("authenticated CareerOS release flow", () => {
     expect((await pageB.request.delete(`/api/resume/${resumeId}`)).status()).toBe(404);
 
     // Introduce an explicit user-authored unsupported claim, then prove that the
-    // AI improve persistence boundary strips it against durable Career Memory.
+    // Humanize path itself cannot bypass the canonical truth/provenance boundary.
     const currentResponse = await pageA.request.get(`/api/resume/${resumeId}`);
     expect(currentResponse.status()).toBe(200);
     const currentPayload = await currentResponse.json();
@@ -166,6 +157,28 @@ test.describe("authenticated CareerOS release flow", () => {
     const seedUnsupported = await pageA.request.patch(`/api/resume/${resumeId}`, { data: { content } });
     expect(seedUnsupported.status()).toBe(200);
     expect(stringifyResumeContent((await seedUnsupported.json()).resume.content)).toContain("900");
+
+    const humanize = await pageA.request.post("/api/resume-agent", {
+      data: { resumeId, message: "Humanize my resume wording. Do not add or remove factual claims." },
+    });
+    expect(humanize.status()).toBe(200);
+    const humanized = await humanize.json();
+    expect(humanized.status).toBe("completed");
+    expect(humanized.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(stringifyResumeContent(humanized.resume?.content)).not.toContain("900");
+
+    // Seed the unsupported claim again and verify the dedicated Improve endpoint
+    // applies the same canonical boundary.
+    const afterHumanizeResponse = await pageA.request.get(`/api/resume/${resumeId}`);
+    expect(afterHumanizeResponse.status()).toBe(200);
+    const afterHumanizePayload = await afterHumanizeResponse.json();
+    const contentForImprove = structuredClone(afterHumanizePayload.resume.content);
+    contentForImprove.experience[0].bullets = [
+      ...(contentForImprove.experience[0].bullets || []),
+      "Increased company revenue by 900% through a global optimization program",
+    ];
+    const reseedUnsupported = await pageA.request.patch(`/api/resume/${resumeId}`, { data: { content: contentForImprove } });
+    expect(reseedUnsupported.status()).toBe(200);
 
     const improve = await pageA.request.post("/api/resume/improve", { data: { resumeId } });
     expect(improve.status()).toBe(200);
