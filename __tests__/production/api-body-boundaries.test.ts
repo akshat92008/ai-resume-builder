@@ -5,11 +5,8 @@ import { join, relative } from "node:path";
 const API_ROOT = join(process.cwd(), "app", "api");
 const ALLOWED_DIRECT_BODY_READS = new Set([
   // Multipart parsing is preceded by an explicit Content-Length boundary and
-  // followed by an actual File.size check in this route.
+  // followed by an actual File.size check in this authenticated route.
   "app/api/extract-pdf/route.ts",
-  // Webhook signature verification requires the exact raw provider body; this
-  // route applies declared and actual byte limits before processing it.
-  "app/api/razorpay/webhook/route.ts",
 ]);
 
 function routeFiles(dir: string): string[] {
