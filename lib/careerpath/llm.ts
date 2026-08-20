@@ -3,6 +3,26 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { LanguageModel } from "ai";
 
+const DEFAULT_FAST_AI_TIMEOUT_MS = 15_000;
+const DEFAULT_STANDARD_AI_TIMEOUT_MS = 30_000;
+
+function configuredTimeoutMs(fast?: boolean): number {
+  const raw = fast ? process.env.AI_REQUEST_TIMEOUT_MS_FAST : process.env.AI_REQUEST_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed >= 1_000 && parsed <= 120_000) return parsed;
+  return fast ? DEFAULT_FAST_AI_TIMEOUT_MS : DEFAULT_STANDARD_AI_TIMEOUT_MS;
+}
+
+function createBoundedFetch(timeoutMs: number): typeof fetch {
+  return async (input, init) => {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = init?.signal
+      ? AbortSignal.any([init.signal, timeoutSignal])
+      : timeoutSignal;
+    return fetch(input, { ...init, signal });
+  };
+}
+
 export function getModel(fast?: boolean): LanguageModel {
   const apiKey = process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_API_KEY;
   if (!apiKey) throw new Error("AI provider is not configured for this deployment.");
@@ -10,6 +30,7 @@ export function getModel(fast?: boolean): LanguageModel {
   const nvidia = createOpenAI({
     baseURL: process.env.NVIDIA_NIM_BASE_URL || "https://integrate.api.nvidia.com/v1",
     apiKey,
+    fetch: createBoundedFetch(configuredTimeoutMs(fast)),
   });
 
   const modelName = fast
@@ -24,12 +45,16 @@ export function getModel(fast?: boolean): LanguageModel {
  * This avoids silently relying on stale/deprecated model IDs in production.
  */
 export function getFallbackModel(fast?: boolean): LanguageModel | undefined {
+  const timeoutMs = configuredTimeoutMs(fast);
   const anthropicModel = fast
     ? process.env.ANTHROPIC_FALLBACK_MODEL_FAST
     : process.env.ANTHROPIC_FALLBACK_MODEL;
 
   if (process.env.ANTHROPIC_API_KEY && anthropicModel) {
-    const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const anthropic = createAnthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      fetch: createBoundedFetch(timeoutMs),
+    });
     return anthropic(anthropicModel);
   }
 
@@ -38,7 +63,10 @@ export function getFallbackModel(fast?: boolean): LanguageModel | undefined {
     : process.env.OPENAI_FALLBACK_MODEL;
 
   if (process.env.OPENAI_API_KEY && openAIModel) {
-    const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = createOpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      fetch: createBoundedFetch(timeoutMs),
+    });
     return openai(openAIModel);
   }
 
