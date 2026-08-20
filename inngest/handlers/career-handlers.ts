@@ -63,25 +63,28 @@ export async function handleGenerateApplicationPack(message: string, currentResu
 
 export async function handleTrackJobApplication(message: string, currentResume: CareerPathResume | null, userId: string) {
   if (!currentResume) return { assistantMessage: "I can track applications after there is a resume in the workspace. Build or paste your resume details first, then say what job you applied to.", resume: null, resumeId: null, missingFields: ["resume"], workspace: buildCareerWorkspaceState(null) };
-  const expectedVersion = currentResume.version;
   decorateResumeForCareerOS(currentResume, message);
   const job = currentResume.jobDescription ? extractJobDescription(currentResume.jobDescription) : extractJobDescription(message);
   const baseApplication = createJobApplicationFromCommand(message, userId, currentResume, job);
   const intelligence = currentResume.careerProfile ? analyzeCareerLoopJob(job, currentResume.careerProfile) : null;
   const application: CareerLoopJobApplication = {
     ...baseApplication,
-    resumeVersion: expectedVersion,
+    resumeVersion: currentResume.version,
     source: inferJobSource(baseApplication.jobUrl),
     fitScore: intelligence?.fitPercentage,
     fitRecommendation: intelligence?.recommendation,
   };
+
+  // job_applications is the canonical store for tracked jobs. Do not perform a
+  // second resume-row write after this insert: if that CAS conflicted, the API
+  // could report failure even though the job was already durably tracked, and a
+  // retry could create a duplicate. App-state reloads canonical jobs and attaches
+  // them to the resume on every request.
   await saveJobApplication(application, userId);
   const applications = [application, ...(currentResume.applications || []).filter((item) => item.id !== application.id)].slice(0, MAX_TRACKED_APPLICATIONS);
   currentResume.applications = applications;
   currentResume.jobSearchInsights = analyzeJobSearchPerformance(applications, [currentResume.resumeDocument!]);
-  currentResume.version = expectedVersion + 1;
-  currentResume.updatedAt = new Date().toISOString();
-  await saveServerResume(currentResume, currentResume.userId, { expectedVersion });
+
   const fit = intelligence ? ` CareerLoop rated the role ${intelligence.fitPercentage}% fit (${intelligence.recommendation.toUpperCase()}).` : "";
   return { assistantMessage: `Tracked ${application.company} — ${application.role} as ${application.status.replaceAll("_", " ")}.${fit} Next action: ${application.followUpAt ? "follow up in about 5 days if there is no reply" : "prepare the application pack before applying"}.`, resume: currentResume, resumeId: currentResume.id, workspace: buildCareerWorkspaceState(currentResume, message) };
 }
