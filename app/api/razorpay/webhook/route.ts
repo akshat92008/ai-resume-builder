@@ -7,6 +7,7 @@ import {
 } from "@/lib/careerpath/razorpay";
 import { persistRazorpaySubscriptionState } from "@/lib/careerpath/razorpay-billing-sync";
 import { razorpaySubscriptionSnapshot } from "@/lib/careerpath/razorpay-state";
+import { RequestBodyError, readBytesLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
 
 export const dynamic = "force-dynamic";
@@ -31,24 +32,22 @@ export async function POST(request: Request) {
   const signature = request.headers.get("x-razorpay-signature");
   if (!signature) return NextResponse.json({ error: "Missing Razorpay signature." }, { status: 400 });
 
-  const contentLength = request.headers.get("content-length");
-  if (contentLength) {
-    const announcedBytes = Number(contentLength);
-    if (!Number.isFinite(announcedBytes) || announcedBytes < 0 || announcedBytes > MAX_WEBHOOK_BYTES) {
+  let rawBytes: Uint8Array;
+  try {
+    rawBytes = await readBytesLimited(request, MAX_WEBHOOK_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyError && error.code === "PAYLOAD_TOO_LARGE") {
       return NextResponse.json({ error: "Webhook payload is too large." }, { status: 413 });
     }
+    throw error;
   }
 
-  const rawBody = await request.text();
-  if (Buffer.byteLength(rawBody, "utf8") > MAX_WEBHOOK_BYTES) {
-    return NextResponse.json({ error: "Webhook payload is too large." }, { status: 413 });
-  }
-
-  if (!verifyRazorpayWebhookSignature(rawBody, signature)) {
+  if (!verifyRazorpayWebhookSignature(rawBytes, signature)) {
     logger.warn("[api/razorpay/webhook] Signature verification failed");
     return NextResponse.json({ error: "Invalid webhook signature." }, { status: 400 });
   }
 
+  const rawBody = Buffer.from(rawBytes).toString("utf8");
   let event: RazorpayWebhookPayload;
   try {
     event = JSON.parse(rawBody) as RazorpayWebhookPayload;
@@ -67,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   const headerEventId = request.headers.get("x-razorpay-event-id");
-  const eventId = headerEventId || `body:${createHash("sha256").update(rawBody).digest("hex")}`;
+  const eventId = headerEventId || `body:${createHash("sha256").update(rawBytes).digest("hex")}`;
   const eventCreated = Number.isFinite(event.created_at) ? Number(event.created_at) : Math.floor(Date.now() / 1000);
 
   try {
