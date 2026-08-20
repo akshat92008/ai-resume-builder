@@ -49,21 +49,28 @@ export type LimitedJsonResult<T> =
   | { ok: true; data: T }
   | { ok: false; code: "PAYLOAD_TOO_LARGE" | "INVALID_JSON" | "VALIDATION_ERROR" };
 
-async function readTextLimited(request: Request, maxBytes: number): Promise<string> {
+/**
+ * Streams the exact request bytes through a hard cap. This is suitable for
+ * signed webhook bodies because the caller can verify the signature over the
+ * original bytes without first buffering an unbounded request.
+ */
+export async function readBytesLimited(request: Request, maxBytes: number): Promise<Uint8Array> {
   const declaredLengthHeader = request.headers.get("content-length");
   if (declaredLengthHeader) {
     const declaredLength = Number(declaredLengthHeader);
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    if (!Number.isFinite(declaredLength) || declaredLength < 0) {
+      throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload length is invalid.");
+    }
+    if (declaredLength > maxBytes) {
       throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
     }
   }
 
-  if (!request.body) return "";
+  if (!request.body) return new Uint8Array();
 
   const reader = request.body.getReader();
-  const decoder = new TextDecoder();
+  const chunks: Uint8Array[] = [];
   let totalBytes = 0;
-  let raw = "";
 
   try {
     while (true) {
@@ -76,13 +83,24 @@ async function readTextLimited(request: Request, maxBytes: number): Promise<stri
         await reader.cancel("payload-too-large").catch(() => undefined);
         throw new RequestBodyError("PAYLOAD_TOO_LARGE", "Request payload is too large.");
       }
-      raw += decoder.decode(value, { stream: true });
+      chunks.push(value);
     }
-    raw += decoder.decode();
-    return raw;
   } finally {
     reader.releaseLock();
   }
+
+  const output = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+export async function readTextLimited(request: Request, maxBytes: number): Promise<string> {
+  const bytes = await readBytesLimited(request, maxBytes);
+  return new TextDecoder().decode(bytes);
 }
 
 async function readRawJson<T = unknown>(request: Request, maxBytes: number): Promise<T> {
