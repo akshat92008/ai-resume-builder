@@ -6,6 +6,15 @@ const nextConfig: NextConfig = {
   images: { remotePatterns: [] },
   transpilePackages: ["motion"],
   serverExternalPackages: ["pdf-parse"],
+  // pdf-parse v2 lazily imports its PDF.js worker at runtime. Next/Vercel's
+  // server file tracer does not discover that dynamic relative import when the
+  // package is externalized, so the production lambda otherwise ships without
+  // pdf.worker.mjs and canonical ATS round-trip verification fails at runtime.
+  outputFileTracingIncludes: {
+    "/api/resume/[id]/pdf": [
+      "./node_modules/pdf-parse/dist/pdf-parse/cjs/pdf.worker.mjs",
+    ],
+  },
   async headers() {
     return [{
       source: "/(.*)",
