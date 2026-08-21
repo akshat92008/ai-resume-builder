@@ -7,6 +7,17 @@ import type {
   HumanizedResume,
 } from "./types";
 
+const runtimeFallbackContents = new WeakSet<object>();
+
+function markRuntimeFallback(content: CareerPathResumeContent): CareerPathResumeContent {
+  runtimeFallbackContents.add(content);
+  return content;
+}
+
+export function isRuntimeFallbackContent(content: CareerPathResumeContent) {
+  return runtimeFallbackContents.has(content);
+}
+
 function normalize(value: unknown) {
   return String(value ?? "")
     .toLowerCase()
@@ -70,7 +81,7 @@ export function fallbackResumeFromProfile(profile: CareerPathProfile): CareerPat
   addSkills("AI Tools", profile.skills.aiTools);
   addSkills("Soft Skills", profile.skills.softSkills);
 
-  return {
+  return markRuntimeFallback({
     header: {
       name: profile.personal.name || "",
       email: profile.personal.email || "",
@@ -116,7 +127,7 @@ export function fallbackResumeFromProfile(profile: CareerPathProfile): CareerPat
     })),
     achievements: unique(profile.achievements),
     languages: unique(profile.languages),
-  };
+  });
 }
 
 function clampScore(value: number) {
@@ -185,7 +196,7 @@ export function fallbackResumeAudit(
 }
 
 export function fallbackImproveResume(content: CareerPathResumeContent): CareerPathResumeContent {
-  return cloneResumeContent(content);
+  return markRuntimeFallback(cloneResumeContent(content));
 }
 
 export function fallbackTailorResume(
@@ -204,13 +215,13 @@ export function fallbackTailorResume(
     safeKeywordsAdded: [],
     missingKeywordsNotAdded,
     tailoringSummary: ["External tailoring model was unavailable; preserved the verified resume without inventing missing keywords."],
-    tailoredResume: cloneResumeContent(content),
+    tailoredResume: markRuntimeFallback(cloneResumeContent(content)),
   };
 }
 
 export function fallbackHumanizedResume(content: CareerPathResumeContent): HumanizedResume {
   return {
-    content: cloneResumeContent(content),
+    content: markRuntimeFallback(cloneResumeContent(content)),
     changes: [],
     clisheesRemoved: [],
     summary: "External humanization model was unavailable; preserved the verified wording and factual content unchanged.",
