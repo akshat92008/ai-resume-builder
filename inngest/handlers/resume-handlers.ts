@@ -24,6 +24,12 @@ import {
 } from "@/lib/careerpath/career-os";
 import { saveServerResume, saveResumeVersion } from "@/lib/careerpath/db";
 import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
+import { reconcileExtractedProfileWithEvidence } from "@/lib/careerpath/profile-evidence";
+import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
+import {
+  mergeDeterministicProfileEvidence,
+  preserveDeterministicResumeEvidence,
+} from "@/lib/careerpath/deterministic-evidence";
 import { decorateResumeForCareerOS, emptyCareerPathProfile } from "./shared";
 import type {
   CareerPathProfile,
@@ -138,12 +144,30 @@ export async function applyBrainToResume(input: {
   let assistantMessage = "";
 
   if (input.mode === "build") {
-    legacyProfile = await extractProfileDataAgent(
+    const previousLegacyProfile = legacyProfile;
+    const extractedLegacyProfile = await extractProfileDataAgent(
       input.message,
-      legacyProfile,
+      previousLegacyProfile,
       input.currentResume?.targetRole || "",
       input.metadata,
     );
+
+    // Source-gate extraction before the writer ever sees it. Then recover a
+    // conservative subset of explicit first-person facts directly from the
+    // authenticated message so provider timeouts cannot collapse a new user's
+    // Career Memory to an empty profile.
+    legacyProfile = reconcileExtractedProfileWithEvidence({
+      message: input.message,
+      existing: previousLegacyProfile,
+      extracted: extractedLegacyProfile,
+    });
+    legacyProfile = mergeDeterministicProfileEvidence({
+      message: input.message,
+      profile: legacyProfile,
+      targetRole: input.currentResume?.targetRole || "",
+    });
+    legacyProfile = enforceCareerPathProfileEvidence(legacyProfile);
+
     let gaps: GapReport = {
       readyToGenerate: true,
       questionsToAsk: [],
@@ -214,6 +238,16 @@ export async function applyBrainToResume(input: {
     );
     if (!assistantMessage) assistantMessage = "Created a new resume based on your profile.";
   }
+
+  // Generative writing may rephrase supported evidence, but it must not erase
+  // source-backed proof such as explicit test counts. For tailor/improve we only
+  // preserve previously gated Career Memory facts; job-description numbers are
+  // never treated as candidate evidence.
+  candidateContent = preserveDeterministicResumeEvidence({
+    content: candidateContent,
+    profile: legacyProfile,
+    message: input.mode === "build" ? input.message : "",
+  });
 
   const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
   const verified = await verifyResumeCandidate({
