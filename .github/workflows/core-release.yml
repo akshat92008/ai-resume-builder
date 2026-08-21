@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: core-release-${{ github.ref }}
@@ -21,6 +22,7 @@ concurrency:
 
 env:
   RELEASE_DEPLOYMENT_URL: ${{ inputs.deployment_url || 'https://ai-resume-builder-ivory-nine.vercel.app' }}
+  RELEASE_STATUS_CONTEXT: Core Commercial Release Gate
 
 jobs:
   certify-core:
@@ -35,6 +37,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Mark production certification pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-release-status.mjs pending
 
       - name: Validate deployment URL
         env:
@@ -203,3 +210,15 @@ jobs:
             playwright-report/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Mark production certification failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-release-status.mjs failure
+
+      - name: Mark production certification successful
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-release-status.mjs success
