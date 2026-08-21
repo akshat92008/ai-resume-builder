@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { getLatestResumeForUser, ResumeConflictError, saveServerResume } from "@/lib/careerpath/db";
 import type { CareerProfile } from "@/lib/careerpath/types";
+import { createEmptyResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
@@ -65,7 +66,7 @@ export async function PUT(req: Request) {
         mode: "build",
         status: "draft",
         version: 1,
-        content: { header: { name: "User", email: "", phone: "", location: "", links: {} } } as unknown as import("@/lib/careerpath/types").CareerPathResumeContent,
+        content: createEmptyResumeContent("User"),
         createdAt: now,
         updatedAt: now,
       };
