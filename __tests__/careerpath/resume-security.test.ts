@@ -20,6 +20,7 @@ vi.mock("../../lib/careerpath/auth", () => ({
 }));
 
 import { getServerResume, saveResumeVersion, saveServerResume } from "../../lib/careerpath/db";
+import { auditResume } from "../../lib/careerpath/agents";
 
 const existingResume = {
   id: "123e4567-e89b-12d3-a456-426614174000",
@@ -94,7 +95,7 @@ describe("Resume Security & PATCH", () => {
     expect(saveResumeVersion).toHaveBeenCalledWith(expect.objectContaining({
       userId: "user_1",
       resumeId: existingResume.id,
-      resumeJson: existingResume.content,
+      resumeJson: expect.objectContaining({ summary: "Old summary" }),
     }));
 
     const savedArg = (saveServerResume as any).mock.calls[0][0];
@@ -108,6 +109,61 @@ describe("Resume Security & PATCH", () => {
     expect(json.resume.version).toBe(6);
     expect(saveServerResume).toHaveBeenCalledWith(
       expect.objectContaining({ id: existingResume.id, version: 6 }),
+      "user_1",
+      { expectedVersion: 5 },
+    );
+  });
+
+  it("accepts a full generated-content round trip when the database job description is null", async () => {
+    const generatedResume = {
+      ...existingResume,
+      jobDescription: null,
+      content: {
+        header: { name: "Release Candidate", email: "", phone: "", location: "", links: {} },
+        summary: "Software engineering intern",
+        skills: [{ category: "Programming", items: ["React", "TypeScript"] }],
+        experience: [{
+          company: "Example Labs",
+          role: "Software Engineering Intern",
+          dates: "2025 – 2026",
+          bullets: ["Wrote 120 automated tests"],
+        }],
+        projects: [{ name: "Inventory Dashboard", techStack: ["React", "TypeScript"], bullets: [] }],
+        education: [],
+        certifications: [],
+        achievements: [],
+        languages: [],
+      },
+    };
+    (getServerResume as any).mockResolvedValueOnce(generatedResume);
+
+    const editedContent = structuredClone(generatedResume.content);
+    editedContent.experience[0].bullets.push(
+      "Increased company revenue by 900% through a global optimization program",
+    );
+
+    const request = new Request(`http://localhost/api/resume/${generatedResume.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: editedContent }),
+    });
+
+    const response = await PATCH(request, { params: Promise.resolve({ id: generatedResume.id }) });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(auditResume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experience: [expect.objectContaining({
+          bullets: expect.arrayContaining(["Increased company revenue by 900% through a global optimization program"]),
+        })],
+      }),
+      "Software Engineer",
+      "",
+    );
+    expect(json.resume.content.experience[0].bullets.join(" ")).toContain("900%");
+    expect(saveServerResume).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 6 }),
       "user_1",
       { expectedVersion: 5 },
     );
