@@ -19,7 +19,9 @@ import { logger } from "@/lib/observability/logger";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
-const EditResumeSchema = ResumePayloadSchema.strict();
+const EditResumeSchema = ResumePayloadSchema.extend({
+  expectedVersion: z.number().int().nonnegative(),
+}).strict();
 
 function databaseFailure(error: unknown, fallbackCode: string, fallbackMessage: string) {
   const unavailable = error instanceof DatabaseUnavailableError;
@@ -95,7 +97,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         { status: parsed.code === "PAYLOAD_TOO_LARGE" ? 413 : 400 },
       );
     }
-    const body = parsed.data;
+    const { expectedVersion, ...body } = parsed.data;
+
+    // Optimistic concurrency must be based on the version the caller actually
+    // edited, not a fresh version read inside this request. Otherwise a second
+    // overlapping request can observe the first winner's new version and also
+    // succeed, silently overwriting it. The database conditional update below
+    // remains the final atomic guard against two writers using the same version.
+    if (expectedVersion !== resume.version) throw new ResumeConflictError();
 
     await saveResumeVersion({
       userId: auth.user.id,
@@ -129,7 +138,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     );
     updated.audit = audit;
     updated.score = audit.score;
-    await saveServerResume(updated, auth.user.id, { expectedVersion: resume.version });
+    await saveServerResume(updated, auth.user.id, { expectedVersion });
 
     return NextResponse.json({ resume: updated });
   } catch (error: unknown) {
