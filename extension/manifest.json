@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CareerOS Job Clipper",
   "version": "1.0.0",
-  "description": "Clip jobs and auto-fill applications directly from CareerOS",
+  "description": "Clip jobs directly into your CareerOS tracker.",
   "permissions": [
     "activeTab",
     "storage"
@@ -11,7 +11,7 @@
     "https://*.linkedin.com/*",
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
-    "https://app.careeros.ai/*",
+    "https://ai-resume-builder-ivory-nine.vercel.app/*",
     "http://localhost:3000/*"
   ],
   "icons": {
