@@ -43,10 +43,12 @@ function stringifyResumeContent(value: unknown) {
 }
 
 test.describe("authenticated CareerOS release flow", () => {
-  // Production auth and network calls can legitimately take longer than the
-  // Playwright default 30s total-test budget. Keep the suite strict but give
-  // non-AI release checks enough wall-clock time for multiple logins/round trips.
-  test.describe.configure({ mode: "serial", timeout: 120_000 });
+  // This suite intentionally mutates durable production state and consumes the
+  // real per-user AI quota. Automatic retries against the same disposable user
+  // would not replay from a clean state and can turn a later assertion failure
+  // into a misleading RATE_LIMIT_EXCEEDED failure. The release workflow itself
+  // provisions fresh users for every run, so keep each run single-attempt.
+  test.describe.configure({ mode: "serial", timeout: 120_000, retries: 0 });
   test.skip(!email || !password || !userBEmail || !userBPassword, "Authenticated two-user release credentials are not configured.");
 
   test("memory → job → stage → refresh persistence with cross-tenant isolation", async ({ browser }) => {
