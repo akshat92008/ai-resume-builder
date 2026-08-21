@@ -180,7 +180,9 @@ test.describe("authenticated CareerOS release flow", () => {
       ...(content.experience[0].bullets || []),
       "Increased company revenue by 900% through a global optimization program",
     ];
-    const seedUnsupported = await apiA.patch(`/api/resume/${resumeId}`, { data: { content } });
+    const seedUnsupported = await apiA.patch(`/api/resume/${resumeId}`, {
+      data: { expectedVersion: currentPayload.resume.version, content },
+    });
     expect(seedUnsupported.status()).toBe(200);
     expect(stringifyResumeContent((await seedUnsupported.json()).resume.content)).toContain("900");
 
@@ -201,7 +203,9 @@ test.describe("authenticated CareerOS release flow", () => {
       ...(contentForImprove.experience[0].bullets || []),
       "Increased company revenue by 900% through a global optimization program",
     ];
-    const reseedUnsupported = await apiA.patch(`/api/resume/${resumeId}`, { data: { content: contentForImprove } });
+    const reseedUnsupported = await apiA.patch(`/api/resume/${resumeId}`, {
+      data: { expectedVersion: afterHumanizePayload.resume.version, content: contentForImprove },
+    });
     expect(reseedUnsupported.status()).toBe(200);
 
     const improve = await apiA.post("/api/resume/improve", { data: { resumeId } });
@@ -228,9 +232,13 @@ test.describe("authenticated CareerOS release flow", () => {
     expect(Number(pdf.headers()["x-careeros-ats-artifact-score"] || "0")).toBeGreaterThan(0);
     expect((await pdf.body()).byteLength).toBeGreaterThan(500);
 
+    const preConcurrent = await apiA.get(`/api/resume/${tailoredId}`);
+    expect(preConcurrent.status()).toBe(200);
+    const preConcurrentPayload = await preConcurrent.json();
+    const concurrentVersion = preConcurrentPayload.resume.version as number;
     const concurrent = await Promise.all([
-      apiA.patch(`/api/resume/${tailoredId}`, { data: { title: `Concurrent A ${marker}` } }),
-      apiA.patch(`/api/resume/${tailoredId}`, { data: { title: `Concurrent B ${marker}` } }),
+      apiA.patch(`/api/resume/${tailoredId}`, { data: { expectedVersion: concurrentVersion, title: `Concurrent A ${marker}` } }),
+      apiA.patch(`/api/resume/${tailoredId}`, { data: { expectedVersion: concurrentVersion, title: `Concurrent B ${marker}` } }),
     ]);
     expect(concurrent.map((response) => response.status()).sort()).toEqual([200, 409]);
 
