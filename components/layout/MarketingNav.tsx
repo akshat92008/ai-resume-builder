@@ -4,7 +4,7 @@ import { ArrowUpRight, Play, Sparkles } from "lucide-react";
 export function MarketingNav() {
   return (
     <header className="site-header fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl border border-white/[0.11] bg-[#090b12]/72 px-3.5 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl sm:px-4">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl border border-white/[0.11] bg-[#080a10]/78 px-3.5 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur-2xl sm:px-4">
         <Link href="/" className="group flex items-center gap-2.5" aria-label="CareerOS home">
           <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-[11px] border border-white/10 bg-white/[0.07] text-white shadow-[0_10px_30px_rgba(99,102,241,0.18)]">
             <Sparkles className="relative z-10 h-3.5 w-3.5" />
@@ -20,7 +20,7 @@ export function MarketingNav() {
           <Link href="/#product" className="transition hover:text-white">Product</Link>
           <Link href="/#how-it-works" className="transition hover:text-white">How it works</Link>
           <Link href="/#trust" className="transition hover:text-white">Trust</Link>
-          <Link href="/#cinematic-demo" className="inline-flex items-center gap-1.5 transition hover:text-white"><Play className="h-3 w-3 fill-current" />Live demo</Link>
+          <Link href="/#demo" className="inline-flex items-center gap-1.5 transition hover:text-white"><Play className="h-3 w-3 fill-current" />See it work</Link>
         </nav>
 
         <div className="flex items-center gap-1.5">

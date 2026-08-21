@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Validate deployment URL
@@ -41,6 +41,32 @@ jobs:
           E2E_BASE_URL: ${{ env.RELEASE_DEPLOYMENT_URL }}
         run: |
           node -e 'const u=new URL(process.env.E2E_BASE_URL); if(u.protocol!=="https:") { console.error("deployment_url must use HTTPS"); process.exit(1); }'
+
+      - name: Require authenticated release credentials
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_USER_B_EMAIL: ${{ secrets.E2E_USER_B_EMAIL }}
+          E2E_USER_B_PASSWORD: ${{ secrets.E2E_USER_B_PASSWORD }}
+        run: |
+          node <<'NODE'
+          const required = [
+            "E2E_EMAIL",
+            "E2E_PASSWORD",
+            "E2E_USER_B_EMAIL",
+            "E2E_USER_B_PASSWORD",
+          ];
+          const missing = required.filter((key) => !process.env[key] || process.env[key].trim().length === 0);
+          if (missing.length > 0) {
+            console.error(`Authenticated production certification is blocked. Missing GitHub Actions secrets: ${missing.join(", ")}`);
+            process.exit(1);
+          }
+          if (process.env.E2E_EMAIL === process.env.E2E_USER_B_EMAIL) {
+            console.error("Production certification requires two distinct accounts for cross-tenant isolation.");
+            process.exit(1);
+          }
+          console.log("Authenticated release credentials are present for two distinct accounts.");
+          NODE
 
       - name: Install dependencies
         run: npm ci
