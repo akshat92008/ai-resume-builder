@@ -7,16 +7,20 @@ const nextConfig = readFileSync(join(root, "next.config.ts"), "utf8");
 const atsArtifact = readFileSync(join(root, "lib/careerpath/ats-artifact.ts"), "utf8");
 
 describe("canonical PDF production bundle", () => {
-  it("ships the lazy pdf-parse worker required by the Vercel PDF route", () => {
-    expect(nextConfig).toContain('serverExternalPackages: ["pdf-parse"]');
-    expect(nextConfig).toContain('"/api/resume/[id]/pdf"');
-    expect(nextConfig).toContain('"./node_modules/pdf-parse/dist/pdf-parse/cjs/pdf.worker.mjs"');
+  it("uses the documented pdf-parse Next.js/Vercel runtime dependencies", () => {
+    expect(nextConfig).toContain('serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"]');
+    expect(nextConfig).not.toContain("outputFileTracingIncludes");
   });
 
-  it("keeps canonical PDF verification on the real pdf-parse v2 parser", () => {
+  it("boots pdf-parse through its embedded serverless worker before parsing", () => {
+    expect(atsArtifact).toContain('require("pdf-parse/worker")');
+    expect(atsArtifact).toContain('const { CanvasFactory, getData }');
+    expect(atsArtifact).toContain("PDFParse.setWorker(getData())");
+    expect(atsArtifact).toContain("CanvasFactory");
     expect(atsArtifact).toContain('const { PDFParse } = require("pdf-parse")');
     expect(atsArtifact).toContain("await parser.getText()");
     expect(atsArtifact).toContain("await parser.destroy()");
+    expect(atsArtifact).not.toContain("class DOMMatrix {}");
     expect(atsArtifact).not.toContain('require("pdf-parse") as (input: Buffer)');
   });
 });
