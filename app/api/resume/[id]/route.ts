@@ -12,6 +12,7 @@ import {
 } from "@/lib/careerpath/db";
 import type { CareerPathResume, CareerPathResumeContent } from "@/lib/careerpath/types";
 import { ResumePayloadSchema, mergeResumeContent } from "@/lib/careerpath/types";
+import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import { requireAppAccess } from "@/lib/careerpath/auth";
 import { readJsonLimited } from "@/lib/http/request";
 import { logger } from "@/lib/observability/logger";
@@ -50,6 +51,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         { status: 404 },
       );
     }
+    resume.content = normalizeResumeContent(resume.content);
     return NextResponse.json({ resume });
   } catch (error: unknown) {
     logger.error("[api/resume/[id]] GET failed", { error });
@@ -73,6 +75,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         { status: 404 },
       );
     }
+
+    // Database JSON may predate the current complete content shape. Normalize
+    // before snapshot/merge so a valid manual edit can never reach downstream
+    // auditing with missing arrays or nested header links.
+    resume.content = normalizeResumeContent(resume.content);
 
     const parsed = await readJsonLimited(request, 100_000, EditResumeSchema);
     if (!parsed.ok) {
@@ -98,16 +105,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       reason: "Pre-edit snapshot",
     });
 
+    const mergedContent = body.content
+      ? normalizeResumeContent(mergeResumeContent(resume.content, body.content as Partial<CareerPathResumeContent>))
+      : resume.content;
+
     const updated: CareerPathResume = {
       ...resume,
       ...body,
       id: resume.id,
       userId: resume.userId,
-      content: body.content ? mergeResumeContent(resume.content, body.content as Partial<CareerPathResumeContent>) : resume.content,
+      content: mergedContent,
       version: resume.version + 1,
       updatedAt: new Date().toISOString(),
     };
-    const audit = auditResume(updated.content, updated.targetRole, updated.jobDescription);
+
+    // Supabase returns SQL NULL as runtime `null`; the hydrated TypeScript type
+    // is optional, so passing that value through without coercion bypasses a
+    // default parameter and can make keyword matching call `.match` on null.
+    const audit = auditResume(
+      updated.content,
+      typeof updated.targetRole === "string" ? updated.targetRole : "",
+      typeof updated.jobDescription === "string" ? updated.jobDescription : "",
+    );
     updated.audit = audit;
     updated.score = audit.score;
     await saveServerResume(updated, auth.user.id, { expectedVersion: resume.version });
