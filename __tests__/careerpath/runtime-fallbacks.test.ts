@@ -5,6 +5,7 @@ import {
   fallbackResumeAudit,
   fallbackResumeFromProfile,
   fallbackTailorResume,
+  isRuntimeFallbackContent,
 } from "@/lib/careerpath/runtime-fallbacks";
 import {
   createEmptyResumeContent,
@@ -62,6 +63,7 @@ describe("runtime AI fallbacks", () => {
     expect(text).toContain("120");
     expect(text).toContain("example labs");
     expect(text).not.toContain("kubernetes");
+    expect(isRuntimeFallbackContent(content)).toBe(true);
   });
 
   it("audits deterministically without changing factual content", () => {
@@ -83,9 +85,10 @@ describe("runtime AI fallbacks", () => {
     expect(tailored.missingKeywordsNotAdded).toContain("Kubernetes");
     expect(tailored.safeKeywordsAdded).toEqual([]);
     expect(text).not.toContain("kubernetes");
+    expect(isRuntimeFallbackContent(tailored.tailoredResume)).toBe(true);
   });
 
-  it("improve and humanize fallbacks are safe no-op clones", () => {
+  it("improve and humanize fallbacks are safe no-op clones and stay marked degraded", () => {
     const content = fallbackResumeFromProfile(profile());
     const improved = fallbackImproveResume(content);
     const humanized = fallbackHumanizedResume(content);
@@ -95,6 +98,8 @@ describe("runtime AI fallbacks", () => {
     expect(humanized.content).toEqual(content);
     expect(humanized.changes).toEqual([]);
     expect(humanized.clisheesRemoved).toEqual([]);
+    expect(isRuntimeFallbackContent(improved)).toBe(true);
+    expect(isRuntimeFallbackContent(humanized.content)).toBe(true);
   });
 });
 
