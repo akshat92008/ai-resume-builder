@@ -46,14 +46,25 @@ export function verifyExtractedResumeText(content: CareerPathResumeContent, extr
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Invalid PDF signature");
+
+  // pdf-parse v2 no longer exports a callable `pdf(buffer)` function. Its
+  // supported Node/Vercel API is the PDFParse class. Keep the import lazy so
+  // PDF.js is initialized only on export requests, after the small DOM shims it
+  // expects in headless Node have been installed.
   const globals = globalThis as unknown as Record<string, unknown>;
   if (typeof globals.DOMMatrix === "undefined") globals.DOMMatrix = class DOMMatrix {};
   if (typeof globals.Path2D === "undefined") globals.Path2D = class Path2D {};
   if (typeof globals.ImageData === "undefined") globals.ImageData = class ImageData {};
+
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require("pdf-parse") as (input: Buffer) => Promise<{ text?: string }>;
-  const result = await pdfParse(buffer);
-  return String(result.text || "").trim();
+  const { PDFParse } = require("pdf-parse") as typeof import("pdf-parse");
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  try {
+    const result = await parser.getText();
+    return String(result.text || "").trim();
+  } finally {
+    await parser.destroy();
+  }
 }
 
 export async function verifyResumePdfArtifact(content: CareerPathResumeContent, buffer: Buffer) {
