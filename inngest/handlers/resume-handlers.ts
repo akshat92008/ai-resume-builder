@@ -30,6 +30,13 @@ import {
   mergeDeterministicProfileEvidence,
   preserveDeterministicResumeEvidence,
 } from "@/lib/careerpath/deterministic-evidence";
+import {
+  fallbackImproveResume,
+  fallbackResumeAudit,
+  fallbackResumeFromProfile,
+  fallbackTailorResume,
+} from "@/lib/careerpath/runtime-fallbacks";
+import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import { decorateResumeForCareerOS, emptyCareerPathProfile } from "./shared";
 import type {
   CareerPathProfile,
@@ -53,6 +60,7 @@ export async function handleImproveResume(
   metadata: { userId: string; resumeId?: string },
 ) {
   if (!currentResume) return applyBrainToResume({ message, currentResume: null, userId, mode: "improve", metadata });
+  currentResume.content = normalizeResumeContent(currentResume.content);
   await saveResumeVersion({
     userId,
     resumeId: currentResume.id,
@@ -70,6 +78,7 @@ export async function handleTailorToJob(
   metadata: { userId: string; resumeId?: string },
 ) {
   if (!currentResume) return applyBrainToResume({ message, currentResume: null, userId, mode: "tailor", metadata });
+  currentResume.content = normalizeResumeContent(currentResume.content);
   await saveResumeVersion({
     userId,
     resumeId: currentResume.id,
@@ -86,6 +95,7 @@ export async function handleAddInformation(
   userId: string,
   metadata: { userId: string; resumeId?: string },
 ) {
+  if (currentResume) currentResume.content = normalizeResumeContent(currentResume.content);
   return applyBrainToResume({ message, currentResume, userId, mode: "build", metadata });
 }
 
@@ -102,6 +112,7 @@ export async function handleRewriteSection(
       resumeId: null,
     };
   }
+  currentResume.content = normalizeResumeContent(currentResume.content);
   return applyBrainToResume({ message, currentResume, userId, mode: "improve", metadata });
 }
 
@@ -116,6 +127,7 @@ export async function handleGenerateResumeVersion(message: string, currentResume
     };
   }
 
+  currentResume.content = normalizeResumeContent(currentResume.content);
   decorateResumeForCareerOS(currentResume, message);
   const versions = generateSmartResumeVersions(currentResume, currentResume.careerProfile!);
   const requested = versions.find((version) => message.toLowerCase().includes(version.versionType.replace("_", " "))) || versions[0];
@@ -135,6 +147,7 @@ export async function applyBrainToResume(input: {
   metadata?: { userId: string; resumeId?: string };
   versionCreated?: boolean;
 }) {
+  if (input.currentResume) input.currentResume.content = normalizeResumeContent(input.currentResume.content);
   let legacyProfile: CareerPathProfile = input.currentResume?.profile || emptyCareerPathProfile(input.userId);
   const existingCareerProfile = input.currentResume?.careerProfile
     ? refreshCareerProfileInsights(input.currentResume.careerProfile)
@@ -142,6 +155,7 @@ export async function applyBrainToResume(input: {
   let profile = existingCareerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
   let achievementLogResult: ReturnType<typeof applyAchievementLog>["result"] | null = null;
   let assistantMessage = "";
+  let degradedByProvider = false;
 
   if (input.mode === "build") {
     const previousLegacyProfile = legacyProfile;
@@ -205,37 +219,62 @@ export async function applyBrainToResume(input: {
 
   if (input.mode === "tailor" && input.currentResume) {
     const jobDesc = input.message;
-    tailoringResult = await tailorResumeAgent(
-      input.currentResume.content,
-      input.currentResume.targetRole || "",
-      jobDesc,
-      input.metadata,
-    );
+    try {
+      tailoringResult = await tailorResumeAgent(
+        input.currentResume.content,
+        input.currentResume.targetRole || "",
+        jobDesc,
+        input.metadata,
+      );
+    } catch {
+      degradedByProvider = true;
+      tailoringResult = fallbackTailorResume(input.currentResume.content, jobDesc);
+    }
     candidateContent = tailoringResult.tailoredResume;
     missingKeywords = tailoringResult.missingKeywordsNotAdded;
     matchedKeywords = tailoringResult.matchedKeywords;
     assistantMessage = `Tailored the resume toward the job. Matched: ${matchedKeywords.join(", ") || "none yet"}. Missing from your resume: ${missingKeywords.join(", ") || "none detected"}. I did not add missing skills without confirmation.`;
   } else if (input.mode === "improve" && input.currentResume) {
-    const audit = await auditResumeAgent(
-      input.currentResume.content,
-      input.currentResume.targetRole || "",
-      input.currentResume.jobDescription || "",
-      input.metadata,
-    );
-    candidateContent = await improveResumeAgent(
-      input.currentResume.content,
-      audit,
-      input.currentResume.targetRole || "",
-      input.metadata,
-    );
+    let audit;
+    try {
+      audit = await auditResumeAgent(
+        input.currentResume.content,
+        input.currentResume.targetRole || "",
+        input.currentResume.jobDescription || "",
+        input.metadata,
+      );
+    } catch {
+      degradedByProvider = true;
+      audit = fallbackResumeAudit(
+        input.currentResume.content,
+        input.currentResume.targetRole || "",
+        input.currentResume.jobDescription || "",
+      );
+    }
+    try {
+      candidateContent = await improveResumeAgent(
+        input.currentResume.content,
+        audit,
+        input.currentResume.targetRole || "",
+        input.metadata,
+      );
+    } catch {
+      degradedByProvider = true;
+      candidateContent = fallbackImproveResume(input.currentResume.content);
+    }
     assistantMessage = "Improved the wording and formatting while preserving your original details.";
   } else {
-    candidateContent = await writeResumeAgent(
-      legacyProfile,
-      input.mode,
-      input.currentResume?.jobDescription || "",
-      input.metadata,
-    );
+    try {
+      candidateContent = await writeResumeAgent(
+        legacyProfile,
+        input.mode,
+        input.currentResume?.jobDescription || "",
+        input.metadata,
+      );
+    } catch {
+      degradedByProvider = true;
+      candidateContent = fallbackResumeFromProfile(legacyProfile);
+    }
     if (!assistantMessage) assistantMessage = "Created a new resume based on your profile.";
   }
 
@@ -267,6 +306,9 @@ export async function applyBrainToResume(input: {
 
   if (verified.provenance.removedClaims > 0) {
     assistantMessage += ` Removed ${verified.provenance.removedClaims} unsupported claim${verified.provenance.removedClaims === 1 ? "" : "s"} that could not be linked back to Career Memory evidence.`;
+  }
+  if (degradedByProvider) {
+    assistantMessage += " The external AI service was slow, so CareerOS used its source-backed fallback and kept the operation available without inventing facts.";
   }
 
   const now = new Date().toISOString();
