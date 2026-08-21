@@ -31,6 +31,7 @@ export async function verifyResumeCandidate(input: {
   targetRole: string;
   jobDescription?: string;
   metadata?: VerificationMetadata;
+  useDeterministicAudit?: boolean;
 }) {
   const rawLegacyProfile = input.legacyProfile ?? input.currentResume?.profile ?? null;
   const existingCareerProfile = input.careerProfile ?? input.currentResume?.careerProfile ?? null;
@@ -103,18 +104,22 @@ export async function verifyResumeCandidate(input: {
   content = provenance.content;
 
   let audit;
-  try {
-    audit = await auditResumeAgent(
-      content,
-      input.targetRole,
-      input.jobDescription || "",
-      input.metadata,
-    );
-  } catch {
-    // Audit quality should degrade gracefully when the external model is slow;
-    // the canonical truth/provenance checks above are deterministic and remain
-    // mandatory. The fallback audit never changes resume facts.
+  if (input.useDeterministicAudit) {
     audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
+  } else {
+    try {
+      audit = await auditResumeAgent(
+        content,
+        input.targetRole,
+        input.jobDescription || "",
+        input.metadata,
+      );
+    } catch {
+      // Audit quality should degrade gracefully when the external model is slow;
+      // the canonical truth/provenance checks above are deterministic and remain
+      // mandatory. The fallback audit never changes resume facts.
+      audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
+    }
   }
 
   return {
