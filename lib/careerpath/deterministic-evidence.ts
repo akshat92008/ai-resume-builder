@@ -106,7 +106,7 @@ function extractExperience(message: string) {
 
 function extractProject(message: string) {
   const match = message.match(
-    /\bbuilt\s+(?:an?\s+)?([^,.!?]{2,100}?)\s+using\s+([^.!?]{2,240}?)(?=(?:,\s*(?:and\s+)?(?:implemented|wrote|created|developed|designed|added|launched|tested)\b)|[.!?]|$)/i,
+    /\bbuilt\s+(?:an?\s+)?([^,.!?]{2,100}?)\s+using\s+([^!?]{2,240}?)(?=(?:,\s*(?:and\s+)?(?:implemented|wrote|created|developed|designed|added|launched|tested)\b)|[!?]|\.(?:\s|$)|$)/i,
   );
   if (!match) return null;
   const name = cleanFragment(match[1]);
