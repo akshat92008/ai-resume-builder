@@ -3,7 +3,7 @@ import { enforceResumeClaimProvenance } from "@/lib/careerloop/provenance";
 import { enforceCareerProfileSourceEvidence } from "@/lib/careerloop/profile-source";
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
-import { fallbackResumeAudit } from "@/lib/careerpath/runtime-fallbacks";
+import { fallbackResumeAudit, isRuntimeFallbackContent } from "@/lib/careerpath/runtime-fallbacks";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
 import { validateResumeTruthfulness } from "@/lib/resume/validator";
@@ -99,12 +99,13 @@ export async function verifyResumeCandidate(input: {
     },
   );
 
+  const fallbackContent = isRuntimeFallbackContent(input.content);
   let content = deriveRenderableResume(validation.cleanedResume);
   const provenance = enforceResumeClaimProvenance(content, evidenceProfile);
   content = provenance.content;
 
   let audit;
-  if (input.useDeterministicAudit) {
+  if (input.useDeterministicAudit || fallbackContent) {
     audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
   } else {
     try {
