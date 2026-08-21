@@ -5,32 +5,44 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiUrlInput = document.getElementById("api-url") as HTMLInputElement;
   const appLink = document.getElementById("app-link") as HTMLAnchorElement;
 
-  // Load saved API URL
+  function showError(message: string) {
+    errorMsg.textContent = message;
+    errorMsg.style.display = "block";
+  }
+
+  function updateAppLink(apiUrl: string) {
+    try {
+      const url = new URL(apiUrl);
+      appLink.href = `${url.origin}/jobs`;
+    } catch {
+      // Keep the known-good production dashboard link.
+    }
+  }
+
   chrome.runtime.sendMessage({ action: "GET_API_URL" }, (response) => {
     if (response?.url) {
       apiUrlInput.value = response.url;
-      // Update the dashboard link to match the configured server
-      try {
-        const url = new URL(response.url);
-        appLink.href = `${url.origin}/jobs`;
-      } catch {
-        // Keep default link
-      }
+      updateAppLink(response.url);
     }
   });
 
-  // Save API URL on change
   apiUrlInput.addEventListener("change", () => {
     const url = apiUrlInput.value.trim();
-    if (url) {
-      chrome.runtime.sendMessage({ action: "SET_API_URL", url });
-      try {
-        const parsed = new URL(url);
-        appLink.href = `${parsed.origin}/jobs`;
-      } catch {
-        // Invalid URL, ignore
+    if (!url) return;
+
+    errorMsg.style.display = "none";
+    chrome.runtime.sendMessage({ action: "SET_API_URL", url }, (response) => {
+      if (!response?.success) {
+        showError(response?.error || "That API server is not allowed.");
+        chrome.runtime.sendMessage({ action: "GET_API_URL" }, (current) => {
+          if (current?.url) apiUrlInput.value = current.url;
+        });
+        return;
       }
-    }
+
+      apiUrlInput.value = response.url;
+      updateAppLink(response.url);
+    });
   });
 
   clipBtn.addEventListener("click", async () => {
@@ -48,8 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const response = await chrome.tabs.sendMessage(tab.id, { action: "CLIP_JOB" });
 
-      if (response && response.success) {
-        // Send the extracted data to the background worker to post to the API
+      if (response?.success) {
         chrome.runtime.sendMessage(
           { action: "SAVE_JOB_TO_API", data: { ...response.data, jobUrl: tab.url } },
           (apiResponse) => {
@@ -57,21 +68,20 @@ document.addEventListener("DOMContentLoaded", () => {
               successMsg.style.display = "block";
               clipBtn.textContent = "Clipped!";
             } else {
-              errorMsg.textContent = apiResponse?.error || "Failed to save to CareerOS";
-              errorMsg.style.display = "block";
+              showError(apiResponse?.error || "Failed to save to CareerOS");
               clipBtn.disabled = false;
               clipBtn.textContent = "Try Again";
             }
-          }
+          },
         );
       } else {
-        errorMsg.style.display = "block";
+        showError("Could not read a supported job description on this page.");
         clipBtn.disabled = false;
         clipBtn.textContent = "Clip Job to Tracker";
       }
     } catch (err) {
       console.error(err);
-      errorMsg.style.display = "block";
+      showError(err instanceof Error ? err.message : "Failed to clip this job.");
       clipBtn.disabled = false;
       clipBtn.textContent = "Clip Job to Tracker";
     }
