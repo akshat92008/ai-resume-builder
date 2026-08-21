@@ -16,7 +16,7 @@ async function login(context: BrowserContext, username: string, secret: string) 
   await page.goto("/login?next=/app");
   await page.getByLabel("Email").fill(username);
   await page.getByLabel("Password").fill(secret);
-  await page.getByRole("button", { name: /login/i }).click();
+  await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL(/\/app(?:$|\?)/, { timeout: 30_000 });
   return page;
 }
@@ -26,7 +26,10 @@ function stringifyResumeContent(value: unknown) {
 }
 
 test.describe("authenticated CareerOS release flow", () => {
-  test.describe.configure({ mode: "serial" });
+  // Production auth and network calls can legitimately take longer than the
+  // Playwright default 30s total-test budget. Keep the suite strict but give
+  // non-AI release checks enough wall-clock time for multiple logins/round trips.
+  test.describe.configure({ mode: "serial", timeout: 120_000 });
   test.skip(!email || !password || !userBEmail || !userBPassword, "Authenticated two-user release credentials are not configured.");
 
   test("memory → job → stage → refresh persistence with cross-tenant isolation", async ({ browser }) => {
@@ -125,15 +128,12 @@ test.describe("authenticated CareerOS release flow", () => {
     expect(stringifyResumeContent(completed.resume?.content)).toContain("react");
     expect(stringifyResumeContent(completed.resume?.content)).toContain("120");
 
-    // The compatibility status endpoint still resolves the saved assistant result
-    // immediately, but the interactive API no longer depends on queue polling.
     const ownStatus = await pageA.request.get(`/api/resume-agent/status?operationId=${completed.operationId}&resumeId=${resumeId}`);
     expect(ownStatus.status()).toBe(200);
     const ownStatusPayload = await ownStatus.json();
     expect(ownStatusPayload.done).toBe(true);
     expect(ownStatusPayload.resumeId).toBe(resumeId);
 
-    // Operation correlation is tenant-bound: User B cannot discover User A's completion.
     const contextB = await browser.newContext();
     const pageB = await login(contextB, userBEmail!, userBPassword!);
     const userBStatus = await pageB.request.get(`/api/resume-agent/status?operationId=${completed.operationId}&resumeId=${resumeId}`);
@@ -143,8 +143,6 @@ test.describe("authenticated CareerOS release flow", () => {
     expect((await pageB.request.patch(`/api/resume/${resumeId}`, { data: { title: "cross-tenant" } })).status()).toBe(404);
     expect((await pageB.request.delete(`/api/resume/${resumeId}`)).status()).toBe(404);
 
-    // Introduce an explicit user-authored unsupported claim, then prove that the
-    // Humanize path itself cannot bypass the canonical truth/provenance boundary.
     const currentResponse = await pageA.request.get(`/api/resume/${resumeId}`);
     expect(currentResponse.status()).toBe(200);
     const currentPayload = await currentResponse.json();
@@ -167,8 +165,6 @@ test.describe("authenticated CareerOS release flow", () => {
     expect(humanized.operationId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(stringifyResumeContent(humanized.resume?.content)).not.toContain("900");
 
-    // Seed the unsupported claim again and verify the dedicated Improve endpoint
-    // applies the same canonical boundary.
     const afterHumanizeResponse = await pageA.request.get(`/api/resume/${resumeId}`);
     expect(afterHumanizeResponse.status()).toBe(200);
     const afterHumanizePayload = await afterHumanizeResponse.json();
@@ -204,8 +200,6 @@ test.describe("authenticated CareerOS release flow", () => {
     expect(Number(pdf.headers()["x-careeros-ats-artifact-score"] || "0")).toBeGreaterThan(0);
     expect((await pdf.body()).byteLength).toBeGreaterThan(500);
 
-    // Two concurrent edits must not both overwrite the same version. Exactly
-    // one conditional update wins and one receives the explicit conflict.
     const concurrent = await Promise.all([
       pageA.request.patch(`/api/resume/${tailoredId}`, { data: { title: `Concurrent A ${marker}` } }),
       pageA.request.patch(`/api/resume/${tailoredId}`, { data: { title: `Concurrent B ${marker}` } }),
