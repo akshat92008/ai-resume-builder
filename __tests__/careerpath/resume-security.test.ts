@@ -59,6 +59,7 @@ describe("Resume Security & PATCH", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        expectedVersion: 5,
         title: "Senior Software Engineer",
         score: { overall: 100 },
         version: 99,
@@ -75,13 +76,53 @@ describe("Resume Security & PATCH", () => {
     expect(saveServerResume).not.toHaveBeenCalled();
   });
 
-  it("increments version server-side and uses optimistic concurrency for a valid edit", async () => {
+  it("requires the caller version for a valid edit", async () => {
+    (getServerResume as any).mockResolvedValueOnce(existingResume);
+
+    const request = new Request("http://localhost/api/resume/123e4567-e89b-12d3-a456-426614174000", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Senior Software Engineer" }),
+    });
+
+    const response = await PATCH(request, { params: Promise.resolve({ id: existingResume.id }) });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error.code).toBe("INVALID_INPUT");
+    expect(saveResumeVersion).not.toHaveBeenCalled();
+    expect(saveServerResume).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale caller version before snapshot or write", async () => {
     (getServerResume as any).mockResolvedValueOnce(existingResume);
 
     const request = new Request("http://localhost/api/resume/123e4567-e89b-12d3-a456-426614174000", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        expectedVersion: 4,
+        title: "Stale title",
+      }),
+    });
+
+    const response = await PATCH(request, { params: Promise.resolve({ id: existingResume.id }) });
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.error.code).toBe("RESUME_CONFLICT");
+    expect(saveResumeVersion).not.toHaveBeenCalled();
+    expect(saveServerResume).not.toHaveBeenCalled();
+  });
+
+  it("increments version server-side and uses caller-version optimistic concurrency for a valid edit", async () => {
+    (getServerResume as any).mockResolvedValueOnce(existingResume);
+
+    const request = new Request("http://localhost/api/resume/123e4567-e89b-12d3-a456-426614174000", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expectedVersion: 5,
         title: "Senior Software Engineer",
         content: { summary: "New summary" },
       }),
@@ -145,7 +186,7 @@ describe("Resume Security & PATCH", () => {
     const request = new Request(`http://localhost/api/resume/${generatedResume.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: editedContent }),
+      body: JSON.stringify({ expectedVersion: 5, content: editedContent }),
     });
 
     const response = await PATCH(request, { params: Promise.resolve({ id: generatedResume.id }) });
