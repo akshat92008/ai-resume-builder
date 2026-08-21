@@ -62,29 +62,29 @@ describe("runtime AI fallbacks", () => {
     expect(text).toContain("typescript");
     expect(text).toContain("120");
     expect(text).toContain("example labs");
-    expect(text).not.toContain("kubernetes");
+    expect(text).not.toContain("firebase");
     expect(isRuntimeFallbackContent(content)).toBe(true);
   });
 
   it("audits deterministically without changing factual content", () => {
     const content = fallbackResumeFromProfile(profile());
     const before = JSON.stringify(content);
-    const audit = fallbackResumeAudit(content, "Software Engineer", "React TypeScript Kubernetes");
+    const audit = fallbackResumeAudit(content, "Software Engineer", "React TypeScript Firebase");
 
     expect(audit.score.truthfulness).toBe(100);
     expect(audit.score.overall).toBeGreaterThan(0);
     expect(JSON.stringify(content)).toBe(before);
   });
 
-  it("tailor fallback reports missing job skills but never injects them", () => {
+  it("tailor fallback reports known missing job skills but never injects them", () => {
     const content = fallbackResumeFromProfile(profile());
-    const tailored = fallbackTailorResume(content, "React TypeScript Kubernetes");
+    const tailored = fallbackTailorResume(content, "React TypeScript Firebase");
     const text = JSON.stringify(tailored.tailoredResume).toLowerCase();
 
     expect(tailored.matchedKeywords).toEqual(expect.arrayContaining(["React", "TypeScript"]));
-    expect(tailored.missingKeywordsNotAdded).toContain("Kubernetes");
+    expect(tailored.missingKeywordsNotAdded).toContain("Firebase");
     expect(tailored.safeKeywordsAdded).toEqual([]);
-    expect(text).not.toContain("kubernetes");
+    expect(text).not.toContain("firebase");
     expect(isRuntimeFallbackContent(tailored.tailoredResume)).toBe(true);
   });
 
