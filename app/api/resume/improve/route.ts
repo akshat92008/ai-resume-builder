@@ -5,6 +5,8 @@ import { auditResume } from "@/lib/careerpath/agents";
 import { improveResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getServerResume, ResumeConflictError, saveResumeVersion, saveServerResume } from "@/lib/careerpath/db";
 import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
+import { fallbackImproveResume } from "@/lib/careerpath/runtime-fallbacks";
+import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
@@ -60,14 +62,20 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
+    resume.content = normalizeResumeContent(resume.content);
 
     const baselineAudit = resume.audit ?? auditResume(resume.content, resume.targetRole, resume.jobDescription);
-    const candidate = await improveResumeAgent(
-      resume.content,
-      baselineAudit,
-      resume.targetRole,
-      { userId: auth.user.id, resumeId: resume.id },
-    );
+    let candidate;
+    try {
+      candidate = await improveResumeAgent(
+        resume.content,
+        baselineAudit,
+        resume.targetRole,
+        { userId: auth.user.id, resumeId: resume.id },
+      );
+    } catch {
+      candidate = fallbackImproveResume(resume.content);
+    }
 
     const verified = await verifyResumeCandidate({
       content: candidate,

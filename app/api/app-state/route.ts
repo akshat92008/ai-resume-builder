@@ -5,6 +5,7 @@ import { requireAppAccess } from "@/lib/careerpath/auth";
 import { DatabaseUnavailableError, getLatestResumeForUser, getLatestMessagesForUser } from "@/lib/careerpath/db";
 import { listJobApplications } from "@/lib/careerpath/db-jobs";
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
+import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import { logger } from "@/lib/observability/logger";
 
 /** Load the authenticated user's current CareerOS workspace state. */
@@ -16,7 +17,13 @@ export async function GET() {
 
     const resume = await getLatestResumeForUser(userId);
     const applications = await listJobApplications(userId);
-    if (resume) resume.applications = applications;
+    if (resume) {
+      // Older Career Memory-only rows were persisted before all resume-content
+      // arrays became required. Normalize at this read boundary so those records
+      // remain usable and cannot crash workspace derivation.
+      resume.content = normalizeResumeContent(resume.content);
+      resume.applications = applications;
+    }
     const messages = resume
       ? await getLatestMessagesForUser(userId, resume.id)
       : [];
