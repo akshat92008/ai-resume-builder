@@ -4,6 +4,7 @@ import { enforceCareerProfileSourceEvidence } from "@/lib/careerloop/profile-sou
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import { fallbackResumeAudit, isRuntimeFallbackContent } from "@/lib/careerpath/runtime-fallbacks";
+import { preserveSectionBoundQuantifiedEvidence } from "@/lib/careerpath/section-proof";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
 import { validateResumeTruthfulness } from "@/lib/resume/validator";
@@ -101,6 +102,19 @@ export async function verifyResumeCandidate(input: {
 
   const fallbackContent = isRuntimeFallbackContent(input.content);
   let content = deriveRenderableResume(validation.cleanedResume);
+
+  // Validation may remove a generative summary sentence that happened to be the
+  // only place an explicit metric appeared. Re-bind already source-gated numeric
+  // proof to its matching experience/project section before the authoritative
+  // provenance pass, so supported user evidence cannot disappear due to layout
+  // or wording choices made by the model.
+  if (legacyProfile) {
+    content = preserveSectionBoundQuantifiedEvidence({
+      content,
+      profile: legacyProfile,
+    });
+  }
+
   const provenance = enforceResumeClaimProvenance(content, evidenceProfile);
   content = provenance.content;
 
