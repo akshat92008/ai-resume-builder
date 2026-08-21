@@ -5,6 +5,8 @@ import { createResumeRecord } from "@/lib/careerpath/agents";
 import { tailorResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getServerResume, saveResumeVersion, saveServerResume } from "@/lib/careerpath/db";
 import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
+import { fallbackTailorResume } from "@/lib/careerpath/runtime-fallbacks";
+import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
 import { checkAiActionRateLimit } from "@/lib/careerpath/rate-limit";
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
     if (!resume) {
       return NextResponse.json({ error: { code: "RESUME_NOT_FOUND", message: "Resume not found.", recoverable: true } }, { status: 404 });
     }
+    resume.content = normalizeResumeContent(resume.content);
 
     const ipHash = getClientIp(request);
     const entitlements = await getCurrentUserEntitlements();
@@ -59,12 +62,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: { code: "RATE_LIMIT_EXCEEDED", message: "Daily AI or tailoring limit exceeded.", recoverable: true } }, { status: 429 });
     }
 
-    const tailoring = await tailorResumeAgent(
-      resume.content,
-      resume.targetRole,
-      body.jobDescription,
-      { userId: auth.user.id, resumeId: resume.id },
-    );
+    let tailoring;
+    try {
+      tailoring = await tailorResumeAgent(
+        resume.content,
+        resume.targetRole,
+        body.jobDescription,
+        { userId: auth.user.id, resumeId: resume.id },
+      );
+    } catch {
+      tailoring = fallbackTailorResume(resume.content, body.jobDescription);
+    }
 
     const verified = await verifyResumeCandidate({
       content: tailoring.tailoredResume,
