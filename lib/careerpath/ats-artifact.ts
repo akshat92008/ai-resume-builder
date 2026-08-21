@@ -47,18 +47,18 @@ export function verifyExtractedResumeText(content: CareerPathResumeContent, extr
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") throw new Error("Invalid PDF signature");
 
-  // pdf-parse v2 no longer exports a callable `pdf(buffer)` function. Its
-  // supported Node/Vercel API is the PDFParse class. Keep the import lazy so
-  // PDF.js is initialized only on export requests, after the small DOM shims it
-  // expects in headless Node have been installed.
-  const globals = globalThis as unknown as Record<string, unknown>;
-  if (typeof globals.DOMMatrix === "undefined") globals.DOMMatrix = class DOMMatrix {};
-  if (typeof globals.Path2D === "undefined") globals.Path2D = class Path2D {};
-  if (typeof globals.ImageData === "undefined") globals.ImageData = class ImageData {};
-
+  // pdf-parse v2's supported serverless bootstrap lives in `pdf-parse/worker`.
+  // In v2.4.5 getData() returns the PDF.js worker as an embedded data URL, so
+  // Vercel does not need a lazily imported pdf.worker.mjs file at runtime.
+  // Loading the worker module first also installs the real Node canvas globals
+  // and exposes CanvasFactory instead of relying on incomplete DOM shims.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { CanvasFactory, getData } = require("pdf-parse/worker") as typeof import("pdf-parse/worker");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PDFParse } = require("pdf-parse") as typeof import("pdf-parse");
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  PDFParse.setWorker(getData());
+
+  const parser = new PDFParse({ data: new Uint8Array(buffer), CanvasFactory });
   try {
     const result = await parser.getText();
     return String(result.text || "").trim();
