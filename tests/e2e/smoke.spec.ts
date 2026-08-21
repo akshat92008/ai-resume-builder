@@ -5,11 +5,12 @@ test.describe("CareerOS public launch smoke", () => {
     const response = await page.goto("/");
     expect(response?.ok()).toBeTruthy();
 
-    await expect(page.getByRole("heading", { name: /Turn career evidence into better outcomes/i })).toBeVisible();
-    await expect(page.getByText(/Your career, finally in one system/i).first()).toBeVisible();
-    await expect(page.getByText(/verifies generated claims against Career Memory and removes unsupported claims/i)).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Don’t read a feature list\. Watch the system move/i })).toBeVisible();
-    await expect(page.getByText(/Product theater/i).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Your career search, run like a system/i })).toBeVisible();
+    await expect(page.getByText(/Evidence → decision → application → outcome/i).first()).toBeVisible();
+    await expect(page.getByText(/CareerOS operating layer/i).first()).toBeVisible();
+    await expect(page.getByText(/Unsupported claims blocked/i).first()).toBeVisible();
+    await expect(page.getByText(/removes or rejects claims that are not supported by stored evidence/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Five moves\. One accumulating advantage/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Start free/i }).first()).toBeVisible();
   });
 
