@@ -3,6 +3,7 @@ import { enforceResumeClaimProvenance } from "@/lib/careerloop/provenance";
 import { enforceCareerProfileSourceEvidence } from "@/lib/careerloop/profile-source";
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
+import { fallbackResumeAudit } from "@/lib/careerpath/runtime-fallbacks";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
 import { validateResumeTruthfulness } from "@/lib/resume/validator";
@@ -101,12 +102,20 @@ export async function verifyResumeCandidate(input: {
   const provenance = enforceResumeClaimProvenance(content, evidenceProfile);
   content = provenance.content;
 
-  const audit = await auditResumeAgent(
-    content,
-    input.targetRole,
-    input.jobDescription || "",
-    input.metadata,
-  );
+  let audit;
+  try {
+    audit = await auditResumeAgent(
+      content,
+      input.targetRole,
+      input.jobDescription || "",
+      input.metadata,
+    );
+  } catch {
+    // Audit quality should degrade gracefully when the external model is slow;
+    // the canonical truth/provenance checks above are deterministic and remain
+    // mandatory. The fallback audit never changes resume facts.
+    audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
+  }
 
   return {
     content,
