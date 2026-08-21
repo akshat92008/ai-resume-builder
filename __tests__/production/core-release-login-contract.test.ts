@@ -23,8 +23,8 @@ describe("authenticated release login contract", () => {
     expect(coreFlow).not.toContain("refreshedPageA.request");
   });
 
-  it("allows production round trips without weakening the real-AI budget", () => {
-    expect(coreFlow).toContain('test.describe.configure({ mode: "serial", timeout: 120_000 })');
+  it("allows production round trips without weakening the real-AI budget or replaying durable state", () => {
+    expect(coreFlow).toContain('test.describe.configure({ mode: "serial", timeout: 120_000, retries: 0 })');
     expect(coreFlow).toContain("test.setTimeout(360_000)");
   });
 });
