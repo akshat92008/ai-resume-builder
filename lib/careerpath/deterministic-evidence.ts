@@ -160,27 +160,44 @@ function extractExperiences(message: string): ExtractedExperience[] {
     }
   }
 
-  const actionClaims = extractActionClaims(message);
+  const experienceClaims = extractActionClaims(message).filter((claim) => !/^(?:Built|Created)\b/i.test(claim));
   if (found.length === 1) {
     found[0].responsibilities = unique([
       ...found[0].responsibilities,
-      ...actionClaims.filter((claim) => numericSignals(claim).length === 0),
+      ...experienceClaims.filter((claim) => numericSignals(claim).length === 0),
     ]);
     found[0].achievements = unique([
       ...found[0].achievements,
-      ...actionClaims.filter((claim) => numericSignals(claim).length > 0),
+      ...experienceClaims.filter((claim) => numericSignals(claim).length > 0),
     ]);
   }
   return found;
 }
 
+function isSentenceBoundary(message: string, index: number) {
+  const char = message[index];
+  if (char === "\n") return true;
+  if (!/[.!?]/.test(char || "")) return false;
+  return index === message.length - 1 || /\s/.test(message[index + 1] || "");
+}
+
 function sentenceContext(message: string, index: number) {
-  const previous = Math.max(message.lastIndexOf(".", Math.max(0, index - 1)), message.lastIndexOf("\n", Math.max(0, index - 1)));
-  let end = message.indexOf(".", index);
-  if (end < 0) end = message.indexOf("\n", index);
-  if (end < 0) end = message.length;
-  let context = message.slice(previous + 1, end + (end < message.length ? 1 : 0)).replace(/^\s*\d+[.)]\s*/, "").trim();
-  const remainder = message.slice(end + 1);
+  let start = 0;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (isSentenceBoundary(message, cursor)) {
+      start = cursor + 1;
+      break;
+    }
+  }
+  let end = message.length;
+  for (let cursor = index; cursor < message.length; cursor += 1) {
+    if (isSentenceBoundary(message, cursor)) {
+      end = cursor + (message[cursor] === "\n" ? 0 : 1);
+      break;
+    }
+  }
+  let context = message.slice(start, end).replace(/^\s*\d+[.)]\s*/, "").trim();
+  const remainder = message.slice(end);
   const follow = remainder.match(/^\s*(It|This)\s+([^.!?\n]{2,220})[.!?]?/i);
   if (follow) context += ` ${follow[0].trim()}`;
   return context.trim();
