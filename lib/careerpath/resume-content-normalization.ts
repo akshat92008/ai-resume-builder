@@ -1,4 +1,4 @@
-import type { CareerPathResumeContent } from "./types";
+import type { CareerPathProfile, CareerPathResumeContent } from "./types";
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -16,6 +16,35 @@ function stringArray(value: unknown) {
 
 function normalizedSkill(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").trim();
+}
+
+function normalizedText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9%]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function achievementKey(value: string) {
+  return normalizedText(value)
+    .split(" ")
+    .filter((token) => !["a", "an", "the", "my"].includes(token))
+    .join(" ");
+}
+
+export function dedupeSemanticAchievements(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const key = achievementKey(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
 }
 
 const CANONICAL_SKILL_CATEGORIES = new Map<string, string>([
@@ -138,7 +167,7 @@ export function normalizeResumeContent(value: unknown): CareerPathResumeContent 
     projects,
     education,
     certifications,
-    achievements: stringArray(raw.achievements),
+    achievements: dedupeSemanticAchievements(stringArray(raw.achievements)),
     languages: stringArray(raw.languages),
   };
 }
@@ -181,5 +210,71 @@ export function normalizeKnownResumeSkillCategories(content: CareerPathResumeCon
   return {
     ...content,
     skills: [...canonicalGroups, ...unknownGroups],
+  };
+}
+
+/**
+ * The writer is allowed to abbreviate presentation, but it must not erase
+ * explicit source-backed education fields. The supplied profile has already
+ * crossed the evidence boundary before this helper is called.
+ */
+export function preserveVerifiedEducation(
+  content: CareerPathResumeContent,
+  profile?: CareerPathProfile | null,
+): CareerPathResumeContent {
+  if (!profile?.education?.length) return content;
+  const education = content.education.map((item) => ({ ...item }));
+
+  for (const source of profile.education) {
+    const sourceInstitution = normalizedText(source.institution || "");
+    const sourceDegree = normalizedText(source.degree || "");
+    let target = education.find((item) =>
+      (sourceInstitution && normalizedText(item.institution) === sourceInstitution) ||
+      (sourceDegree && normalizedText(item.degree).startsWith(sourceDegree)),
+    );
+
+    const completeDegree = [source.degree, source.field]
+      .filter(Boolean)
+      .filter((value, index, values) => index === 0 || !normalizedText(values[0] || "").includes(normalizedText(value || "")))
+      .join(", ");
+    const dates = source.startYear && source.endYear
+      ? `${source.startYear} – ${source.endYear}`
+      : source.endYear || source.startYear || "";
+
+    if (!target) {
+      target = {
+        institution: source.institution || "",
+        degree: completeDegree,
+        dates,
+        score: source.score || "",
+        location: source.location || "",
+      };
+      education.push(target);
+      continue;
+    }
+
+    if (!target.institution && source.institution) target.institution = source.institution;
+    if (!target.degree && completeDegree) target.degree = completeDegree;
+    else if (source.field && !normalizedText(target.degree).includes(normalizedText(source.field))) {
+      target.degree = [target.degree, source.field].filter(Boolean).join(", ");
+    }
+    if (!target.dates && dates) target.dates = dates;
+    if (!target.score && source.score) target.score = source.score;
+    if (!target.location && source.location) target.location = source.location;
+  }
+
+  return { ...content, education };
+}
+
+/** Final deterministic presentation pass for already verified content. */
+export function normalizeVerifiedResumePresentation(
+  content: CareerPathResumeContent,
+  profile?: CareerPathProfile | null,
+): CareerPathResumeContent {
+  const withEducation = preserveVerifiedEducation(content, profile);
+  const withSkills = normalizeKnownResumeSkillCategories(withEducation);
+  return {
+    ...withSkills,
+    achievements: dedupeSemanticAchievements(withSkills.achievements),
   };
 }
