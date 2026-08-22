@@ -15,12 +15,14 @@ function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [messageVariant, setMessageVariant] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    setMessageVariant("error");
     const nextPath = searchParams.get("next");
     const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
 
@@ -44,7 +46,8 @@ function SignupForm() {
       }
 
       if (data.requiresEmailConfirmation) {
-        setMessage("Email verification is required on this environment, but delivery is not configured. Please contact support rather than waiting for an email that may not arrive.");
+        setMessageVariant("success");
+        setMessage("Verification email requested. Check your inbox and spam folder, open the verification link, then sign in with the same email and password.");
         setLoading(false);
         return;
       }
@@ -85,7 +88,7 @@ function SignupForm() {
         </div>
 
         <h1 className="mt-6 text-3xl font-semibold tracking-[-0.045em] text-white sm:text-[34px]">Build your career operating system.</h1>
-        <p className="mt-3 text-sm leading-6 text-white/45">Create your account and enter CareerOS immediately. No inbox detour during the controlled beta.</p>
+        <p className="mt-3 text-sm leading-6 text-white/45">Create your account, verify your email, and keep Career Memory tied to a confirmed identity.</p>
 
         <div className="mt-5 grid grid-cols-3 gap-2">
           {["Career Memory", "Truthful AI", "Outcome loop"].map((item) => (
@@ -104,7 +107,7 @@ function SignupForm() {
             <div className="flex items-center justify-between"><Label htmlFor="signup-password" className="text-white/70">Password</Label><span className="text-[10px] font-medium text-white/25">8–128 characters</span></div>
             <Input id="signup-password" type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="Create a strong password" className="h-12 border-white/10 bg-white/[0.055] text-white placeholder:text-white/25 focus:border-indigo-400/50" />
           </div>
-          {message && <Alert variant="error">{message}</Alert>}
+          {message && <Alert variant={messageVariant}>{message}</Alert>}
           <Button type="submit" size="lg" className="h-12 w-full rounded-xl bg-white text-slate-950 shadow-[0_12px_30px_rgba(255,255,255,.08)] hover:bg-indigo-100" disabled={loading || !isSupabaseConfigured}>
             {loading ? "Creating your workspace..." : <>Create free account <ArrowRight className="ml-2 h-4 w-4" /></>}
           </Button>
