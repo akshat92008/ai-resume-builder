@@ -14,6 +14,43 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function normalizedSkill(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").trim();
+}
+
+const CANONICAL_SKILL_CATEGORIES = new Map<string, string>([
+  ["typescript", "Programming"],
+  ["javascript", "Programming"],
+  ["python", "Programming"],
+  ["html", "Programming"],
+  ["css", "Programming"],
+  ["react", "Frameworks & Runtime"],
+  ["next.js", "Frameworks & Runtime"],
+  ["node.js", "Frameworks & Runtime"],
+  ["express", "Frameworks & Runtime"],
+  ["tailwind css", "Frameworks & Runtime"],
+  ["langchain", "Frameworks & Runtime"],
+  ["postgresql", "Databases"],
+  ["mongodb", "Databases"],
+  ["redis", "Databases"],
+  ["sql", "Databases"],
+  ["supabase", "Databases"],
+  ["firebase", "Databases"],
+  ["aws", "Cloud & DevOps"],
+  ["docker", "Cloud & DevOps"],
+  ["kubernetes", "Cloud & DevOps"],
+  ["git", "Developer Tools"],
+  ["github", "Developer Tools"],
+  ["figma", "Developer Tools"],
+  ["openai", "AI & ML"],
+  ["nvidia nim", "AI & ML"],
+  ["machine learning", "AI & ML"],
+]);
+
+function pushUnique(target: string[], value: string) {
+  if (!target.some((item) => normalizedSkill(item) === normalizedSkill(value))) target.push(value);
+}
+
 export function createEmptyResumeContent(name = ""): CareerPathResumeContent {
   return {
     header: { name, email: "", phone: "", location: "", links: {} },
@@ -103,5 +140,46 @@ export function normalizeResumeContent(value: unknown): CareerPathResumeContent 
     certifications,
     achievements: stringArray(raw.achievements),
     languages: stringArray(raw.languages),
+  };
+}
+
+/**
+ * Models may choose misleading headings (for example "Frontend" for Express).
+ * Move only a bounded list of well-known technologies into deterministic
+ * categories after truth/provenance validation. Unknown or domain-specific
+ * skills remain in the user's/model's original group, so this is classification
+ * normalization rather than factual generation.
+ */
+export function normalizeKnownResumeSkillCategories(content: CareerPathResumeContent): CareerPathResumeContent {
+  const canonical = new Map<string, string[]>();
+  const unknownGroups: Array<{ category: string; items: string[] }> = [];
+  const seen = new Set<string>();
+
+  for (const group of content.skills) {
+    const unknownItems: string[] = [];
+    for (const skill of group.items) {
+      const key = normalizedSkill(skill);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const category = CANONICAL_SKILL_CATEGORIES.get(key);
+      if (category) {
+        const items = canonical.get(category) || [];
+        pushUnique(items, skill);
+        canonical.set(category, items);
+      } else {
+        pushUnique(unknownItems, skill);
+      }
+    }
+    if (unknownItems.length) unknownGroups.push({ category: group.category || "Skills", items: unknownItems });
+  }
+
+  const preferredOrder = ["Programming", "Frameworks & Runtime", "Databases", "Cloud & DevOps", "Developer Tools", "AI & ML"];
+  const canonicalGroups = preferredOrder
+    .filter((category) => (canonical.get(category) || []).length > 0)
+    .map((category) => ({ category, items: canonical.get(category)! }));
+
+  return {
+    ...content,
+    skills: [...canonicalGroups, ...unknownGroups],
   };
 }
