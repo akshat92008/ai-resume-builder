@@ -6,6 +6,10 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function flexibleTermPattern(value: string) {
+  return value.trim().split(/\s+/).map(escapeRegExp).join("\\s+");
+}
+
 function clauseBefore(text: string, index: number, maxLength = 180) {
   const prefix = text.slice(Math.max(0, index - maxLength), index);
   return prefix.split(/[.!?;\n]/).pop() || prefix;
@@ -43,7 +47,7 @@ export function hasUnsafeActionContext(text: string, actionIndex: number) {
 export function isExplicitlyNegatedTerm(term: string, evidence: string) {
   const clean = term.trim();
   if (!clean || !evidence.trim()) return false;
-  const matcher = new RegExp(escapeRegExp(clean).replace(/\\\s+/g, "\\s+"), "gi");
+  const matcher = new RegExp(flexibleTermPattern(clean), "gi");
   const matches = [...evidence.matchAll(matcher)];
   if (!matches.length) return false;
 
@@ -56,8 +60,9 @@ export function isExplicitlyNegatedTerm(term: string, evidence: string) {
       continue;
     }
     const normalizedPrefix = prefix.replace(/\s+/g, " ").trim();
-    const deniedKnowledge = /\b(?:do\s+not|don['’]?t|did\s+not|didn['’]?t|not|never|no)\b[^.!?;\n]{0,120}\b(?:know|use|used|worked\s+with|experience\s+with|experience\s+in|familiar\s+with|skilled\s+in)?[^.!?;\n]{0,120}$/i.test(normalizedPrefix);
-    if (deniedKnowledge || NEGATION_WORDS.test(normalizedPrefix.slice(-120))) {
+    const scope = normalizedPrefix.split(/\bbut\b|\bhowever\b/i).pop() || normalizedPrefix;
+    const deniedKnowledge = /\b(?:do\s+not|don['’]?t|did\s+not|didn['’]?t|not|never|no)\b[^.!?;\n]{0,140}\b(?:know|use|used|worked\s+with|experience\s+with|experience\s+in|familiar\s+with|skilled\s+in)?[^.!?;\n]{0,140}$/i.test(scope);
+    if (deniedKnowledge || NEGATION_WORDS.test(scope.slice(-120))) {
       sawNegated = true;
       continue;
     }
