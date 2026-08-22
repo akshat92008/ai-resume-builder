@@ -87,15 +87,20 @@ export async function POST(request: Request) {
         code: error.code || "AUTH_ERROR",
         status: error.status,
       });
+
+      const code = error.code === "over_email_send_rate_limit"
+        ? "EMAIL_RATE_LIMITED"
+        : error.code === "email_address_not_authorized"
+          ? "EMAIL_DELIVERY_NOT_CONFIGURED"
+          : "SIGNUP_FAILED";
+      const message = code === "EMAIL_RATE_LIMITED"
+        ? "Too many verification emails were requested. Try again after the email limit resets."
+        : code === "EMAIL_DELIVERY_NOT_CONFIGURED"
+          ? "Verification email cannot be sent to this address while Supabase is using its default test mailer. Custom SMTP must be configured for public email delivery."
+          : "Unable to create the account or send its verification email. Check the address and try again.";
+
       return NextResponse.json(
-        {
-          error: {
-            code: error.code === "over_email_send_rate_limit" ? "EMAIL_RATE_LIMITED" : "SIGNUP_FAILED",
-            message: error.code === "over_email_send_rate_limit"
-              ? "Too many verification emails were requested. Try again after the email limit resets."
-              : "Unable to create the account or send its verification email. Check the address and try again.",
-          },
-        },
+        { error: { code, message } },
         { status: error.status === 429 ? 429 : 400 },
       );
     }
