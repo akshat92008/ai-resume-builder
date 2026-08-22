@@ -5,6 +5,7 @@ import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evide
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import { fallbackResumeAudit, isRuntimeFallbackContent } from "@/lib/careerpath/runtime-fallbacks";
 import { normalizeVerifiedResumePresentation } from "@/lib/careerpath/resume-content-normalization";
+import { dedupeResumeSectionBullets, stripUnsupportedDurationClaims } from "@/lib/careerpath/reliability-normalization";
 import { preserveSectionBoundQuantifiedEvidence } from "@/lib/careerpath/section-proof";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
@@ -122,6 +123,13 @@ export async function verifyResumeCandidate(input: {
   // source-gated education fields, and remove near-identical achievements.
   content = normalizeVerifiedResumePresentation(provenance.content, legacyProfile);
 
+  // Numeric overlap alone must never validate duration semantics. For example,
+  // a source-backed "2-month internship" cannot support "2+ years of
+  // experience" merely because both contain the number 2. This final source-
+  // authored evidence check is unit-aware and runs after all model writing.
+  const durationCheck = stripUnsupportedDurationClaims(content, rawSourceEvidence);
+  content = dedupeResumeSectionBullets(durationCheck.content);
+
   let audit;
   if (input.useDeterministicAudit || fallbackContent) {
     audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
@@ -148,6 +156,9 @@ export async function verifyResumeCandidate(input: {
     careerProfile: evidenceProfile,
     legacyProfile,
     validation,
-    provenance: provenance.report,
+    provenance: {
+      ...provenance.report,
+      removedClaims: provenance.report.removedClaims + durationCheck.removedClaims,
+    },
   };
 }
