@@ -55,6 +55,14 @@ function content(): CareerPathResumeContent {
   };
 }
 
+function locationProfile(): CareerPathProfile {
+  return {
+    personal: {},
+    education: [{ institution: "Delhi Technological University", location: "Delhi" }],
+    experience: [],
+  } as unknown as CareerPathProfile;
+}
+
 describe("basic Rahul screening reliability", () => {
   it("treats Career Memory inspection as a deterministic read", () => {
     const message = "Show me everything you currently know about me from Career Memory.";
@@ -98,23 +106,13 @@ describe("basic Rahul screening reliability", () => {
   });
 
   it("does not infer Delhi as education location from the university name", () => {
-    const profile = {
-      personal: {},
-      education: [{ institution: "Delhi Technological University", location: "Delhi" }],
-      experience: [],
-    } as CareerPathProfile;
-    const result = stripUnsourcedProfileLocations(profile, RAHUL_SOURCE);
+    const result = stripUnsourcedProfileLocations(locationProfile(), RAHUL_SOURCE);
     expect(result.education[0].location).toBe("");
   });
 
   it("keeps an education location when the user explicitly supplies it", () => {
-    const profile = {
-      personal: {},
-      education: [{ institution: "Delhi Technological University", location: "Delhi" }],
-      experience: [],
-    } as CareerPathProfile;
     const result = stripUnsourcedProfileLocations(
-      profile,
+      locationProfile(),
       `${RAHUL_SOURCE}\nEducation location: Delhi.`,
     );
     expect(result.education[0].location).toBe("Delhi");
