@@ -1,4 +1,5 @@
 import type { CareerPathProfile } from "./types";
+import { actionClaimHasAffirmativeSupport, isExplicitlyNegatedTerm } from "./source-safety";
 
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "from", "that", "this", "into", "using", "used", "was", "were", "are", "is", "a", "an", "to", "of", "in", "on", "my", "i", "we", "our", "at", "as",
@@ -30,14 +31,16 @@ function equivalent(a: unknown, b: unknown) {
 
 /**
  * New Career Memory facts must be traceable to the current user message.
- * Reworded free-form text is allowed only when it has strong token overlap and
- * every numeric signal is present verbatim in the evidence. Previously stored
- * facts are trusted because they already crossed this boundary on an earlier run.
+ * Reworded free-form text is allowed only when it has strong token overlap,
+ * every numeric signal is present verbatim, and the source supports the same
+ * semantic polarity. A negated statement can never validate its positive form.
  */
 export function textSupportedByEvidence(value: string, evidence: string) {
   const candidate = normalize(value);
   const source = normalize(evidence);
   if (!candidate) return true;
+  if (isExplicitlyNegatedTerm(value, evidence)) return false;
+  if (!actionClaimHasAffirmativeSupport(value, evidence)) return false;
   if (source.includes(candidate)) return true;
 
   const numbers = numericSignals(candidate);
@@ -59,7 +62,8 @@ function existingString(value: string | undefined | null, existing: string | und
 function filterStrings(values: string[], existingValues: string[], evidence: string, removed: string[], label: string) {
   const existingNormalized = new Set(existingValues.map(normalize));
   return values.filter((value) => {
-    const allowed = existingNormalized.has(normalize(value)) || textSupportedByEvidence(value, evidence);
+    const explicitlyNegated = isExplicitlyNegatedTerm(value, evidence);
+    const allowed = !explicitlyNegated && (existingNormalized.has(normalize(value)) || textSupportedByEvidence(value, evidence));
     if (!allowed) removed.push(`${label}: ${value}`);
     return allowed;
   });
