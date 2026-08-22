@@ -1,5 +1,6 @@
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { answerCareerQuestionAgent } from "@/lib/careerpath/orchestrator";
+import { formatCareerMemorySnapshot, isReadOnlyCareerMemoryQuery } from "@/lib/careerpath/read-only-memory";
 import { isFabricationInstruction } from "@/lib/careerpath/source-safety";
 import {
   handleCreateResume,
@@ -43,6 +44,19 @@ export async function processCareerIntent(
   command?: unknown,
 ): Promise<CareerIntentResult> {
   const metadata = { userId, resumeId };
+
+  // This guard is intentionally inside the executor rather than relying only on
+  // routing. Even if a semantic classifier accidentally labels a memory read as
+  // ADD_INFORMATION, asking what CareerOS knows can never write or regenerate.
+  if (isReadOnlyCareerMemoryQuery(message)) {
+    const workspace = buildCareerWorkspaceState(currentResume);
+    return {
+      assistantMessage: formatCareerMemorySnapshot(workspace.careerProfile),
+      resume: currentResume,
+      resumeId: currentResume?.id || null,
+      workspace,
+    };
+  }
 
   // Instructions to fabricate or inject unverified claims are commands, not
   // career evidence. Stop them before any handler can append raw notes, log an
