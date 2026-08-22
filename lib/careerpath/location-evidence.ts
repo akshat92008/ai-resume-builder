@@ -11,13 +11,13 @@ function flexible(value: string) {
 function explicitLocationEvidence(
   location: string,
   evidence: string,
-  kind: "personal" | "education" | "experience",
+  kind: "personal" | "education",
 ) {
   const clean = location.trim();
   if (!clean) return false;
   const loc = flexible(clean);
   const common = [
-    new RegExp(`\\b(?:location|located|based|live|living|reside|residing)\\s*(?:is|:|-)??\\s*(?:in\\s+)?${loc}\\b`, "i"),
+    new RegExp(`\\b(?:location|located|based|live|living|reside|residing)\\s*(?:is|:|-)?\\s*(?:in\\s+)?${loc}\\b`, "i"),
     new RegExp(`\\b(?:my\\s+)?(?:current\\s+)?location\\s*(?:is|:|-)\\s*${loc}\\b`, "i"),
   ];
   if (common.some((pattern) => pattern.test(evidence))) return true;
@@ -30,21 +30,15 @@ function explicitLocationEvidence(
     ].some((pattern) => pattern.test(evidence));
   }
 
-  if (kind === "experience") {
-    return [
-      new RegExp(`\\b(?:experience|job|work|office|internship)\\s+location\\s*(?:is|:|-)\\s*${loc}\\b`, "i"),
-      new RegExp(`\\b(?:worked|working|interned)\\b[^.!?\\n]{0,120}\\bin\\s+${loc}\\b`, "i"),
-    ].some((pattern) => pattern.test(evidence));
-  }
-
   return false;
 }
 
 /**
  * Location strings are especially prone to false support because city names
- * often occur inside university/company names. Keep only locations that the user
+ * often occur inside university names. Keep only locations that the user
  * explicitly supplied as locations; do not turn world knowledge or name tokens
- * into resume facts.
+ * into resume facts. Legacy experience rows do not carry a location field, so
+ * their richer Career Memory location can only originate from source-gated data.
  */
 export function stripUnsourcedProfileLocations(
   profile: CareerPathProfile,
@@ -63,12 +57,6 @@ export function stripUnsourcedProfileLocations(
       location: item.location && explicitLocationEvidence(item.location, evidence, "education")
         ? item.location
         : "",
-    })),
-    experience: profile.experience.map((item) => ({
-      ...item,
-      location: item.location && explicitLocationEvidence(item.location, evidence, "experience")
-        ? item.location
-        : undefined,
     })),
   };
 }
