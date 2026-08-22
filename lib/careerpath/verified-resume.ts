@@ -4,6 +4,7 @@ import { enforceCareerProfileSourceEvidence } from "@/lib/careerloop/profile-sou
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import { fallbackResumeAudit, isRuntimeFallbackContent } from "@/lib/careerpath/runtime-fallbacks";
+import { normalizeKnownResumeSkillCategories } from "@/lib/careerpath/resume-content-normalization";
 import { preserveSectionBoundQuantifiedEvidence } from "@/lib/careerpath/section-proof";
 import { deriveRenderableResume } from "@/lib/resume/render";
 import { contentToResumeState } from "@/lib/resume/types";
@@ -116,7 +117,10 @@ export async function verifyResumeCandidate(input: {
   }
 
   const provenance = enforceResumeClaimProvenance(content, evidenceProfile);
-  content = provenance.content;
+  // Provenance decides which facts may survive. Category normalization only
+  // moves already-approved, well-known skills between presentation groups, so a
+  // model cannot label Express/Node as frontend or PostgreSQL as a tool.
+  content = normalizeKnownResumeSkillCategories(provenance.content);
 
   let audit;
   if (input.useDeterministicAudit || fallbackContent) {
