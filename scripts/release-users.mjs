@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 
 const command = process.argv[2];
 const baseUrl = (process.env.E2E_BASE_URL || "").replace(/\/$/, "");
+const releaseAudience = "careeros-release";
 
 function requireBaseUrl() {
   if (!baseUrl) throw new Error("E2E_BASE_URL is required");
@@ -14,36 +15,46 @@ function randomPassword() {
   return `Cr9!${randomBytes(24).toString("base64url")}zQ`;
 }
 
-async function signup(email, password) {
-  const response = await fetch(`${baseUrl}/api/auth/signup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+async function githubOidcToken() {
+  const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+  const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+  if (!requestUrl || !requestToken) throw new Error("GitHub Actions OIDC is unavailable");
+
+  const url = new URL(requestUrl);
+  url.searchParams.set("audience", releaseAudience);
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${requestToken}` },
     redirect: "error",
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok !== true || payload.requiresEmailConfirmation !== false) {
-    throw new Error(`Could not provision ${email}: status=${response.status} code=${payload.error?.code || "unknown"}`);
+  if (!response.ok || typeof payload.value !== "string" || !payload.value) {
+    throw new Error(`Could not obtain GitHub OIDC token: status=${response.status}`);
   }
+  return payload.value;
 }
 
-async function deleteAccount(email, password) {
-  if (!email || !password) return;
-  const response = await fetch(`${baseUrl}/api/account`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, confirm: "DELETE" }),
+async function callProvisioner(payload) {
+  const oidc = await githubOidcToken();
+  const response = await fetch(`${baseUrl}/api/internal/release-users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${oidc}`,
+    },
+    body: JSON.stringify(payload),
     redirect: "error",
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.ok !== true) {
-    throw new Error(`Could not delete ${email}: status=${response.status} code=${payload.error?.code || "unknown"}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok !== true) {
+    throw new Error(`Release user provisioner failed: status=${response.status} code=${data.error?.code || "unknown"}`);
   }
+  return data;
 }
 
 async function provision() {
   requireBaseUrl();
-  const runId = String(process.env.GITHUB_RUN_ID || Date.now()).replace(/[^0-9]/g, "");
+  const runId = String(process.env.GITHUB_RUN_ID || "").replace(/[^0-9]/g, "");
+  if (!runId) throw new Error("GITHUB_RUN_ID is required for release user provisioning");
   const nonce = randomBytes(6).toString("hex");
   const emailA = `release-${runId}-${nonce}-a@example.com`;
   const emailB = `release-${runId}-${nonce}-b@example.com`;
@@ -53,55 +64,40 @@ async function provision() {
   console.log(`::add-mask::${passwordA}`);
   console.log(`::add-mask::${passwordB}`);
 
-  let createdA = false;
-  let createdB = false;
-  try {
-    await signup(emailA, passwordA);
-    createdA = true;
-    await signup(emailB, passwordB);
-    createdB = true;
-  } catch (error) {
-    const cleanupErrors = [];
-    if (createdB) {
-      try { await deleteAccount(emailB, passwordB); } catch (cleanupError) { cleanupErrors.push(cleanupError); }
-    }
-    if (createdA) {
-      try { await deleteAccount(emailA, passwordA); } catch (cleanupError) { cleanupErrors.push(cleanupError); }
-    }
-    if (cleanupErrors.length > 0) {
-      console.error("Release-user rollback also failed", cleanupErrors);
-    }
-    throw error;
+  const result = await callProvisioner({
+    action: "provision",
+    users: [
+      { email: emailA, password: passwordA },
+      { email: emailB, password: passwordB },
+    ],
+  });
+  if (!Array.isArray(result.users) || result.users.length !== 2) {
+    throw new Error("Release provisioner did not return two users");
   }
+
+  const userA = result.users.find((user) => user.email === emailA);
+  const userB = result.users.find((user) => user.email === emailB);
+  if (!userA?.id || !userB?.id) throw new Error("Release provisioner returned incomplete identities");
 
   const envPath = process.env.GITHUB_ENV;
   if (!envPath) throw new Error("GITHUB_ENV is required when provisioning release users");
-  appendFileSync(envPath, `E2E_EMAIL=${emailA}\nE2E_PASSWORD=${passwordA}\nE2E_USER_B_EMAIL=${emailB}\nE2E_USER_B_PASSWORD=${passwordB}\n`);
-  console.log("Provisioned two isolated ephemeral release accounts");
+  appendFileSync(
+    envPath,
+    `E2E_EMAIL=${emailA}\nE2E_PASSWORD=${passwordA}\nE2E_USER_ID=${userA.id}\nE2E_USER_B_EMAIL=${emailB}\nE2E_USER_B_PASSWORD=${passwordB}\nE2E_USER_B_ID=${userB.id}\n`,
+  );
+  console.log("Provisioned two isolated confirmed ephemeral release accounts through GitHub OIDC");
 }
 
 async function cleanup() {
   requireBaseUrl();
-  const accounts = [
-    [process.env.E2E_USER_B_EMAIL, process.env.E2E_USER_B_PASSWORD],
-    [process.env.E2E_EMAIL, process.env.E2E_PASSWORD],
-  ].filter(([email, password]) => email && password);
-
-  if (accounts.length === 0) {
+  const userIds = [process.env.E2E_USER_B_ID, process.env.E2E_USER_ID].filter(Boolean);
+  if (userIds.length === 0) {
     console.log("No ephemeral release accounts were provisioned; cleanup is a no-op");
     return;
   }
 
-  const errors = [];
-  for (const [email, password] of accounts) {
-    try {
-      await deleteAccount(email, password);
-      console.log(`Deleted ephemeral release account ${email}`);
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  if (errors.length > 0) throw new AggregateError(errors, "One or more release accounts could not be deleted");
+  await callProvisioner({ action: "cleanup", userIds });
+  console.log(`Deleted ${userIds.length} ephemeral release account(s)`);
 }
 
 async function main() {
