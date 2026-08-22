@@ -1,5 +1,6 @@
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { answerCareerQuestionAgent } from "@/lib/careerpath/orchestrator";
+import { isFabricationInstruction } from "@/lib/careerpath/source-safety";
 import {
   handleCreateResume,
   handleImproveResume,
@@ -42,6 +43,18 @@ export async function processCareerIntent(
   command?: unknown,
 ): Promise<CareerIntentResult> {
   const metadata = { userId, resumeId };
+
+  // Instructions to fabricate or inject unverified claims are commands, not
+  // career evidence. Stop them before any handler can append raw notes, log an
+  // achievement, rewrite the resume, or mutate Career Memory.
+  if (isFabricationInstruction(message)) {
+    return {
+      assistantMessage: "I won’t store or generate those requested claims as facts because Career Memory does not contain evidence for them. I left your profile and resume unchanged. If any number, skill, leadership claim, or user count is real, provide the supporting context and I can add the verified version.",
+      resume: currentResume,
+      resumeId: currentResume?.id || null,
+      workspace: buildCareerWorkspaceState(currentResume),
+    };
+  }
 
   switch (intent) {
     case "CREATE_RESUME":
