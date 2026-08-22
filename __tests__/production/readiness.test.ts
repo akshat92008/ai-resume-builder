@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEntitlementsForPlan } from "@/lib/careerpath/entitlements";
+import { getEntitlementsForPlan, PRODUCT_CAPS_DISABLED_FOR_TESTING } from "@/lib/careerpath/entitlements";
 import { CreateJobApplicationSchema, UpdateJobApplicationSchema } from "@/lib/careerpath/job-validation";
 import { razorpayPeriodEndIso, razorpayStatusToPlan } from "@/lib/careerpath/razorpay-state";
 import { validatePaidProductionConfiguration, validateProductionConfiguration } from "@/lib/env";
@@ -138,20 +138,17 @@ describe("Razorpay state mapping", () => {
 });
 
 describe("production entitlements", () => {
-  it("keeps free usage constrained while allowing onboarding plus one complete core AI journey", () => {
-    const free = getEntitlementsForPlan("free");
-    const usableFirstSessionAiActions = 12;
-    expect(free.aiActionsPerDay).toBe(usableFirstSessionAiActions);
-    expect(free.tailoringPerDay).toBe(1);
-    expect(free.outreachPerDay).toBe(1);
-  });
-
-  it("gives pro materially higher server-enforced quotas", () => {
+  it("temporarily disables product usage caps for full manual feature certification", () => {
     const free = getEntitlementsForPlan("free");
     const pro = getEntitlementsForPlan("pro");
-    expect(pro.aiActionsPerDay).toBeGreaterThan(free.aiActionsPerDay);
-    expect(pro.tailoringPerDay).toBeGreaterThan(free.tailoringPerDay);
-    expect(pro.outreachPerDay).toBeGreaterThan(free.outreachPerDay);
+
+    expect(PRODUCT_CAPS_DISABLED_FOR_TESTING).toBe(true);
+    expect(free.aiActionsPerDay).toBeGreaterThanOrEqual(100_000);
+    expect(free.tailoringPerDay).toBeGreaterThanOrEqual(100_000);
+    expect(free.outreachPerDay).toBeGreaterThanOrEqual(100_000);
+    expect(pro.aiActionsPerDay).toBe(free.aiActionsPerDay);
+    expect(pro.tailoringPerDay).toBe(free.tailoringPerDay);
+    expect(pro.outreachPerDay).toBe(free.outreachPerDay);
   });
 });
 

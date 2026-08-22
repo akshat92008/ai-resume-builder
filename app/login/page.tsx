@@ -16,6 +16,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const emailVerified = searchParams.get("verified") === "1";
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +40,9 @@ function LoginForm() {
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setMessage(error.code === "email_not_confirmed" ? "This account came from the earlier beta signup flow. Re-enter the same email and password on Create account once to activate it." : error.message);
+      setMessage(error.code === "email_not_confirmed"
+        ? "Your email is not verified yet. Open the verification link from Supabase, then try signing in again."
+        : error.message);
       setLoading(false);
       return;
     }
@@ -65,6 +68,7 @@ function LoginForm() {
         <p className="mt-3 text-sm leading-6 text-white/45">Continue from the same Career Memory, applications and outcome history you left behind.</p>
 
         {!isSupabaseConfigured && <Alert className="mt-5" variant="error">Authentication is not configured on this deployment.</Alert>}
+        {emailVerified && <Alert className="mt-5" variant="success">Email verified. Sign in to continue to CareerOS.</Alert>}
 
         <form onSubmit={submit} className="mt-7 space-y-5">
           <div className="space-y-2">

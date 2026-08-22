@@ -26,8 +26,10 @@ describe("manual production testing regression contract", () => {
     expect(chat).toContain('response.headers.get("retry-after")');
   });
 
-  it("gives a free account enough AI actions for onboarding plus one core workflow", () => {
+  it("keeps full-product test mode behind one explicit reversible switch", () => {
     const entitlements = source("lib/careerpath/entitlements.ts");
-    expect(entitlements).toContain("free: { aiActionsPerDay: 12");
+    expect(entitlements).toContain("PRODUCT_CAPS_DISABLED_FOR_TESTING = true");
+    expect(entitlements).toContain("TESTING_EFFECTIVELY_UNLIMITED = 1_000_000");
+    expect(entitlements).toContain("PRODUCT_CAPS_DISABLED_FOR_TESTING ? TESTING_LIMITS : PLAN_LIMITS[plan]");
   });
 });
