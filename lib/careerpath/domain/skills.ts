@@ -7,6 +7,7 @@
 
 import type { CareerPathProfile, CareerProfile } from "../types";
 import { escapeRegExp, unique } from "./utils";
+import { hasUnsafeActionContext, isExplicitlyNegatedTerm } from "../source-safety";
 
 // ---------------------------------------------------------------------------
 // Skill Extraction
@@ -15,10 +16,13 @@ import { escapeRegExp, unique } from "./utils";
 export function extractKnownSkills(text: string) {
   const skills = [
     "React", "Next.js", "TypeScript", "JavaScript", "Python", "Node.js", "Express", "Supabase",
-    "Firebase", "PostgreSQL", "SQL", "Tailwind CSS", "Figma", "Git", "GitHub", "API", "NVIDIA NIM",
-    "OpenAI", "LangChain", "Docker", "HTML", "CSS",
+    "Firebase", "PostgreSQL", "MongoDB", "Redis", "SQL", "Tailwind CSS", "Figma", "Git", "GitHub", "API",
+    "AWS", "Kubernetes", "NVIDIA NIM", "OpenAI", "LangChain", "Docker", "Machine Learning", "HTML", "CSS",
   ];
-  return skills.filter((skill) => new RegExp(`\\b${escapeRegExp(skill).replace(/\\ /g, "\\s*")}\\b`, "i").test(text));
+  return skills.filter((skill) => {
+    const present = new RegExp(`\\b${escapeRegExp(skill).replace(/\\ /g, "\\s*")}\\b`, "i").test(text);
+    return present && !isExplicitlyNegatedTerm(skill, text);
+  });
 }
 
 export function extractRoleKeywords(text: string) {
@@ -72,8 +76,13 @@ export function extractMetrics(text: string) {
 }
 
 export function extractLeadershipSignals(text: string) {
-  return (text.match(/\b(?:led|mentored|managed|coordinated|owned|trained|organized)[^\n.]{2,120}/gi) ?? [])
-    .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
+  const pattern = /\b(?:led|mentored|managed|coordinated|owned|trained|organized)[^\n.]{2,120}/gi;
+  return [...text.matchAll(pattern)]
+    .filter((match) => !hasUnsafeActionContext(text, match.index ?? 0))
+    .map((match) => {
+      const item = match[0];
+      return item.charAt(0).toUpperCase() + item.slice(1);
+    })
     .slice(0, 6);
 }
 
@@ -125,17 +134,17 @@ export function extractHiddenExpectations(text: string) {
 
 export function extractDreamCompanies(text: string) {
   const match = text.match(/\b(?:dream company|target companies|preferred companies)\s*[:\-]\s*([^\n.]{2,160})/i)?.[1];
-  return match ? text.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
+  return match ? match.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
 }
 
 export function extractPreferredCountries(text: string) {
   const match = text.match(/\b(?:preferred countries|target countries|countries)\s*[:\-]\s*([^\n.]{2,160})/i)?.[1];
-  return match ? text.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
+  return match ? match.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
 }
 
 export function extractCoursework(text: string) {
   const match = text.match(/\b(?:coursework|courses)\s*[:\-]\s*([^\n.]{2,180})/i)?.[1];
-  return match ? text.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 10) : [];
+  return match ? match.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 10) : [];
 }
 
 export function extractAwards(text: string) {
@@ -146,7 +155,7 @@ export function extractAwards(text: string) {
 
 export function extractActivities(text: string) {
   const match = text.match(/\b(?:activities|clubs|societies)\s*[:\-]\s*([^\n.]{2,180})/i)?.[1];
-  return match ? text.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
+  return match ? match.split(/,|;|\||\band\b/i).map((item) => item.trim()).filter(Boolean).slice(0, 8) : [];
 }
 
 export function inferIndustry(text: string) {
