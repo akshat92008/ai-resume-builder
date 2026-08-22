@@ -127,6 +127,15 @@ function isAgentResponse(value: unknown): value is AgentResponse {
   return typeof value === "object" && value !== null;
 }
 
+function readRetryAfterSeconds(response: Response, payload: unknown) {
+  if (typeof payload === "object" && payload !== null && "retryAfterSeconds" in payload) {
+    const value = (payload as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.ceil(value);
+  }
+  const header = Number(response.headers.get("retry-after"));
+  return Number.isFinite(header) && header > 0 ? Math.ceil(header) : 60;
+}
+
 async function readJsonResponse(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) return response.json();
@@ -261,7 +270,8 @@ export function ChatInterface() {
       const json = await readJsonResponse(response);
       if (!response.ok) {
         if (response.status === 429) {
-          setRateLimitUntil(Date.now() + 30_000);
+          const retryAfterSeconds = readRetryAfterSeconds(response, json);
+          setRateLimitUntil(Date.now() + retryAfterSeconds * 1000);
           throw new Error("RATE_LIMIT");
         }
         throw json;
