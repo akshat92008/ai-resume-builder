@@ -127,7 +127,10 @@ function extractExperiences(message: string): ExtractedExperience[] {
 
   const withoutDates = /\bworked\s+at\s+([^,.!?\n]{2,100}?)\s+as\s+(?:an?\s+)?([^,.!?\n]{2,100}?)(?=[,.!?\n]|$)/gi;
   for (const match of message.matchAll(withoutDates)) {
-    if (found.some((item) => normalize(item.company) === normalize(match[1]) && normalize(item.role) === normalize(match[2]))) continue;
+    // The broad no-date grammar also matches the dated grammar with
+    // "from 2025 to 2026" folded into the role. If the employer was already
+    // recovered by the more specific dated parser, keep that canonical row.
+    if (found.some((item) => normalize(item.company) === normalize(match[1]))) continue;
     found.push({
       company: cleanFragment(match[1]),
       role: cleanFragment(match[2]),
