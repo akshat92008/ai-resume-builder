@@ -1,9 +1,8 @@
-import { auditResumeAgent } from "@/lib/careerpath/orchestrator";
 import { enforceResumeClaimProvenance } from "@/lib/careerloop/provenance";
 import { enforceCareerProfileSourceEvidence } from "@/lib/careerloop/profile-source";
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
-import { fallbackResumeAudit, isRuntimeFallbackContent } from "@/lib/careerpath/runtime-fallbacks";
+import { fallbackResumeAudit } from "@/lib/careerpath/runtime-fallbacks";
 import { normalizeVerifiedResumePresentation } from "@/lib/careerpath/resume-content-normalization";
 import { dedupeResumeSectionBullets, stripUnsupportedDurationClaims } from "@/lib/careerpath/reliability-normalization";
 import { preserveSectionBoundQuantifiedEvidence } from "@/lib/careerpath/section-proof";
@@ -102,7 +101,6 @@ export async function verifyResumeCandidate(input: {
     },
   );
 
-  const fallbackContent = isRuntimeFallbackContent(input.content);
   let content = deriveRenderableResume(validation.cleanedResume);
 
   // Validation may remove a generative summary sentence that happened to be the
@@ -130,24 +128,13 @@ export async function verifyResumeCandidate(input: {
   const durationCheck = stripUnsupportedDurationClaims(content, rawSourceEvidence);
   content = dedupeResumeSectionBullets(durationCheck.content);
 
-  let audit;
-  if (input.useDeterministicAudit || fallbackContent) {
-    audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
-  } else {
-    try {
-      audit = await auditResumeAgent(
-        content,
-        input.targetRole,
-        input.jobDescription || "",
-        input.metadata,
-      );
-    } catch {
-      // Audit quality should degrade gracefully when the external model is slow;
-      // the canonical truth/provenance checks above are deterministic and remain
-      // mandatory. The fallback audit never changes resume facts.
-      audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
-    }
-  }
+  // Scoring is advisory and must never be able to hold the truth-critical write
+  // path hostage. The external model is still used for the generative operation
+  // itself, but the persisted resume gets a deterministic audit immediately.
+  // This also makes CareerOS scores reproducible instead of provider-dependent.
+  const audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
+  audit.recruiterComments = "CareerOS deterministic audit. Scores are reproducible signals, not a claim about any employer's private ATS.";
+  audit.summary = "Deterministic CareerOS audit completed without adding or changing resume facts.";
 
   return {
     content,

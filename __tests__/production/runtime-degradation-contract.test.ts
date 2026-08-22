@@ -19,8 +19,9 @@ describe("production runtime degradation contract", () => {
     expect(resumeHandlers).toContain("fallbackResumeAudit");
     expect(resumeHandlers).toContain("fallbackImproveResume");
     expect(resumeHandlers).toContain("fallbackTailorResume");
-    expect(verifiedResume).toContain("isRuntimeFallbackContent");
     expect(verifiedResume).toContain("fallbackResumeAudit");
+    expect(verifiedResume).not.toContain("auditResumeAgent");
+    expect(verifiedResume).toContain("Scoring is advisory and must never be able to hold the truth-critical write");
   });
 
   it("keeps dedicated improve/tailor/humanize paths available without inventing facts", () => {
