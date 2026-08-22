@@ -133,6 +133,8 @@ export async function verifyResumeCandidate(input: {
   // itself, but the persisted resume gets a deterministic audit immediately.
   // This also makes CareerOS scores reproducible instead of provider-dependent.
   const audit = fallbackResumeAudit(content, input.targetRole, input.jobDescription || "");
+  audit.recruiterComments = "CareerOS deterministic audit. Scores are reproducible signals, not a claim about any employer's private ATS.";
+  audit.summary = "Deterministic CareerOS audit completed without adding or changing resume facts.";
 
   return {
     content,
