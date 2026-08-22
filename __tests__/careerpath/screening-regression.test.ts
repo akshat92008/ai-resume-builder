@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAchievementLogInput } from "@/lib/careerpath/career-os";
+import { isAchievementLogInput, legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import {
   mergeDeterministicProfileEvidence,
   preserveDeterministicResumeEvidence,
@@ -127,6 +127,35 @@ describe("manual screening regression", () => {
     expect(claims).not.toContain("managed a team professionally");
     // Raw notes intentionally retain the user's negative statements as evidence.
     expect(profile.rawNotes.toLowerCase()).toContain("never managed a team professionally");
+  });
+
+  it("survives conversion into the Career Memory model used by the workspace", () => {
+    const legacy = mergeDeterministicProfileEvidence({ message: screeningSource, profile: emptyProfile() });
+    const memory = legacyProfileToCareerProfile(legacy, "user-screening", screeningSource);
+    const claims = JSON.stringify({
+      education: memory.education,
+      experience: memory.experience,
+      projects: memory.projects,
+      skills: memory.skills,
+      achievements: memory.achievements,
+    }).toLowerCase();
+
+    expect(memory.education).toHaveLength(1);
+    expect(memory.education[0].institution).toBe("Delhi Technological University");
+    expect(memory.education[0].endDate).toBe("2027");
+    expect(memory.experience).toHaveLength(1);
+    expect(memory.experience[0].company).toBe("BrightStack Technologies");
+    expect(memory.projects).toHaveLength(3);
+    expect(memory.projects.map((item) => item.name.toLowerCase())).toEqual(expect.arrayContaining([
+      "campusconnect",
+      "expense tracker",
+      "python web scraper",
+    ]));
+    expect(memory.skills.map((item) => item.name)).toEqual(expect.arrayContaining(["MongoDB", "AWS", "Docker"]));
+    expect(memory.achievements.some((item) => item.text.toLowerCase().includes("won second place"))).toBe(true);
+    expect(claims).not.toContain("managed a team professionally");
+    expect(claims).not.toContain("kubernetes");
+    expect(claims).not.toContain("redis");
   });
 
   it("preserves every recovered section in a conservative resume without cross-project contamination", () => {
