@@ -12,7 +12,7 @@ describe("production auth email verification contract", () => {
     expect(route).toContain("emailRedirectTo");
     expect(route).not.toContain("createSupabaseAdminClient");
     expect(route).not.toContain("admin.auth.admin.createUser");
-    expect(route).not.toContain("email_confirm: true");
+    expect(route).not.toMatch(/\bemail_confirm\s*:\s*true\s*[,}]/);
   });
 
   it("keeps signup abuse protection while product feature caps are disabled", () => {
