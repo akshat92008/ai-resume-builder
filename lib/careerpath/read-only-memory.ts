@@ -83,7 +83,7 @@ export function answerCareerMemoryQuery(message: string, profile: CareerProfile 
 
   const mentionedExperience = findMentionedExperience(message, profile);
   const internship = mentionedExperience || profile.experience.find((item) => /\bintern(?:ship)?\b/i.test(`${item.title} ${item.description || ""}`));
-  if (internship && (/\b(?:duration|dates?|when)\b/.test(text) || /\binternship\b/.test(text))) {
+  if (internship && /\b(?:duration|dates?|when)\b/.test(text)) {
     const dates = dateRange(internship.startDate, internship.endDate);
     const identity = joined([internship.title, internship.company]);
     return dates
@@ -110,7 +110,7 @@ export function answerCareerMemoryQuery(message: string, profile: CareerProfile 
       dateRange(mentionedExperience.startDate, mentionedExperience.endDate),
       mentionedExperience.description,
       ...mentionedExperience.responsibilities,
-      ...mentionedExperience.metrics,
+      ...(mentionedExperience.metrics || []),
       ...mentionedExperience.achievements.map((item) => item.text),
       ...mentionedExperience.technologies,
     ]);
@@ -122,7 +122,7 @@ export function answerCareerMemoryQuery(message: string, profile: CareerProfile 
     const details = unique([
       mentionedProject.description,
       ...mentionedProject.technologies,
-      ...mentionedProject.metrics || [],
+      ...(mentionedProject.metrics || []),
       ...mentionedProject.achievements.map((item) => item.text),
     ]);
     return `${mentionedProject.name}${details.length ? `:\n${details.map((item) => `- ${item}`).join("\n")}` : " is stored in Career Memory."}`;
