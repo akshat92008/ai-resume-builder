@@ -5,7 +5,9 @@ import { checkRateLimit } from "@/lib/careerpath/rate-limit";
 import { checkPromptInjection } from "@/lib/careerpath/guardrails";
 import { getServerResume, ResumeConflictError, saveResumeMessage } from "@/lib/careerpath/db";
 import { buildCareerWorkspaceState, routeCareerCommand } from "@/lib/careerpath/career-os";
-import { inferIntentKeyword, inferIntentLLM } from "@/lib/careerpath/orchestrator";
+import { inferIntentKeyword, inferIntentLLM } from "@/lib/careerpath/intent-router";
+import { isReadOnlyCareerMemoryQuery } from "@/lib/careerpath/read-only-memory";
+import { isFabricationInstruction } from "@/lib/careerpath/source-safety";
 import { processCareerIntent } from "@/lib/careerpath/process-intent";
 import { safeErrorSummary } from "@/lib/careerpath/telemetry";
 import { getClientIp, readJsonLimited } from "@/lib/http/request";
@@ -128,16 +130,34 @@ export async function POST(request: Request) {
       const entitlements = await getCurrentUserEntitlements();
       const rateLimit = await checkRateLimit(userId, ipHash, "resume_agent", entitlements.aiActionsPerDay);
       if (!rateLimit.allowed) {
+        const retryAfterSeconds = rateLimit.resetAt
+          ? Math.max(1, Math.ceil((rateLimit.resetAt - Date.now()) / 1000))
+          : undefined;
         return NextResponse.json(
-          { error: { code: "RATE_LIMIT_EXCEEDED", message: "You've reached the AI usage limit. Please wait and try again.", recoverable: true } },
-          { status: 429 },
+          {
+            error: {
+              code: "RATE_LIMIT_EXCEEDED",
+              message: "You've reached today's AI action limit. Read-only Career Memory questions are still available while the quota resets.",
+              recoverable: true,
+            },
+            remaining: rateLimit.remaining,
+            ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+          },
+          {
+            status: 429,
+            headers: retryAfterSeconds ? { "Retry-After": String(retryAfterSeconds) } : undefined,
+          },
         );
       }
       quotaConsumed = true;
       return null;
     }
 
-    let intent = mapCommandIntent(command.intent, Boolean(currentResume));
+    // These operations are entirely deterministic. They must stay usable even
+    // after the AI budget is exhausted and must never consume an AI action.
+    const deterministicNoAi = isReadOnlyCareerMemoryQuery(message) || isFabricationInstruction(message);
+    let intent: AgentIntent | null = deterministicNoAi ? "GENERAL_HELP" : mapCommandIntent(command.intent, Boolean(currentResume));
+
     if (!intent) {
       const keywordIntent = inferIntentKeyword(message, Boolean(currentResume));
       if (keywordIntent.confidence >= 0.85 && keywordIntent.intent !== "GENERAL_HELP") {
@@ -175,10 +195,18 @@ export async function POST(request: Request) {
     if (!intent) {
       const limited = await consumeAiQuota();
       if (limited) return limited;
-      intent = (await inferIntentLLM(message, Boolean(currentResume), { userId, resumeId })).intent;
+      intent = (await inferIntentLLM(
+        message,
+        Boolean(currentResume),
+        {
+          profile: currentResume?.careerProfile,
+          commandIntent: command.intent,
+        },
+        { userId, resumeId },
+      )).intent;
     }
 
-    if (intentUsesAi(intent, command.intent)) {
+    if (!deterministicNoAi && intentUsesAi(intent, command.intent)) {
       const limited = await consumeAiQuota();
       if (limited) return limited;
     }
