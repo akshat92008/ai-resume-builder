@@ -23,8 +23,10 @@ export type GithubActionsReleaseClaims = {
   event_name: string;
 };
 
+type GithubJwk = JsonWebKey & { kid?: string };
+
 type JwksResponse = {
-  keys?: JsonWebKey[];
+  keys?: GithubJwk[];
 };
 
 function decodeJsonSegment<T>(segment: string): T {
