@@ -13,6 +13,13 @@ const GLOBAL_AI_EVENTS = new Set([
   "job_analyzer",
 ]);
 
+type RateLimitResult = {
+  allowed: boolean;
+  remaining: number;
+  resetAt?: number;
+  error?: string;
+};
+
 function canonicalEventName(eventType: string) {
   return GLOBAL_AI_EVENTS.has(eventType) ? "global_ai_daily" : eventType;
 }
@@ -46,7 +53,7 @@ export async function checkRateLimit(
   ipHash: string,
   eventType: string,
   maxLimit: number,
-): Promise<{ allowed: boolean; remaining: number; error?: string }> {
+): Promise<RateLimitResult> {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     if (process.env.NODE_ENV === "production") return { allowed: false, remaining: 0, error: "RATE_LIMIT_NOT_CONFIGURED" };
     return { allowed: true, remaining: maxLimit };
@@ -56,8 +63,12 @@ export async function checkRateLimit(
   }
   try {
     const identifier = await identifierFor(userId, ipHash);
-    const { success, remaining } = await getRatelimiter(eventType, maxLimit).limit(identifier);
-    return { allowed: success, remaining };
+    const { success, remaining, reset } = await getRatelimiter(eventType, maxLimit).limit(identifier);
+    return {
+      allowed: success,
+      remaining,
+      resetAt: typeof reset === "number" ? reset : undefined,
+    };
   } catch (error) {
     logger.error("[rate-limit] Upstash Redis check failed", { error });
     if (process.env.NODE_ENV === "production") return { allowed: false, remaining: 0, error: "RATE_LIMIT_CHECK_FAILED" };
@@ -85,8 +96,8 @@ export async function checkAiActionRateLimit(
   globalMaxLimit: number,
   featureType?: string,
   featureMaxLimit?: number,
-): Promise<{ allowed: boolean; remaining: number; error?: string }> {
-  let feature: { allowed: boolean; remaining: number; error?: string } | null = null;
+): Promise<RateLimitResult> {
+  let feature: RateLimitResult | null = null;
   if (featureType && featureMaxLimit != null) {
     feature = await checkRateLimit(userId, ipHash, featureType, featureMaxLimit);
     if (!feature.allowed) return feature;
@@ -97,5 +108,6 @@ export async function checkAiActionRateLimit(
   return {
     allowed: true,
     remaining: feature ? Math.min(global.remaining, feature.remaining) : global.remaining,
+    resetAt: global.resetAt,
   };
 }
