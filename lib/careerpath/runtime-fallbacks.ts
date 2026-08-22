@@ -38,6 +38,33 @@ function unique(values: string[]) {
   });
 }
 
+function extractFallbackJobKeywords(text: string) {
+  const supplemental = [
+    /\bJava\b/i.test(text) ? "Java" : "",
+  ].filter(Boolean);
+  return unique([...extractKnownSkills(text), ...supplemental]);
+}
+
+function extractExperienceRequirement(text: string) {
+  const match = text.match(/\b(\d+)\s*\+\s*years?\s+of\s+([^\n.]{3,120})/i)
+    || text.match(/\b(?:at\s+least\s+)?(\d+)\s+years?\s+of\s+([^\n.]{3,120})/i);
+  if (!match) return null;
+  const years = Number(match[1]);
+  if (!Number.isFinite(years) || years <= 0 || years > 50) return null;
+  const area = match[2].replace(/\s+/g, " ").trim();
+  return {
+    years,
+    label: `${years}+ years of ${area}`,
+  };
+}
+
+function resumeExplicitlyMeetsExperienceRequirement(resumeText: string, requiredYears: number) {
+  const explicitYears = [...resumeText.matchAll(/\b(\d+(?:\.\d+)?)\s*\+?\s*years?\b/gi)]
+    .map((match) => Number(match[1]))
+    .filter(Number.isFinite);
+  return explicitYears.some((years) => years >= requiredYears);
+}
+
 export function cloneResumeContent(content: CareerPathResumeContent): CareerPathResumeContent {
   return {
     ...content,
@@ -204,17 +231,28 @@ export function fallbackTailorResume(
   jobDescription: string,
 ): CareerPathTailoringResult {
   const resumeText = JSON.stringify(content);
-  const resumeSkills = new Set(extractKnownSkills(resumeText).map(normalize));
-  const jdSkills = unique(extractKnownSkills(jobDescription));
+  const resumeSkills = new Set(extractFallbackJobKeywords(resumeText).map(normalize));
+  const jdSkills = extractFallbackJobKeywords(jobDescription);
   const matchedKeywords = jdSkills.filter((skill) => resumeSkills.has(normalize(skill)));
   const missingKeywordsNotAdded = jdSkills.filter((skill) => !resumeSkills.has(normalize(skill)));
-  const matchScore = jdSkills.length ? Math.round((matchedKeywords.length / jdSkills.length) * 100) : 70;
+
+  const experienceRequirement = extractExperienceRequirement(jobDescription);
+  if (experienceRequirement) {
+    if (resumeExplicitlyMeetsExperienceRequirement(resumeText, experienceRequirement.years)) {
+      matchedKeywords.push(experienceRequirement.label);
+    } else {
+      missingKeywordsNotAdded.push(experienceRequirement.label);
+    }
+  }
+
+  const signalCount = matchedKeywords.length + missingKeywordsNotAdded.length;
+  const matchScore = signalCount ? Math.round((matchedKeywords.length / signalCount) * 100) : 70;
   return {
     matchScore,
-    matchedKeywords,
+    matchedKeywords: unique(matchedKeywords),
     safeKeywordsAdded: [],
-    missingKeywordsNotAdded,
-    tailoringSummary: ["External tailoring model was unavailable; preserved the verified resume without inventing missing keywords."],
+    missingKeywordsNotAdded: unique(missingKeywordsNotAdded),
+    tailoringSummary: ["External tailoring model was unavailable; preserved the verified resume without inventing missing keywords or experience."],
     tailoredResume: markRuntimeFallback(cloneResumeContent(content)),
   };
 }

@@ -1,6 +1,7 @@
 import type { CareerPathProfile } from "./types";
 import { reconcileExtractedProfileWithEvidence } from "./profile-evidence";
 import { stripUnsourcedProfileLocations } from "./location-evidence";
+import { recoverStructuredProfileEvidence } from "./structured-profile-recovery";
 
 function emptyEvidenceProfile(profile: CareerPathProfile): CareerPathProfile {
   return {
@@ -41,7 +42,8 @@ export function enforceCareerPathProfileEvidence(profile: CareerPathProfile): Ca
     existing: emptyEvidenceProfile(profile),
     extracted: profile,
   });
-  const locationGated = stripUnsourcedProfileLocations(gated, evidence);
+  const structuredRecovered = recoverStructuredProfileEvidence(gated);
+  const locationGated = stripUnsourcedProfileLocations(structuredRecovered, evidence);
 
   return {
     ...locationGated,
