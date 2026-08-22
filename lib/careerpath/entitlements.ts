@@ -9,10 +9,11 @@ export type PlanEntitlements = {
 };
 
 const PLAN_LIMITS: Record<SubscriptionPlan, Omit<PlanEntitlements, "plan">> = {
-  // A complete core journey is create → humanize → improve → tailor. Keep the
-  // free tier constrained, but do not block that single end-to-end workflow at
-  // the fourth action after the user has already invested work in the resume.
-  free: { aiActionsPerDay: 4, tailoringPerDay: 1, outreachPerDay: 1, advancedTools: true },
+  // A real first session includes onboarding corrections plus create → humanize
+  // → improve → tailor. Deterministic Career Memory reads and safety refusals do
+  // not consume this budget, but four AI actions was still too small for a
+  // customer to complete and verify one end-to-end workflow.
+  free: { aiActionsPerDay: 12, tailoringPerDay: 1, outreachPerDay: 1, advancedTools: true },
   pro: { aiActionsPerDay: 100, tailoringPerDay: 30, outreachPerDay: 20, advancedTools: true },
 };
 

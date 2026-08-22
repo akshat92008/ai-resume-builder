@@ -138,10 +138,10 @@ describe("Razorpay state mapping", () => {
 });
 
 describe("production entitlements", () => {
-  it("keeps free usage constrained while allowing one complete core AI journey", () => {
+  it("keeps free usage constrained while allowing onboarding plus one complete core AI journey", () => {
     const free = getEntitlementsForPlan("free");
-    const certifiedCoreAiActions = 4; // create → humanize → improve → tailor
-    expect(free.aiActionsPerDay).toBe(certifiedCoreAiActions);
+    const usableFirstSessionAiActions = 12;
+    expect(free.aiActionsPerDay).toBe(usableFirstSessionAiActions);
     expect(free.tailoringPerDay).toBe(1);
     expect(free.outreachPerDay).toBe(1);
   });
