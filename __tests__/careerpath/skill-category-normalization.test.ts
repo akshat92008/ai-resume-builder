@@ -31,6 +31,6 @@ describe("resume skill category normalization", () => {
     expect(byCategory.get("Cloud & DevOps")).toContain("Docker");
     expect(byCategory.get("Developer Tools")).toContain("Git");
     expect(normalized.skills.some((group) => group.items.includes("GraphQL"))).toBe(true);
-    expect(normalized.skills.find((group) => group.category === "Frontend")?.items).not.toContain("Express");
+    expect(normalized.skills.find((group) => group.category === "Frontend")?.items ?? []).not.toContain("Express");
   });
 });
