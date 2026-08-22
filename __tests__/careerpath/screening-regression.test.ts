@@ -62,10 +62,24 @@ function emptyResume(): CareerPathResumeContent {
   };
 }
 
+function structuredClaims(profile: CareerPathProfile) {
+  return JSON.stringify({
+    personal: profile.personal,
+    target: profile.target,
+    education: profile.education,
+    skills: profile.skills,
+    projects: profile.projects,
+    experience: profile.experience,
+    certifications: profile.certifications,
+    achievements: profile.achievements,
+    languages: profile.languages,
+  }).toLowerCase();
+}
+
 describe("manual screening regression", () => {
   it("recovers the complete source structure without turning negatives into claims", () => {
     const profile = mergeDeterministicProfileEvidence({ message: screeningSource, profile: emptyProfile() });
-    const serialized = JSON.stringify(profile).toLowerCase();
+    const claims = structuredClaims(profile);
 
     expect(profile.personal.name).toBe("Arjun Mehta");
     expect(profile.personal.github).toBe("github.com/arjunmehta-dev");
@@ -82,9 +96,9 @@ describe("manual screening regression", () => {
 
     expect(profile.skills.databases).toEqual(expect.arrayContaining(["PostgreSQL", "MongoDB"]));
     expect(profile.skills.tools).toEqual(expect.arrayContaining(["Git", "Docker", "AWS"]));
-    expect(serialized).not.toContain("kubernetes");
-    expect(serialized).not.toContain("redis");
-    expect(serialized).not.toContain("machine learning");
+    expect(claims).not.toContain("kubernetes");
+    expect(claims).not.toContain("redis");
+    expect(claims).not.toContain("machine learning");
 
     expect(profile.experience).toHaveLength(1);
     expect(profile.experience[0].company).toBe("BrightStack Technologies");
@@ -110,7 +124,9 @@ describe("manual screening regression", () => {
     expect(scraper.description.toLowerCase()).toContain("exports it to csv");
 
     expect(profile.achievements.join(" ").toLowerCase()).toContain("won second place");
-    expect(serialized).not.toContain("managed a team professionally");
+    expect(claims).not.toContain("managed a team professionally");
+    // Raw notes intentionally retain the user's negative statements as evidence.
+    expect(profile.rawNotes.toLowerCase()).toContain("never managed a team professionally");
   });
 
   it("preserves every recovered section in a conservative resume without cross-project contamination", () => {
@@ -145,10 +161,12 @@ describe("manual screening regression", () => {
       existing: emptyProfile(),
       extracted,
     });
-    const serialized = JSON.stringify(gated).toLowerCase();
-    expect(serialized).not.toContain("kubernetes");
-    expect(serialized).not.toContain("redis");
-    expect(serialized).not.toContain("managed a team professionally");
+    const claims = structuredClaims(gated);
+    expect(gated.skills.tools).not.toContain("Kubernetes");
+    expect(gated.skills.databases).not.toContain("Redis");
+    expect(gated.experience[0]?.responsibilities).not.toContain("Managed a team professionally");
+    expect(claims).not.toContain("managed a team professionally");
+    expect(gated.confidenceNotes.some((note) => note.includes("Kubernetes"))).toBe(true);
   });
 
   it("treats the adversarial add-fake-claims prompt as an instruction, never an achievement", () => {
