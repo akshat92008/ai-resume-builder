@@ -75,8 +75,20 @@ const BULLET_STOPWORDS = new Set([
   "user", "ease", "it", "this", "that",
 ]);
 
+function cleanBulletToken(token: string) {
+  // Keep meaningful internal punctuation in technologies such as node.js and
+  // c++, but strip sentence punctuation that otherwise makes PostgreSQL and
+  // PostgreSQL. look like different evidence tokens.
+  return token.replace(/^[.%]+|[.%]+$/g, "");
+}
+
 function bulletTokens(value: string) {
-  return [...new Set(normalize(value).split(" ").filter((token) => token.length >= 2 && !BULLET_STOPWORDS.has(token)))];
+  return [...new Set(
+    normalize(value)
+      .split(" ")
+      .map(cleanBulletToken)
+      .filter((token) => token.length >= 2 && !BULLET_STOPWORDS.has(token)),
+  )];
 }
 
 function isNearDuplicate(a: string, b: string) {
