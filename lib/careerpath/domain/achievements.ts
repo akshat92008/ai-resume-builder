@@ -13,14 +13,19 @@ import { achievementItem, createId, escapeRegExp, sentenceCase, unique, uniqueBy
 import { extractMetrics } from "./skills";
 import { refreshCareerProfileInsights } from "./profile";
 import { inferProofLevel } from "./resume";
+import { isFocusedAchievementMessage } from "../source-safety";
 
 // ---------------------------------------------------------------------------
 // Achievement Detection
 // ---------------------------------------------------------------------------
 
+/**
+ * Only focused, affirmative achievement notes are allowed into the achievement
+ * logger. A long profile dump or an instruction such as "add that I increased
+ * performance by 70%" is not itself career evidence.
+ */
 export function isAchievementLogInput(input: string): boolean {
-  return /\b(log|achievement|accomplished|today|shipped|launched|optimized|improved|reduced|increased|won|published|fixed|delivered)\b/i.test(input) &&
-    /\b(built|made|created|optimized|improved|reduced|increased|won|published|fixed|delivered|launched|shipped|completed)\b/i.test(input);
+  return isFocusedAchievementMessage(input);
 }
 
 // ---------------------------------------------------------------------------
