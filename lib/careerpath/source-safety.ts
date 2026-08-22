@@ -2,6 +2,10 @@ const NEGATION_WORDS = /\b(?:never|not|no|didn['’]?t|did\s+not|haven['’]?t|h
 
 const INSTRUCTIONAL_CLAIM_WORDS = /\b(?:add\s+that|say\s+that|claim\s+that|write\s+that|pretend(?:\s+that)?|invent(?:ed|ing)?|fabricat(?:e|ed|ing)|make\s+up|just\s+add)\b/i;
 
+const DECEPTION_FRAMING = /\b(?:don['’]?t|do\s+not)\s+(?:call|label|treat)\s+(?:these|them|it)\s+(?:as\s+)?(?:fake|fabricated|invented|unverified)\b/i;
+const VERIFICATION_BYPASS = /(?:\bno\s+need\s+to\s+(?:ask|verify|check)\b|\b(?:don['’]?t|do\s+not)\s+(?:ask|verify|check)\b|\bskip\s+(?:verification|evidence|proof)\b|\bwithout\s+(?:verification|evidence|proof)\b|\bregardless\s+of\s+(?:whether|if)\b|\b(?:i\s+)?(?:don['’]?t|do\s+not)\s+care\s+if\b.{0,120}\b(?:missing|unsupported|not\s+in|not\s+from)\b)/i;
+const FACT_INSERTION = /\b(?:add|include|insert|put|state|claim|write|rewrite)\b/i;
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -16,15 +20,17 @@ function clauseBefore(text: string, index: number, maxLength = 180) {
 }
 
 /**
- * Detect explicit requests to put invented or unverified claims into Career
- * Memory. Legitimate commands such as "add my internship at X" stay allowed;
- * this guard is intentionally aimed at manipulation language such as "add that
- * I led 8 people" or "just make it up".
+ * Detect explicit requests to put invented or deliberately unverified claims
+ * into Career Memory. Legitimate commands such as "add my internship at X"
+ * stay allowed. Requests that explicitly bypass verification are blocked before
+ * any generative handler runs, even when they are disguised as a rewrite.
  */
 export function isFabricationInstruction(message: string) {
   const text = message.replace(/\s+/g, " ").trim();
   if (!text) return false;
+  if (DECEPTION_FRAMING.test(text)) return true;
   if (INSTRUCTIONAL_CLAIM_WORDS.test(text)) return true;
+  if (VERIFICATION_BYPASS.test(text) && FACT_INSERTION.test(text)) return true;
   if (/\bmake\s+(?:my|the)\s+(?:profile|resume|cv)\b.{0,80}\b(?:impressive|stronger|better)\b/i.test(text) && /\badd\b/i.test(text)) return true;
   if (/\badd\s+that\b/i.test(text) && /\b(?:expert|led|managed|increased|improved|users?|revenue|performance|team)\b/i.test(text)) return true;
   return false;
