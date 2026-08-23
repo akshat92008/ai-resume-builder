@@ -6,6 +6,7 @@ import { tailorResumeAgent } from "@/lib/careerpath/orchestrator";
 import { getServerResume, saveResumeVersion, saveServerResume } from "@/lib/careerpath/db";
 import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
 import { fallbackTailorResume } from "@/lib/careerpath/runtime-fallbacks";
+import { reconcileVerifiedTailoringResult } from "@/lib/careerpath/tailoring-verification";
 import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 import { ResumePayloadSchema } from "@/lib/careerpath/types";
@@ -86,6 +87,11 @@ export async function POST(request: Request) {
       jobDescription: body.jobDescription,
       metadata: { userId: auth.user.id, resumeId: resume.id },
     });
+    const verifiedTailoring = reconcileVerifiedTailoringResult(
+      tailoring,
+      verified.content,
+      body.jobDescription,
+    );
 
     await saveResumeVersion({
       userId: auth.user.id,
@@ -107,21 +113,18 @@ export async function POST(request: Request) {
       audit: verified.audit,
     });
     tailored.careerProfile = verified.careerProfile;
-    tailored.tailoring = {
-      ...tailoring,
-      tailoredResume: verified.content,
-    };
+    tailored.tailoring = verifiedTailoring;
     tailored.audit = verified.audit;
     tailored.score = verified.score;
     await saveServerResume(tailored, auth.user.id);
 
     return NextResponse.json({
       newResumeId: tailored.id,
-      matchScore: tailoring.matchScore,
-      matchedKeywords: tailoring.matchedKeywords,
-      missingKeywords: tailoring.missingKeywordsNotAdded,
+      matchScore: verifiedTailoring.matchScore,
+      matchedKeywords: verifiedTailoring.matchedKeywords,
+      missingKeywords: verifiedTailoring.missingKeywordsNotAdded,
       tailoredContent: verified.content,
-      tailoring: tailored.tailoring,
+      tailoring: verifiedTailoring,
       verification: {
         removedUnsupportedClaims: verified.provenance.removedClaims,
         warnings: verified.validation.warnings.length,
