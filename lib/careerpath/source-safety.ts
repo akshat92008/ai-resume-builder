@@ -20,6 +20,20 @@ function clauseBefore(text: string, index: number, maxLength = 180) {
 }
 
 /**
+ * Remove only explicit anti-fabrication clauses before looking for fabrication
+ * verbs. "Do not invent qualifications" is a truth-preservation instruction,
+ * not a request to invent them. Positive clauses elsewhere in the same message
+ * remain intact and are still evaluated by all other safety checks.
+ */
+function stripNegatedFabricationLanguage(text: string) {
+  return text
+    .replace(/\b(?:do\s+not|don['’]?t|never)\s+(?:invent(?:ed|ing)?|fabricat(?:e|ed|ing)|make\s+up)\b[^.!?;\n]*/gi, " ")
+    .replace(/\bwithout\s+(?:inventing|fabricating|making\s+up)\b[^.!?;\n]*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Detect explicit requests to put invented or deliberately unverified claims
  * into Career Memory. Legitimate commands such as "add my internship at X"
  * stay allowed. Requests that explicitly bypass verification are blocked before
@@ -29,7 +43,8 @@ export function isFabricationInstruction(message: string) {
   const text = message.replace(/\s+/g, " ").trim();
   if (!text) return false;
   if (DECEPTION_FRAMING.test(text)) return true;
-  if (INSTRUCTIONAL_CLAIM_WORDS.test(text)) return true;
+  const positiveInstructionText = stripNegatedFabricationLanguage(text);
+  if (INSTRUCTIONAL_CLAIM_WORDS.test(positiveInstructionText)) return true;
   if (VERIFICATION_BYPASS.test(text) && FACT_INSERTION.test(text)) return true;
   if (/\bmake\s+(?:my|the)\s+(?:profile|resume|cv)\b.{0,80}\b(?:impressive|stronger|better)\b/i.test(text) && /\badd\b/i.test(text)) return true;
   if (/\badd\s+that\b/i.test(text) && /\b(?:expert|led|managed|increased|improved|users?|revenue|performance|team)\b/i.test(text)) return true;
