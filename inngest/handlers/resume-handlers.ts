@@ -24,6 +24,7 @@ import {
 } from "@/lib/careerpath/career-os";
 import { saveServerResume, saveResumeVersion } from "@/lib/careerpath/db";
 import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
+import { reconcileVerifiedTailoringResult } from "@/lib/careerpath/tailoring-verification";
 import { reconcileExtractedProfileWithEvidence } from "@/lib/careerpath/profile-evidence";
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import {
@@ -128,7 +129,7 @@ export async function handleGenerateResumeVersion(message: string, currentResume
   }
 
   currentResume.content = normalizeResumeContent(currentResume.content);
-  decorateResumeForCareerOS(currentResume, message);
+  decorateResumeForCareerOS(currentResume);
   const versions = generateSmartResumeVersions(currentResume, currentResume.careerProfile!);
   const requested = versions.find((version) => message.toLowerCase().includes(version.versionType.replace("_", " "))) || versions[0];
   return {
@@ -152,7 +153,8 @@ export async function applyBrainToResume(input: {
   const existingCareerProfile = input.currentResume?.careerProfile
     ? refreshCareerProfileInsights(input.currentResume.careerProfile)
     : null;
-  let profile = existingCareerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
+  const profileSeedInput = input.mode === "build" ? input.message : legacyProfile.rawNotes || "";
+  let profile = existingCareerProfile || legacyProfileToCareerProfile(legacyProfile, input.userId, profileSeedInput);
   let achievementLogResult: ReturnType<typeof applyAchievementLog>["result"] | null = null;
   let assistantMessage = "";
   let degradedByProvider = false;
@@ -231,9 +233,6 @@ export async function applyBrainToResume(input: {
       tailoringResult = fallbackTailorResume(input.currentResume.content, jobDesc);
     }
     candidateContent = tailoringResult.tailoredResume;
-    missingKeywords = tailoringResult.missingKeywordsNotAdded;
-    matchedKeywords = tailoringResult.matchedKeywords;
-    assistantMessage = `Tailored the resume toward the job. Matched: ${matchedKeywords.join(", ") || "none yet"}. Missing from your resume: ${missingKeywords.join(", ") || "none detected"}. I did not add missing skills without confirmation.`;
   } else if (input.mode === "improve" && input.currentResume) {
     let audit;
     try {
@@ -304,6 +303,16 @@ export async function applyBrainToResume(input: {
   const content = verified.content;
   profile = verified.careerProfile;
 
+  // Never persist or display pre-verification model metadata. Recompute fit from
+  // the exact truth-checked content so Studio, API output, and PDF agree about
+  // what is actually present and what the candidate is still missing.
+  if (tailoringResult && input.mode === "tailor") {
+    tailoringResult = reconcileVerifiedTailoringResult(tailoringResult, content, input.message);
+    missingKeywords = tailoringResult.missingKeywordsNotAdded;
+    matchedKeywords = tailoringResult.matchedKeywords;
+    assistantMessage = `Tailored the resume toward the job. Matched: ${matchedKeywords.join(", ") || "none yet"}. Missing from your resume: ${missingKeywords.join(", ") || "none detected"}. I did not add missing skills or experience without Career Memory evidence.`;
+  }
+
   if (verified.provenance.removedClaims > 0) {
     assistantMessage += ` Removed ${verified.provenance.removedClaims} unsupported claim${verified.provenance.removedClaims === 1 ? "" : "s"} that could not be linked back to Career Memory evidence.`;
   }
@@ -341,10 +350,10 @@ export async function applyBrainToResume(input: {
   nextResume.profile = legacyProfile;
   nextResume.careerProfile = profile;
   if (tailoringResult) {
-    nextResume.tailoring = { ...tailoringResult, tailoredResume: content };
+    nextResume.tailoring = tailoringResult;
   }
 
-  decorateResumeForCareerOS(nextResume, input.message, {
+  decorateResumeForCareerOS(nextResume, input.mode === "build" ? input.message : undefined, {
     versionType: input.mode === "tailor" ? "job_specific" : "master",
   });
   await saveServerResume(
