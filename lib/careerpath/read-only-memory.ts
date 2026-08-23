@@ -2,7 +2,7 @@ import type { CareerProfile } from "./types";
 
 const MUTATION_WORDS = /\b(?:add|update|change|correct|replace|remove|delete|forget|store|save|log|build|create|generate|rewrite|improve|tailor|edit|set|clear|refresh)\b/i;
 const MEMORY_READ_PHRASES = /(?:\b(?:show|tell|list|summari[sz]e|display|review|recap)\b[^.!?\n]{0,100}\b(?:career\s+memory|what\s+you\s+(?:know|remember)|stored|saved)\b|\bwhat\s+(?:do|did)\s+you\s+(?:currently\s+)?(?:know|remember)\s+about\s+me\b|\bwhat\s+is\s+(?:currently\s+)?(?:in|stored\s+in)\s+(?:my\s+)?career\s+memory\b|\beverything\s+you\s+(?:currently\s+)?know\s+about\s+me\b)/i;
-const FACT_READ_PHRASES = /(?:\bwhat\s+(?:university|college|school|institution)\s+do\s+i\s+(?:attend|go\s+to)\b|\bwhere\s+do\s+i\s+(?:study|go\s+to\s+(?:college|university|school))\b|\bwhat\s+(?:is|was)\s+my\s+(?:current\s+)?(?:cgpa|gpa|grade|score)\b|\b(?:what\s+are\s+my\s+skills|list\s+(?:every|all|my)\s+skills?|list\s+every\s+skill\s+you\s+(?:currently\s+)?know\s+about\s+me)\b|\bwhat\s+(?:projects?|certifications?|achievements?|experience|education)\s+do\s+i\s+have\b|\bwhat\s+(?:was|is)\s+my\s+(?:internship|work)\s+(?:duration|dates?)\b|\bwhen\s+did\s+i\s+(?:work|intern)\s+at\b|\bwhat\s+(?:measurable\s+)?impact\s+did\s+i\s+have\b|\btell\s+me\s+what\s+you\s+remember\s+about\s+my\b)/i;
+const FACT_READ_PHRASES = /(?:\bwhat\s+(?:university|college|school|institution)\s+do\s+i\s+(?:attend|go\s+to)\b|\bwhere\s+do\s+i\s+(?:study|go\s+to\s+(?:college|university|school))\b|\bwhat\s+(?:is|was)\s+my\s+(?:current\s+)?(?:cgpa|gpa|grade|score)\b|\b(?:what\s+are\s+my\s+skills|list\s+(?:every|all|my)\s+skills?|list\s+every\s+skill\s+you\s+(?:currently\s+)?know\s+about\s+me)\b|\bdo\s+i\s+(?:currently\s+)?know\b|\bwhat\s+(?:projects?|certifications?|achievements?|experience|education)\s+do\s+i\s+have\b|\bwhat\s+(?:was|is)\s+my\s+(?:internship|work)\s+(?:duration|dates?)\b|\bwhen\s+did\s+i\s+(?:work|intern)\s+at\b|\bwhat\s+(?:measurable\s+)?impact\s+did\s+i\s+have\b|\btell\s+me\s+what\s+you\s+remember\s+about\s+my\b)/i;
 
 /**
  * Read-only Career Memory questions must never reach mutation handlers or burn
@@ -41,10 +41,31 @@ function findMentionedProject(message: string, profile: CareerProfile) {
   return profile.projects.find((item) => item.name && text.includes(item.name.toLowerCase()));
 }
 
+function knowledgeTerms(message: string) {
+  const match = message.match(/\bdo\s+i\s+(?:currently\s+)?know\s+(.+?)(?:\?|$)/i)?.[1] || "";
+  return unique(match
+    .replace(/\b(?:or|either)\b/gi, ",")
+    .split(/,|\band\b/i)
+    .map((item) => item.replace(/^(?:how\s+to\s+|whether\s+i\s+know\s+)/i, "").trim())
+    .filter((item) => item && item.length <= 80));
+}
+
 /** Answer common Career Memory lookups without an LLM or any mutation. */
 export function answerCareerMemoryQuery(message: string, profile: CareerProfile | null | undefined) {
   if (!profile) return "Career Memory is empty. Add your education, experience, projects, skills, or goals first.";
   const text = message.replace(/\s+/g, " ").trim().toLowerCase();
+
+  const queriedKnowledge = knowledgeTerms(message);
+  if (queriedKnowledge.length) {
+    const storedSkills = new Map(profile.skills.map((item) => [item.name.toLowerCase(), item.name]));
+    const checks = queriedKnowledge.map((term) => {
+      const stored = storedSkills.get(term.toLowerCase());
+      return stored
+        ? `- ${term}: yes — ${stored} is stored in Career Memory.`
+        : `- ${term}: no supported skill is stored in Career Memory.`;
+    });
+    return `Career Memory skill check (read-only):\n${checks.join("\n")}\nI did not change Career Memory.`;
+  }
 
   if (/\b(?:university|college|school|institution)\b/.test(text) && /\b(?:attend|study|go to)\b/.test(text)) {
     const institutions = unique(profile.education.map((item) => item.institution));

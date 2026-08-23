@@ -35,6 +35,17 @@ export type CareerIntentResult = {
   workspace?: CareerWorkspaceState;
 };
 
+function deterministicCommandIntent(message: string, classifiedIntent: AgentIntent): AgentIntent {
+  const text = message.replace(/\s+/g, " ").trim().toLowerCase();
+  // Humanization is a high-confidence product command. The semantic router can
+  // still classify ambiguous prose, but it must never reinterpret this explicit
+  // transformation as ADD_INFORMATION and mutate Career Memory.
+  if (/\b(?:humanize|humanise|less robotic|sound human|sound natural|natural wording|remove ai[- ]sounding|de[- ]?ai)\b/.test(text)) {
+    return "HUMANIZE_RESUME";
+  }
+  return classifiedIntent;
+}
+
 export async function processCareerIntent(
   intent: AgentIntent,
   message: string,
@@ -69,7 +80,9 @@ export async function processCareerIntent(
     };
   }
 
-  switch (intent) {
+  const effectiveIntent = deterministicCommandIntent(message, intent);
+
+  switch (effectiveIntent) {
     case "CREATE_RESUME":
       return handleCreateResume(message, userId, metadata);
     case "IMPROVE_RESUME":
