@@ -4,6 +4,7 @@ import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evide
 import { legacyProfileToCareerProfile } from "@/lib/careerpath/career-os";
 import { fallbackResumeAudit } from "@/lib/careerpath/runtime-fallbacks";
 import { normalizeVerifiedResumePresentation } from "@/lib/careerpath/resume-content-normalization";
+import { enforceResumeFactualIdentityBoundary } from "@/lib/careerpath/resume-factual-boundary";
 import { dedupeResumeSectionBullets, stripUnsupportedDurationClaims } from "@/lib/careerpath/reliability-normalization";
 import { preserveSectionBoundQuantifiedEvidence } from "@/lib/careerpath/section-proof";
 import { deriveRenderableResume } from "@/lib/resume/render";
@@ -50,15 +51,25 @@ export async function verifyResumeCandidate(input: {
   // Keep callers from subsequently persisting the pre-gate extractor object.
   if (rawLegacyProfile && legacyProfile) Object.assign(rawLegacyProfile, legacyProfile);
 
+  // A build instruction may contain new candidate-authored career facts. An
+  // improve/tailor instruction is operational context (often a job description)
+  // and must NEVER become evidence for a candidate skill, employer, role, date,
+  // metric, or credential. This is the critical trust boundary between "what the
+  // employer wants" and "what the candidate has actually done".
+  const factualInstruction = input.mode === "build" ? input.instruction : "";
   const rawSourceEvidence = [
-    input.instruction,
+    factualInstruction,
     legacyProfile?.rawNotes || "",
     legacyProfile?.existingResumeText || "",
     ...(existingCareerProfile?.rawInputs || []).map((item) => item.content),
   ].filter(Boolean).join("\n\n");
 
   const candidateEvidenceProfile = existingCareerProfile
-    || legacyProfileToCareerProfile(legacyProfile!, input.userId, input.instruction);
+    || legacyProfileToCareerProfile(
+      legacyProfile!,
+      input.userId,
+      factualInstruction || legacyProfile?.rawNotes || "",
+    );
   const evidenceProfile = enforceCareerProfileSourceEvidence(candidateEvidenceProfile, rawSourceEvidence);
 
   const beforeState = input.currentResume
@@ -120,6 +131,12 @@ export async function verifyResumeCandidate(input: {
   // presentation pass may only reorganize already-approved skills, restore
   // source-gated education fields, and remove near-identical achievements.
   content = normalizeVerifiedResumePresentation(provenance.content, legacyProfile);
+
+  // Job titles and skill identities are not paraphrasable facts. Enforce exact
+  // source-gated Career Memory membership after all generative/presentation
+  // passes so a JD keyword such as Java or a target title such as Software
+  // Engineer can never leak into the candidate's factual resume.
+  content = enforceResumeFactualIdentityBoundary(content, evidenceProfile);
 
   // Numeric overlap alone must never validate duration semantics. For example,
   // a source-backed "2-month internship" cannot support "2+ years of
