@@ -16,12 +16,50 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const [resendVariant, setResendVariant] = useState<"error" | "success">("success");
   const emailVerified = searchParams.get("verified") === "1";
+
+  async function resendVerification() {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setResendVariant("error");
+      setResendMessage("Enter the email address you used to sign up first.");
+      return;
+    }
+
+    setResending(true);
+    setResendMessage("");
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setResendVariant("error");
+        setResendMessage(data?.error?.message || "Unable to request another verification email.");
+        return;
+      }
+      setResendVariant("success");
+      setResendMessage(data?.message || "Verification email requested. Check your inbox and spam folder.");
+    } catch {
+      setResendVariant("error");
+      setResendMessage("Unable to request another verification email right now.");
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    setNeedsVerification(false);
+    setResendMessage("");
     const nextPath = searchParams.get("next");
     const targetUrl = nextPath ? safeNextPath(nextPath) : "/app";
 
@@ -40,9 +78,12 @@ function LoginForm() {
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setMessage(error.code === "email_not_confirmed"
-        ? "Your email is not verified yet. Open the verification link from Supabase, then try signing in again."
-        : error.message);
+      if (error.code === "email_not_confirmed") {
+        setNeedsVerification(true);
+        setMessage("Your email is not verified yet. Use the verification link in your inbox, or request a new verification email below.");
+      } else {
+        setMessage(error.message);
+      }
       setLoading(false);
       return;
     }
@@ -80,6 +121,14 @@ function LoginForm() {
             <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} disabled={!isSupabaseConfigured} placeholder="Your password" className="h-12 border-white/10 bg-white/[0.055] text-white placeholder:text-white/25 focus:border-indigo-400/50" />
           </div>
           {message && <Alert variant="error">{message}</Alert>}
+          {needsVerification && (
+            <div className="space-y-2">
+              <Button type="button" variant="outline" className="h-11 w-full border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]" onClick={resendVerification} disabled={resending || !email.trim()}>
+                {resending ? "Requesting verification email..." : "Resend verification email"}
+              </Button>
+              {resendMessage && <Alert variant={resendVariant}>{resendMessage}</Alert>}
+            </div>
+          )}
           <Button type="submit" size="lg" className="h-12 w-full rounded-xl bg-white text-slate-950 shadow-[0_12px_30px_rgba(255,255,255,.08)] hover:bg-indigo-100" disabled={loading || !isSupabaseConfigured}>
             {loading ? "Opening CareerOS..." : <>Sign in <ArrowRight className="ml-2 h-4 w-4" /></>}
           </Button>
