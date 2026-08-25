@@ -122,11 +122,12 @@ describe("natural-language Career Memory regression", () => {
     ]));
     expect(recovered.experience[0].achievements).toContain("Reduced repetitive manual reporting work by approximately 30%");
 
-    expect(recovered.projects.map((project) => project.name)).toEqual(["TaskFlow", "ExpenseLens"]);
+    const projectNames = recovered.projects.map((project) => project.name);
+    expect(projectNames).toEqual(["TaskFlow", "ExpenseLens"]);
+    expect(projectNames).not.toContain("with Next");
+    expect(projectNames).not.toContain("using React and JavaScript");
     expect(recovered.projects[0].techStack).toEqual(expect.arrayContaining(["Next.js", "TypeScript", "PostgreSQL"]));
     expect(recovered.projects[1].techStack).toEqual(expect.arrayContaining(["React", "JavaScript"]));
-    expect(JSON.stringify(recovered.projects)).not.toContain("with Next");
-    expect(JSON.stringify(recovered.projects)).not.toContain("using React and JavaScript");
   });
 
   it("does not promote technologies mentioned only in explicit negative constraints", () => {
