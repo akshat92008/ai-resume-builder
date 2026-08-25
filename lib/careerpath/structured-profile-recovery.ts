@@ -335,7 +335,7 @@ function naturalProjectCandidates(source: string) {
     const name = clean(match[1]);
     if (!name || /^(?:with|using|built|created|developed)$/i.test(name)) continue;
     const remainder = match[2].trim();
-    const sentences = (remainder.match(/[^.!?]+[.!?]?/g) || []).map(clean).filter(Boolean);
+    const sentences = remainder.split(/[.!?]\s+(?=[A-Z])/g).map(clean).filter(Boolean);
     const description = sentenceCase(sentences[0] || remainder);
     const featureSentences = sentences.slice(1)
       .filter((sentence) => /^(?:it|this)\s+(?:includes?|supports?|provides?|enables?)\b/i.test(sentence))
