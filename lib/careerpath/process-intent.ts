@@ -16,6 +16,7 @@ import {
   handleGenerateApplicationPack,
   handleTrackJobApplication,
   handleAnalyzeJobSearch,
+  handleAssessJobFit,
   handleStarInterview,
   handleHumanizeResume,
   handleEstimateImpact,
@@ -43,10 +44,19 @@ export function isDirectInternshipRecall(message: string) {
   return /^\s*(?:where\s+did\s+i\s+intern(?:\s+and\s+when)?|when\s+did\s+i\s+intern|which\s+company\s+did\s+i\s+intern\s+at)\s*\??\s*$/i.test(message);
 }
 
+function commandIntent(command: unknown) {
+  return command && typeof command === "object" && "intent" in command
+    ? String((command as { intent?: unknown }).intent || "")
+    : "";
+}
+
 function deterministicCommandIntent(message: string, classifiedIntent: AgentIntent): AgentIntent {
   const text = message.replace(/\s+/g, " ").trim().toLowerCase();
   if (/\b(?:humanize|humanise|less robotic|sound human|sound natural|natural wording|remove ai[- ]sounding|de[- ]?ai)\b/.test(text)) {
     return "HUMANIZE_RESUME";
+  }
+  if (/\b(?:more impressive|10x more impressive|stronger impact|more impactful)\b/.test(text) && /\b(?:resume|experience|internship|bullet|project|achievement)\b/.test(text)) {
+    return "IMPROVE_RESUME";
   }
   return classifiedIntent;
 }
@@ -135,12 +145,11 @@ export async function processCareerIntent(
         workspace: buildCareerWorkspaceState(currentResume),
       };
     case "GENERAL_HELP": {
-      if (
-        command &&
-        typeof command === "object" &&
-        "intent" in command &&
-        (command as { intent?: string }).intent === "optimize_linkedin"
-      ) {
+      const routedCommand = commandIntent(command);
+      if (routedCommand === "assess_job_fit") {
+        return handleAssessJobFit(currentResume);
+      }
+      if (routedCommand === "optimize_linkedin") {
         const workspace = buildCareerWorkspaceState(currentResume);
         const linkedIn = workspace.linkedInOptimization;
         return {
