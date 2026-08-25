@@ -11,6 +11,7 @@ export {
   handleGenerateApplicationPack,
   handleTrackJobApplication,
   handleAnalyzeJobSearch,
+  handleAssessJobFit,
 } from "./career-handlers";
 
 export {
