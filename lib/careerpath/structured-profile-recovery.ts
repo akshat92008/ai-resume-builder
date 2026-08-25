@@ -166,7 +166,7 @@ function splitActionClauses(value: string) {
 }
 
 function internshipContext(source: string) {
-  return clean(source.match(/\bDuring\s+the\s+internship\s+(.+?)(?=\n\s*\n|$)/is)?.[1] || "");
+  return clean(source.match(/\bDuring\s+the\s+internship\s+([\s\S]+?)(?=\n\s*\n|$)/i)?.[1] || "");
 }
 
 function mergeExperience(next: CareerPathProfile, recovered: CareerPathProfile["experience"][number]) {
@@ -335,7 +335,7 @@ function naturalProjectCandidates(source: string) {
     const name = clean(match[1]);
     if (!name || /^(?:with|using|built|created|developed)$/i.test(name)) continue;
     const remainder = match[2].trim();
-    const sentences = remainder.split(/(?<=[.!?])\s+/).map(clean).filter(Boolean);
+    const sentences = (remainder.match(/[^.!?]+[.!?]?/g) || []).map(clean).filter(Boolean);
     const description = sentenceCase(sentences[0] || remainder);
     const featureSentences = sentences.slice(1)
       .filter((sentence) => /^(?:it|this)\s+(?:includes?|supports?|provides?|enables?)\b/i.test(sentence))
