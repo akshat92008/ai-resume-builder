@@ -30,11 +30,15 @@ type AgentError = {
   recoverable: boolean;
 };
 
+function isDirectJobFitQuery(message: string) {
+  const text = message.replace(/\s+/g, " ").trim().toLowerCase();
+  return /\b(?:should i apply|should i apply to (?:this|the) (?:role|job)|overall fit|fit for (?:this|the) (?:role|job)|how good (?:is|am) my fit|strengths[^.!?]{0,80}gaps[^.!?]{0,80}fit)\b/.test(text);
+}
+
 function mapCommandIntent(commandIntent: string, hasResume: boolean): AgentIntent | null {
   switch (commandIntent) {
     case "generate_application_pack": return "GENERATE_APPLICATION_PACK";
     case "track_job_application": return "TRACK_JOB_APPLICATION";
-    case "assess_job_fit": return "GENERAL_HELP";
     case "analyze_job_search": return "ANALYZE_JOB_SEARCH";
     case "tailor_resume_to_job": return "TAILOR_TO_JOB";
     case "generate_resume_version": return "GENERATE_RESUME_VERSION";
@@ -50,7 +54,7 @@ function intentUsesAi(intent: AgentIntent, commandIntent: string) {
   if (intent === "TRACK_JOB_APPLICATION" || intent === "ANALYZE_JOB_SEARCH" || intent === "GENERATE_RESUME_VERSION" || intent === "GENERATE_PDF" || intent === "ASK_MISSING_INFO") {
     return false;
   }
-  if (intent === "GENERAL_HELP" && (commandIntent === "optimize_linkedin" || commandIntent === "assess_job_fit")) return false;
+  if (intent === "GENERAL_HELP" && commandIntent === "optimize_linkedin") return false;
   return true;
 }
 
@@ -124,6 +128,7 @@ export async function POST(request: Request) {
       resume: currentResume,
       applications: currentResume?.applications,
     });
+    const directJobFit = isDirectJobFitQuery(message);
 
     let quotaConsumed = false;
     async function consumeAiQuota() {
@@ -154,11 +159,8 @@ export async function POST(request: Request) {
       return null;
     }
 
-    // These operations are entirely deterministic. They must stay usable even
-    // after the AI budget is exhausted and must never consume an AI action.
-    const deterministicNoAi = isReadOnlyCareerMemoryQuery(message)
-      || isFabricationInstruction(message)
-      || command.intent === "assess_job_fit";
+    // Entirely deterministic operations remain available without an AI call.
+    const deterministicNoAi = isReadOnlyCareerMemoryQuery(message) || isFabricationInstruction(message) || directJobFit;
     let intent: AgentIntent | null = deterministicNoAi ? "GENERAL_HELP" : mapCommandIntent(command.intent, Boolean(currentResume));
 
     if (!intent) {
