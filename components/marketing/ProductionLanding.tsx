@@ -76,7 +76,7 @@ const trustCards = [
   },
   {
     icon: FileCheck2,
-    title: "Verified PDF export",
+    title: "Verified PDF path",
     text: "The canonical PDF is generated server-side and re-read before delivery.",
   },
   {
