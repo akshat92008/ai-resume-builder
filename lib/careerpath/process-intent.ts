@@ -1,6 +1,10 @@
 import { buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { answerCareerQuestionAgent } from "@/lib/careerpath/orchestrator";
 import { answerCareerMemoryQuery, isReadOnlyCareerMemoryQuery } from "@/lib/careerpath/read-only-memory";
+import {
+  looksLikeStructuredCareerProfile,
+  repairStructuredResumeMemorySnapshot,
+} from "@/lib/careerpath/structured-profile-recovery";
 import { isFabricationInstruction } from "@/lib/careerpath/source-safety";
 import {
   handleCreateResume,
@@ -35,11 +39,12 @@ export type CareerIntentResult = {
   workspace?: CareerWorkspaceState;
 };
 
+export function isDirectInternshipRecall(message: string) {
+  return /^\s*(?:where\s+did\s+i\s+intern(?:\s+and\s+when)?|when\s+did\s+i\s+intern|which\s+company\s+did\s+i\s+intern\s+at)\s*\??\s*$/i.test(message);
+}
+
 function deterministicCommandIntent(message: string, classifiedIntent: AgentIntent): AgentIntent {
   const text = message.replace(/\s+/g, " ").trim().toLowerCase();
-  // Humanization is a high-confidence product command. The semantic router can
-  // still classify ambiguous prose, but it must never reinterpret this explicit
-  // transformation as ADD_INFORMATION and mutate Career Memory.
   if (/\b(?:humanize|humanise|less robotic|sound human|sound natural|natural wording|remove ai[- ]sounding|de[- ]?ai)\b/.test(text)) {
     return "HUMANIZE_RESUME";
   }
@@ -56,21 +61,17 @@ export async function processCareerIntent(
 ): Promise<CareerIntentResult> {
   const metadata = { userId, resumeId };
 
-  // Career Memory recall is a deterministic product action. It must never
-  // mutate the workspace, call an LLM, or consume an AI action.
-  if (isReadOnlyCareerMemoryQuery(message)) {
-    const workspace = buildCareerWorkspaceState(currentResume);
+  if (isReadOnlyCareerMemoryQuery(message) || isDirectInternshipRecall(message)) {
+    const readableResume = repairStructuredResumeMemorySnapshot(currentResume);
+    const workspace = buildCareerWorkspaceState(readableResume);
     return {
       assistantMessage: answerCareerMemoryQuery(message, workspace.careerProfile),
-      resume: currentResume,
-      resumeId: currentResume?.id || null,
+      resume: readableResume,
+      resumeId: readableResume?.id || null,
       workspace,
     };
   }
 
-  // Instructions to fabricate or inject unverified claims are commands, not
-  // career evidence. Stop them before any handler can append raw notes, log an
-  // achievement, rewrite the resume, or mutate Career Memory.
   if (isFabricationInstruction(message)) {
     return {
       assistantMessage: "I won’t store or generate those requested claims as facts because Career Memory does not contain evidence for them. I left your profile and resume unchanged. If any number, skill, leadership claim, or user count is real, provide the supporting context and I can add the verified version.",
@@ -80,7 +81,9 @@ export async function processCareerIntent(
     };
   }
 
-  const effectiveIntent = deterministicCommandIntent(message, intent);
+  const effectiveIntent = looksLikeStructuredCareerProfile(message)
+    ? (currentResume ? "ADD_INFORMATION" : "CREATE_RESUME")
+    : deterministicCommandIntent(message, intent);
 
   switch (effectiveIntent) {
     case "CREATE_RESUME":

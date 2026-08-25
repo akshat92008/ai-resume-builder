@@ -28,6 +28,10 @@ import { reconcileVerifiedTailoringResult } from "@/lib/careerpath/tailoring-ver
 import { reconcileExtractedProfileWithEvidence } from "@/lib/careerpath/profile-evidence";
 import { enforceCareerPathProfileEvidence } from "@/lib/careerpath/profile-evidence-enforce";
 import {
+  looksLikeComprehensiveStructuredCareerProfile,
+  looksLikeStructuredCareerProfile,
+} from "@/lib/careerpath/structured-profile-recovery";
+import {
   mergeDeterministicProfileEvidence,
   preserveDeterministicResumeEvidence,
 } from "@/lib/careerpath/deterministic-evidence";
@@ -158,20 +162,24 @@ export async function applyBrainToResume(input: {
   let achievementLogResult: ReturnType<typeof applyAchievementLog>["result"] | null = null;
   let assistantMessage = "";
   let degradedByProvider = false;
+  const structuredProfileInput = input.mode === "build" && looksLikeStructuredCareerProfile(input.message);
+  const comprehensiveStructuredProfileInput = input.mode === "build"
+    && looksLikeComprehensiveStructuredCareerProfile(input.message);
 
   if (input.mode === "build") {
     const previousLegacyProfile = legacyProfile;
-    const extractedLegacyProfile = await extractProfileDataAgent(
-      input.message,
-      previousLegacyProfile,
-      input.currentResume?.targetRole || "",
-      input.metadata,
-    );
+    const extractedLegacyProfile = structuredProfileInput
+      ? {
+          ...previousLegacyProfile,
+          rawNotes: [previousLegacyProfile.rawNotes, input.message].filter(Boolean).join("\n\n"),
+        }
+      : await extractProfileDataAgent(
+          input.message,
+          previousLegacyProfile,
+          input.currentResume?.targetRole || "",
+          input.metadata,
+        );
 
-    // Source-gate extraction before the writer ever sees it. Then recover a
-    // conservative subset of explicit first-person facts directly from the
-    // authenticated message so provider timeouts cannot collapse a new user's
-    // Career Memory to an empty profile.
     legacyProfile = reconcileExtractedProfileWithEvidence({
       message: input.message,
       existing: previousLegacyProfile,
@@ -203,7 +211,25 @@ export async function applyBrainToResume(input: {
     }
 
     const extractedCareerProfile = legacyProfileToCareerProfile(legacyProfile, input.userId, input.message);
-    profile = mergeCareerMemory(existingCareerProfile, extractedCareerProfile);
+    const mergedCareerProfile = mergeCareerMemory(existingCareerProfile, extractedCareerProfile);
+    if (comprehensiveStructuredProfileInput && existingCareerProfile) {
+      const hasDirectEmail = /(?:^|\n)\s*Email\s*:/i.test(input.message);
+      profile = refreshCareerProfileInsights({
+        ...mergedCareerProfile,
+        personal: {
+          ...mergedCareerProfile.personal,
+          ...extractedCareerProfile.personal,
+          email: hasDirectEmail ? extractedCareerProfile.personal.email : mergedCareerProfile.personal.email,
+        },
+        education: extractedCareerProfile.education,
+        experience: extractedCareerProfile.experience,
+        projects: extractedCareerProfile.projects,
+        skills: extractedCareerProfile.skills,
+        achievements: extractedCareerProfile.achievements,
+      });
+    } else {
+      profile = mergedCareerProfile;
+    }
     if (isAchievementLogInput(input.message)) {
       const logged = applyAchievementLog(profile, input.message);
       profile = logged.profile;
@@ -277,10 +303,6 @@ export async function applyBrainToResume(input: {
     if (!assistantMessage) assistantMessage = "Created a new resume based on your profile.";
   }
 
-  // Generative writing may rephrase supported evidence, but it must not erase
-  // source-backed proof such as explicit test counts. For tailor/improve we only
-  // preserve previously gated Career Memory facts; job-description numbers are
-  // never treated as candidate evidence.
   candidateContent = preserveDeterministicResumeEvidence({
     content: candidateContent,
     profile: legacyProfile,
@@ -303,9 +325,6 @@ export async function applyBrainToResume(input: {
   const content = verified.content;
   profile = verified.careerProfile;
 
-  // Never persist or display pre-verification model metadata. Recompute fit from
-  // the exact truth-checked content so Studio, API output, and PDF agree about
-  // what is actually present and what the candidate is still missing.
   if (tailoringResult && input.mode === "tailor") {
     tailoringResult = reconcileVerifiedTailoringResult(tailoringResult, content, input.message);
     missingKeywords = tailoringResult.missingKeywordsNotAdded;
@@ -332,9 +351,6 @@ export async function applyBrainToResume(input: {
         score: verified.score,
         audit: verified.audit,
         jobDescription: verified.validation.cleanedResume.target.jobDescription || input.currentResume.jobDescription,
-        // Version is the optimistic-concurrency token for the whole persisted
-        // resume aggregate, not only visible document revisions. Every mutation
-        // must advance it so two concurrent writes cannot both succeed.
         version: input.currentResume.version + 1,
         updatedAt: now,
       }

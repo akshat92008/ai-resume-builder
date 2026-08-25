@@ -1,5 +1,6 @@
 import { extractKnownSkills } from "./domain/skills";
-import type { CareerPathProfile } from "./types";
+import type { CareerPathProfile, CareerPathResume } from "./types";
+import { legacyProfileToCareerProfile, refreshCareerProfileInsights } from "./domain/profile";
 
 function normalize(value: unknown) {
   return String(value ?? "")
@@ -63,7 +64,12 @@ function cloneProfile(profile: CareerPathProfile): CareerPathProfile {
   };
 }
 
-const SECTION_HEADING = /^(?:personal profile|career goals?|education|experience|projects?|skills|certifications?|documents?|achievements?|languages?)\s*:?\s*$/i;
+const SECTION_HEADING = /^(?:personal profile|career goals?|education|experience|projects?|skills|certifications?|documents?|achievements?|languages?|important negative facts?|negative facts?|important constraints?|constraints?)\s*:?\s*$/i;
+const CORE_STRUCTURED_HEADING = /^(?:education|experience|projects?|skills)\s*:?\s*$/i;
+const MONTH = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+const DATE_RANGE = new RegExp(`^(${MONTH}\\s+20\\d{2}|20\\d{4})\\s*(?:to|[-–—])\\s*(${MONTH}\\s+20\\d{2}|20\\d{4}|present|current)$`, "i");
+const ACTION_LINE = /^(?:during\b|built\b|created\b|developed\b|designed\b|implemented\b|integrated\b|reduced\b|improved\b|increased\b|worked\b|wrote\b|automated\b|delivered\b|launched\b|tested\b|used\b|added\b|deployed\b)/i;
+const FEATURE_LINE = /^(?:it|this)?\s*(?:includes?|supports?|provides?|enables?|features?)\b/i;
 
 function sectionBody(source: string, heading: RegExp) {
   const lines = source.split(/\r?\n/);
@@ -78,6 +84,36 @@ function sectionBody(source: string, heading: RegExp) {
   return body.join("\n").trim();
 }
 
+function hasHeading(source: string, heading: RegExp) {
+  return source.split(/\r?\n/).some((line) => heading.test(line.trim()));
+}
+
+export function looksLikeStructuredCareerProfile(source: string) {
+  const coreHeadings = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => CORE_STRUCTURED_HEADING.test(line)).length;
+  const directFields = source
+    .split(/\r?\n/)
+    .filter((line) => /^(?:name|email|phone|location|linkedin|github|portfolio)\s*:/i.test(line.trim())).length;
+  return coreHeadings >= 3 || (coreHeadings >= 2 && directFields >= 1);
+}
+
+export function looksLikeComprehensiveStructuredCareerProfile(source: string) {
+  return hasHeading(source, /^education\s*:?\s*$/i)
+    && hasHeading(source, /^skills\s*:?\s*$/i)
+    && hasHeading(source, /^experience\s*:?\s*$/i)
+    && hasHeading(source, /^projects?\s*:?\s*$/i);
+}
+
+function extractProjectTech(text: string) {
+  const known = extractKnownSkills(text);
+  if (/\bREST\s+APIs?\b/i.test(text)) {
+    return unique([...known.filter((skill) => normalize(skill) !== "api"), "REST APIs"]);
+  }
+  return known;
+}
+
 function canonicalDegree(value: string) {
   const key = normalize(value).replace(/\s+/g, "");
   if (key === "b.tech" || key === "btech") return "B.Tech";
@@ -85,13 +121,25 @@ function canonicalDegree(value: string) {
   return clean(value);
 }
 
+function validEmail(value: string) {
+  const candidate = clean(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate : "";
+}
+
 function recoverPersonal(next: CareerPathProfile, source: string) {
-  if (next.personal.name) return;
+  const directName = source.match(/(?:^|\n)\s*Name\s*:\s*([^\n]{2,100})/i)?.[1];
   const explicit = source.match(/\b(?:my name is|i am called|i['’]m called)\s+([a-z][a-z .'-]{1,70}?)(?=[,.!?\n]|$)/i)?.[1];
   const conversational = source.match(/\bI\s+am\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?=\s*,|\s+and\b|[.!?\n]|$)/)?.[1]
     || source.match(/\bI['’]m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})(?=\s*,|\s+and\b|[.!?\n]|$)/)?.[1];
-  const name = clean(explicit || conversational || "");
-  if (name) next.personal.name = name;
+  const name = clean(directName || explicit || conversational || "");
+  if (name && !/^(?:unknown|n\/a|none|use\b|your\b)/i.test(name)) next.personal.name = name;
+
+  const directEmailField = source.match(/(?:^|\n)\s*Email\s*:\s*([^\n]+)/i);
+  if (directEmailField) {
+    const email = validEmail(directEmailField[1]);
+    if (email) next.personal.email = email;
+    else delete next.personal.email;
+  }
 }
 
 function educationScore(source: string) {
@@ -125,7 +173,29 @@ function mergeEducation(next: CareerPathProfile, recovered: CareerPathProfile["e
   };
 }
 
+function recoverStructuredEducation(next: CareerPathProfile, source: string) {
+  const body = sectionBody(source, /^education\s*:?\s*$/i);
+  if (!body) return false;
+  const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const qualificationLine = lines.find((line) => /^(?:B\.?\s*Tech|BTech|M\.?\s*Tech|MTech|Bachelor(?:'s)?|Master(?:'s)?)/i.test(line));
+  const qualification = qualificationLine?.match(/^((?:B\.?\s*Tech|BTech|M\.?\s*Tech|MTech|Bachelor(?:'s)?|Master(?:'s)?))\s+(?:in\s+)?([^,]{2,100}?),\s*(.{3,160})$/i);
+  if (!qualification) return false;
+  const yearRange = body.match(/\b(20\d{2})\s*[-–—]\s*(20\d{2})\b/);
+  const recovered = {
+    institution: clean(qualification[3]),
+    degree: canonicalDegree(qualification[1]),
+    field: clean(qualification[2]),
+    startYear: yearRange?.[1] || "",
+    endYear: yearRange?.[2] || "",
+    score: educationScore(body),
+    location: "",
+  };
+  next.education = [recovered];
+  return true;
+}
+
 function recoverEducation(next: CareerPathProfile, source: string) {
+  if (recoverStructuredEducation(next, source)) return;
   const student = source.match(
     /\b((?:B\.?\s*Tech|BTech|M\.?\s*Tech|MTech|Bachelor(?:'s)?|Master(?:'s)?))\s+(?:in\s+)?([^,.\n]{2,80}?)\s+student\s+at\s+([^,.\n]{3,120}?)(?=\s+from\s+20\d{2}\b|\s+between\s+20\d{2}\b|\s+with\s+(?:an?\s+)?[0-9]|\s*[,.;]|\n|$)/i,
   );
@@ -156,6 +226,39 @@ function recoverEducation(next: CareerPathProfile, source: string) {
   });
 }
 
+function recoverStructuredSkills(next: CareerPathProfile, source: string) {
+  const body = sectionBody(source, /^skills\s*:?\s*$/i);
+  if (!body) return;
+  const items = unique(body
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/,|;|\|/))
+    .map((item) => clean(item))
+    .filter((item) => item && item.length <= 60));
+  if (!items.length) return;
+
+  const programming = new Set(["python", "javascript", "typescript", "java", "go", "c", "c++", "c#", "node.js", "html", "css"]);
+  const frameworks = new Set(["react", "next.js", "express", "fastapi", "tailwind css", "langchain"]);
+  const databases = new Set(["postgresql", "mongodb", "redis", "sql", "supabase", "firebase"]);
+  const aiTools = new Set(["openai", "nvidia nim", "machine learning"]);
+  const categorized = {
+    programming: [] as string[],
+    frameworks: [] as string[],
+    tools: [] as string[],
+    databases: [] as string[],
+    aiTools: [] as string[],
+    softSkills: [] as string[],
+  };
+  for (const item of items) {
+    const key = normalize(item);
+    if (programming.has(key)) categorized.programming.push(item);
+    else if (frameworks.has(key)) categorized.frameworks.push(item);
+    else if (databases.has(key)) categorized.databases.push(item);
+    else if (aiTools.has(key)) categorized.aiTools.push(item);
+    else categorized.tools.push(item);
+  }
+  next.skills = categorized;
+}
+
 function splitActionClauses(value: string) {
   const verbs = "built|created|developed|designed|implemented|integrated|reduced|improved|increased|worked|wrote|automated|delivered|launched|tested";
   return value
@@ -166,7 +269,9 @@ function splitActionClauses(value: string) {
 }
 
 function internshipContext(source: string) {
-  return clean(source.match(/\bDuring\s+the\s+internship\s+([\s\S]+?)(?=\n\s*\n|$)/i)?.[1] || "");
+  return clean(source.match(/\bDuring\s+the\s+internship\s*:?[\s\n]+([\s\S]+?)(?=\n\s*\n|$)/i)?.[1]
+    || source.match(/\bDuring\s+the\s+internship\s+([\s\S]+?)(?=\n\s*\n|$)/i)?.[1]
+    || "");
 }
 
 function mergeExperience(next: CareerPathProfile, recovered: CareerPathProfile["experience"][number]) {
@@ -187,6 +292,39 @@ function mergeExperience(next: CareerPathProfile, recovered: CareerPathProfile["
     responsibilities: unique([...next.experience[index].responsibilities, ...recovered.responsibilities]),
     achievements: unique([...next.experience[index].achievements, ...recovered.achievements]),
   };
+}
+
+function recoverStructuredExperience(next: CareerPathProfile, source: string) {
+  const body = sectionBody(source, /^experience\s*:?\s*$/i);
+  if (!body) return false;
+  const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const headerIndex = lines.findIndex((line) => {
+    if (DATE_RANGE.test(line) || /^during\s+the\s+internship\s*:?$/i.test(line) || /^[-•]/.test(line)) return false;
+    return /^.{2,100}?\s+at\s+.{2,120}$/i.test(line) || /^.{2,100}?\s+[–—-]\s+.{2,120}$/.test(line);
+  });
+  if (headerIndex < 0) return false;
+  const header = lines[headerIndex].match(/^(.{2,100}?)\s+at\s+(.{2,120})$/i)
+    || lines[headerIndex].match(/^(.{2,100}?)\s+[–—-]\s+(.{2,120})$/);
+  if (!header) return false;
+  const dateLine = lines.slice(headerIndex + 1).find((line) => DATE_RANGE.test(line));
+  const dateMatch = dateLine?.match(DATE_RANGE);
+  const actionLines = lines
+    .slice(headerIndex + 1)
+    .filter((line) => line !== dateLine)
+    .filter((line) => !/^during\s+the\s+internship\s*:?$/i.test(line))
+    .map(clean)
+    .filter((line) => line && ACTION_LINE.test(line));
+  const cleanedActions = actionLines.map(sentenceCase);
+  const recovered = {
+    company: clean(header[2]),
+    role: clean(header[1]),
+    startDate: clean(dateMatch?.[1] || ""),
+    endDate: clean(dateMatch?.[2] || ""),
+    responsibilities: unique(cleanedActions.filter((line) => !/\d/.test(line))),
+    achievements: unique(cleanedActions.filter((line) => /\d/.test(line))),
+  };
+  next.experience = [recovered];
+  return true;
 }
 
 function recoverNaturalExperience(next: CareerPathProfile, source: string) {
@@ -212,78 +350,80 @@ function recoverNaturalExperience(next: CareerPathProfile, source: string) {
 }
 
 function recoverExperience(next: CareerPathProfile, source: string) {
-  const body = sectionBody(source, /^experience\s*:?\s*$/i);
-  if (body) {
-    const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const roleCompanyIndex = lines.findIndex((line) => !/^[-•]/.test(line) && /\s+at\s+/i.test(line));
-    if (roleCompanyIndex >= 0) {
-      const roleCompany = lines[roleCompanyIndex].match(/^(.{2,100}?)\s+at\s+(.{2,120})$/i);
-      if (roleCompany) {
-        const role = clean(roleCompany[1]);
-        const company = clean(roleCompany[2]);
-        const dateLine = lines.slice(roleCompanyIndex + 1).find((line) =>
-          /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+20\d{2}\s+(?:to|[-–—])\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|Present)\s*(?:20\d{2})?/i.test(line),
-        );
-        const dateMatch = dateLine?.match(/^(.+?)\s+(?:to|[-–—])\s+(.+?)$/i);
-        const bullets = lines.filter((line) => /^[-•]/.test(line)).map(clean).filter(Boolean);
-        mergeExperience(next, {
-          company,
-          role,
-          startDate: clean(dateMatch?.[1] || ""),
-          endDate: clean(dateMatch?.[2] || ""),
-          responsibilities: unique(bullets.filter((line) => !/\d/.test(line))),
-          achievements: unique(bullets.filter((line) => /\d/.test(line))),
-        });
-      }
-    }
-  }
-
+  if (recoverStructuredExperience(next, source)) return;
   recoverNaturalExperience(next, source);
 }
 
 type StructuredProject = CareerPathProfile["projects"][number];
 
-function parseStructuredProjects(source: string): { projects: StructuredProject[]; body: string } {
-  const body = sectionBody(source, /^projects?\s*:?\s*$/i);
-  if (!body) return { projects: [], body: "" };
-  const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const projects: StructuredProject[] = [];
+function buildProject(name: string, detailLines: string[]): StructuredProject {
+  const details = detailLines.map(clean).filter(Boolean);
+  const quantified = details.filter((line) => /\d/.test(line));
+  const descriptive = details.filter((line) => !FEATURE_LINE.test(line));
+  const description = sentenceCase(descriptive[0] || details[0] || "");
+  const features = details
+    .filter((line, index) => index > 0 || line !== descriptive[0])
+    .filter((line) => FEATURE_LINE.test(line) || (!ACTION_LINE.test(line) && !quantified.includes(line)))
+    .map(sentenceCase);
+  return {
+    name: clean(name.replace(/^\d+[.)]\s*/, "")),
+    description,
+    techStack: extractProjectTech(details.join(" ")),
+    problemSolved: "",
+    features: unique(features.filter((line) => !quantified.includes(line))),
+    impact: quantified[0] ? sentenceCase(quantified[0]) : "",
+    links: [],
+  };
+}
 
+function parseStructuredProjects(source: string): { projects: StructuredProject[]; body: string; explicitNumbered: boolean } {
+  const body = sectionBody(source, /^projects?\s*:?\s*$/i);
+  if (!body) return { projects: [], body: "", explicitNumbered: false };
+  const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const explicitNumbered = lines.some((line) => /^\d+[.)]\s*\S/.test(line));
+  const projects: StructuredProject[] = [];
   let currentName = "";
-  let bullets: string[] = [];
+  let details: string[] = [];
+
   const flush = () => {
     if (!currentName) return;
-    const cleanBullets = bullets.map(clean).filter(Boolean);
-    const combined = cleanBullets.join(" ");
-    const quantified = cleanBullets.filter((line) => /\d/.test(line));
-    projects.push({
-      name: currentName,
-      description: cleanBullets[0] || "",
-      techStack: extractKnownSkills(combined),
-      problemSolved: "",
-      features: unique(cleanBullets.slice(1).filter((line) => !quantified.includes(line))),
-      impact: quantified[0] || "",
-      links: [],
-    });
+    projects.push(buildProject(currentName, details));
+    currentName = "";
+    details = [];
   };
 
-  for (const line of lines) {
-    if (/^i\s+(?:do\s+not|don't|never|have\s+never)\b/i.test(line)) break;
-    if (/^[-•]/.test(line)) {
-      if (currentName) bullets.push(line);
-      continue;
+  if (explicitNumbered) {
+    for (const rawLine of lines) {
+      const numbered = rawLine.match(/^\d+[.)]\s*(.+)$/);
+      if (numbered) {
+        flush();
+        currentName = clean(numbered[1]);
+        continue;
+      }
+      if (currentName) details.push(rawLine);
     }
-    if (/^(?:during\b|built\b|used\b|added\b|integrated\b|deployed\b|implemented\b|reduced\b|improved\b)/i.test(line)) {
-      if (currentName) bullets.push(line);
-      continue;
-    }
-    if (line.endsWith(":")) continue;
     flush();
-    currentName = clean(line);
-    bullets = [];
+    return { projects: projects.filter((project) => project.name), body, explicitNumbered };
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
+    if (/^i\s+(?:do\s+not|don't|never|have\s+never)\b/i.test(rawLine)) break;
+    const isBullet = /^[-•]/.test(rawLine);
+    const stripped = clean(rawLine);
+    const nextLine = lines[index + 1] || "";
+    const startsDetail = isBullet || ACTION_LINE.test(stripped) || FEATURE_LINE.test(stripped);
+    const nextLooksLikeDetail = /^[-•]/.test(nextLine) || ACTION_LINE.test(clean(nextLine)) || FEATURE_LINE.test(clean(nextLine));
+
+    if (!startsDetail && nextLooksLikeDetail) {
+      flush();
+      currentName = stripped;
+      continue;
+    }
+    if (currentName) details.push(rawLine);
   }
   flush();
-  return { projects, body };
+  return { projects: projects.filter((project) => project.name), body, explicitNumbered };
 }
 
 function mergeProject(next: CareerPathProfile, project: StructuredProject) {
@@ -306,24 +446,9 @@ function mergeProject(next: CareerPathProfile, project: StructuredProject) {
 
 function recoverProjects(next: CareerPathProfile, source: string) {
   const structured = parseStructuredProjects(source);
-  if (!structured.projects.length) return;
-  const names = new Set(structured.projects.map((project) => normalize(project.name)));
-  const experienceBody = sectionBody(source, /^experience\s*:?\s*$/i);
-  const projectBullets = structured.body
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => /^[-•]/.test(line))
-    .map(clean);
-
-  next.projects = next.projects.filter((project) => {
-    const key = normalize(project.name);
-    if (names.has(key)) return true;
-    if (key && normalize(experienceBody).includes(key)) return false;
-    if (projectBullets.some((bullet) => normalize(bullet).includes(key) && key.length >= 8)) return false;
-    return true;
-  });
-
-  for (const project of structured.projects) mergeProject(next, project);
+  if (!structured.projects.length) return false;
+  next.projects = structured.projects.map((project) => ({ ...project }));
+  return true;
 }
 
 function naturalProjectCandidates(source: string) {
@@ -404,13 +529,12 @@ function removeNegatedSkills(next: CareerPathProfile, source: string) {
   next.skills.aiTools = next.skills.aiTools.filter((skill) => !negativeOnlyMention(skill, source));
 }
 
-/**
- * Recover high-confidence facts from both common section formatting and normal
- * first-person career prose. This runs only from append-only user-authored raw
- * notes / resume text after the primary evidence gate, so it can repair weak
- * extractor output without turning model guesses or job-description text into
- * Career Memory facts.
- */
+function cleanStructuredTopLevelAchievements(next: CareerPathProfile, source: string) {
+  if (!looksLikeStructuredCareerProfile(source)) return;
+  if (hasHeading(source, /^achievements?\s*:?\s*$/i)) return;
+  next.achievements = [];
+}
+
 export function recoverStructuredProfileEvidence(profile: CareerPathProfile): CareerPathProfile {
   const source = [profile.rawNotes, profile.existingResumeText].filter(Boolean).join("\n\n");
   if (!source.trim()) return profile;
@@ -418,8 +542,42 @@ export function recoverStructuredProfileEvidence(profile: CareerPathProfile): Ca
   recoverPersonal(next, source);
   recoverEducation(next, source);
   recoverExperience(next, source);
-  recoverProjects(next, source);
-  recoverNaturalProjects(next, source);
+  recoverStructuredSkills(next, source);
+  const hasStructuredProjects = recoverProjects(next, source);
+  if (!hasStructuredProjects) recoverNaturalProjects(next, source);
   removeNegatedSkills(next, source);
+  cleanStructuredTopLevelAchievements(next, source);
   return next;
+}
+
+export function repairStructuredResumeMemorySnapshot(resume: CareerPathResume | null): CareerPathResume | null {
+  if (!resume?.profile?.rawNotes || !looksLikeStructuredCareerProfile(resume.profile.rawNotes)) return resume;
+
+  const source = resume.profile.rawNotes;
+  const repairedProfile = recoverStructuredProfileEvidence(resume.profile);
+  const canonical = legacyProfileToCareerProfile(repairedProfile, resume.userId, source);
+  const existing = resume.careerProfile;
+  if (!existing) return { ...resume, profile: repairedProfile, careerProfile: canonical };
+
+  const hasDirectEmail = /(?:^|\n)\s*Email\s*:/i.test(source);
+  const repairedCareerProfile = refreshCareerProfileInsights({
+    ...existing,
+    personal: {
+      ...existing.personal,
+      ...canonical.personal,
+      fullName: canonical.personal.fullName || existing.personal.fullName,
+      email: hasDirectEmail ? canonical.personal.email : existing.personal.email,
+    },
+    education: hasHeading(source, /^education\s*:?\s*$/i) ? canonical.education : existing.education,
+    experience: hasHeading(source, /^experience\s*:?\s*$/i) ? canonical.experience : existing.experience,
+    projects: hasHeading(source, /^projects?\s*:?\s*$/i) ? canonical.projects : existing.projects,
+    skills: hasHeading(source, /^skills\s*:?\s*$/i) ? canonical.skills : existing.skills,
+    achievements: looksLikeComprehensiveStructuredCareerProfile(source) ? canonical.achievements : existing.achievements,
+  });
+
+  return {
+    ...resume,
+    profile: repairedProfile,
+    careerProfile: repairedCareerProfile,
+  };
 }
