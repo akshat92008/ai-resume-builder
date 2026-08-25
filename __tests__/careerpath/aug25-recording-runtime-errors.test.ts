@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { isReadOnlyCareerMemoryQuery } from "@/lib/careerpath/read-only-memory";
 import {
   extractJobDescription,
-  profileSupportsJobKeyword,
   routeCareerCommand,
 } from "@/lib/careerpath/career-os";
+import { profileSupportsJobKeyword } from "@/lib/careerpath/domain/jobs";
 import {
   deterministicCommandIntent,
   isDirectJobFitQuery,
