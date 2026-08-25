@@ -47,7 +47,7 @@ function SignupForm() {
 
       if (data.requiresEmailConfirmation) {
         setMessageVariant("success");
-        setMessage("Verification email requested. Check your inbox and spam folder, open the verification link, then sign in with the same email and password.");
+        setMessage("Email verification is required before you can sign in. Check your inbox and spam folder. If no message arrives, open Sign in with this email and use Resend verification email; repeat signup attempts may be intentionally masked by Supabase and do not guarantee another email was sent.");
         setLoading(false);
         return;
       }
