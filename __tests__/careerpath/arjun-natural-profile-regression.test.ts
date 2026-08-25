@@ -128,6 +128,8 @@ describe("natural-language Career Memory regression", () => {
     expect(projectNames).not.toContain("using React and JavaScript");
     expect(recovered.projects[0].techStack).toEqual(expect.arrayContaining(["Next.js", "TypeScript", "PostgreSQL"]));
     expect(recovered.projects[1].techStack).toEqual(expect.arrayContaining(["React", "JavaScript"]));
+    expect(recovered.projects[0].description).toContain("Next.js, TypeScript, PostgreSQL and REST APIs");
+    expect(recovered.projects[1].description).toContain("React and JavaScript");
   });
 
   it("does not promote technologies mentioned only in explicit negative constraints", () => {
