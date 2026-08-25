@@ -5,13 +5,13 @@ test.describe("CareerOS public launch smoke", () => {
     const response = await page.goto("/");
     expect(response?.ok()).toBeTruthy();
 
-    await expect(page.getByRole("heading", { name: /Your career search, run like a system/i })).toBeVisible();
-    await expect(page.getByText(/Evidence → decision → application → outcome/i).first()).toBeVisible();
-    await expect(page.getByText(/CareerOS operating layer/i).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Tailor every application\. Never invent experience/i })).toBeVisible();
+    await expect(page.getByText(/Truthful AI resume \+ job search system/i).first()).toBeVisible();
+    await expect(page.getByText(/CareerOS application engine/i).first()).toBeVisible();
     await expect(page.getByText(/Unsupported claims blocked/i).first()).toBeVisible();
-    await expect(page.getByText(/removes or rejects claims that are not supported by stored evidence/i)).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Five moves\. One accumulating advantage/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Start free/i }).first()).toBeVisible();
+    await expect(page.getByText(/checked against stored evidence before verified output is persisted/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Five moves\. One application system/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Build my resume free/i }).first()).toBeVisible();
   });
 
   test("production security headers are present on public pages", async ({ page }) => {
@@ -59,5 +59,18 @@ test.describe("CareerOS public launch smoke", () => {
     await expect(terms).toBeVisible();
     await terms.click();
     await expect(page).toHaveURL(/\/terms$/);
+  });
+});
+
+test.describe("CareerOS landing resilience", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("hero and primary CTA stay visible without hydration", async ({ page }) => {
+    const response = await page.goto("/");
+    expect(response?.ok()).toBeTruthy();
+
+    await expect(page.getByRole("heading", { name: /Tailor every application\. Never invent experience/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Build my resume free/i }).first()).toBeVisible();
+    await expect(page.getByText(/Claims checked against evidence/i)).toBeVisible();
   });
 });

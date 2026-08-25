@@ -11,14 +11,19 @@ const productionUrl = 'https://ai-resume-builder-ivory-nine.vercel.app';
 // back to unsafe-inline scripts.
 export const dynamic = 'force-dynamic';
 
+const marketingDescription =
+  'Tailor every application with truthful AI resumes, verified PDFs, reusable Career Memory, and evidence-backed job matching.';
+
+const socialDescription =
+  'Turn real career evidence into role-specific resumes and verified application assets—without inventing experience.';
+
 export const metadata: Metadata = {
   metadataBase: new URL(productionUrl),
   title: {
     default: 'CareerOS by Amaura Labs',
     template: '%s · CareerOS',
   },
-  description:
-    'Turn real career evidence into better job-search decisions, truthful tailored resumes, verified application assets, and outcome-driven learning.',
+  description: marketingDescription,
   applicationName: 'CareerOS',
   category: 'career',
   alternates: {
@@ -29,14 +34,12 @@ export const metadata: Metadata = {
     url: '/',
     siteName: 'CareerOS',
     title: 'CareerOS by Amaura Labs',
-    description:
-      'Your career search, run like a system: evidence, job intelligence, truthful applications, and outcome learning in one private workspace.',
+    description: socialDescription,
   },
   twitter: {
     card: 'summary_large_image',
     title: 'CareerOS by Amaura Labs',
-    description:
-      'Your career search, run like a system: evidence, job intelligence, truthful applications, and outcome learning in one private workspace.',
+    description: socialDescription,
   },
   robots: {
     index: true,
