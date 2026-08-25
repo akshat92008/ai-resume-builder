@@ -1,6 +1,7 @@
 /**
  * Career management intent handlers for the Inngest orchestrator.
- * Handles: GENERATE_APPLICATION_PACK, TRACK_JOB_APPLICATION, ANALYZE_JOB_SEARCH.
+ * Handles: GENERATE_APPLICATION_PACK, TRACK_JOB_APPLICATION, ANALYZE_JOB_SEARCH,
+ * and deterministic job-fit assessment.
  */
 
 import {
@@ -9,6 +10,7 @@ import {
   createJobApplicationFromCommand,
   extractJobDescription,
   generateApplicationPack,
+  legacyProfileToCareerProfile,
 } from "@/lib/careerpath/career-os";
 import { tailorResume } from "@/lib/careerpath/agents";
 import { saveServerResume } from "@/lib/careerpath/db";
@@ -26,9 +28,10 @@ export async function handleGenerateApplicationPack(message: string, currentResu
   if (!resume) return { assistantMessage: "I need a resume or enough career details before I can prepare the full application pack. Paste your career info and the job description together.", resume: null, resumeId: null, missingFields: ["resume", "career profile"], workspace: buildCareerWorkspaceState(null) };
 
   const expectedVersion = resume.version;
-  const job = extractJobDescription(message || resume.jobDescription || "");
-  if (message.length > 80) {
-    const tailoring = tailorResume(resume, resume.profile, message);
+  const jobText = message.length > 100 ? message : resume.jobDescription || message;
+  const job = extractJobDescription(jobText);
+  if (jobText.length > 80) {
+    const tailoring = tailorResume(resume, resume.profile, jobText);
     const verified = await verifyResumeCandidate({
       content: tailoring.tailoredResume,
       currentResume: resume,
@@ -38,7 +41,7 @@ export async function handleGenerateApplicationPack(message: string, currentResu
       instruction: message,
       mode: "tailor",
       targetRole: resume.targetRole,
-      jobDescription: message,
+      jobDescription: jobText,
       metadata,
     });
     resume = {
@@ -46,19 +49,83 @@ export async function handleGenerateApplicationPack(message: string, currentResu
       content: verified.content,
       careerProfile: verified.careerProfile,
       tailoring: { ...tailoring, tailoredResume: verified.content },
-      jobDescription: message,
+      jobDescription: jobText,
       audit: verified.audit,
       score: verified.score,
     };
   }
-  decorateResumeForCareerOS(resume, message, { versionType: "job_specific" });
+  decorateResumeForCareerOS(resume, jobText, { versionType: "job_specific" });
   const pack = generateApplicationPack(resume.careerProfile!, resume, job);
   resume.applicationPack = pack;
   resume.jobSearchInsights = analyzeJobSearchPerformance(resume.applications || [], [resume.resumeDocument!]);
   resume.version = expectedVersion + 1;
   resume.updatedAt = new Date().toISOString();
   await saveServerResume(resume, resume.userId, { expectedVersion });
-  return { assistantMessage: `Application pack ready for ${job.title || resume.targetRole}. I generated a verified tailored resume, cover letter, recruiter DM, cold email, LinkedIn message, why-fit answer, and follow-up message.`, resume, resumeId: resume.id, versionCreated: true, workspace: buildCareerWorkspaceState(resume, message) };
+  return { assistantMessage: `Application pack ready for ${job.title || resume.targetRole}. I generated a verified tailored resume, cover letter, recruiter DM, cold email, LinkedIn message, why-fit answer, and follow-up message.`, resume, resumeId: resume.id, versionCreated: true, workspace: buildCareerWorkspaceState(resume, jobText) };
+}
+
+/**
+ * "Should I apply?" is a job-fit question, not job-search conversion analytics.
+ * It is intentionally deterministic and read-only: use the stored JD + Career
+ * Memory evidence and never mutate application history or consume an LLM call.
+ */
+export function handleAssessJobFit(currentResume: CareerPathResume | null) {
+  if (!currentResume) {
+    return {
+      assistantMessage: "Build Career Memory first, then paste the job description and ask whether you should apply.",
+      resume: null,
+      resumeId: null,
+      missingFields: ["career profile", "job description"],
+      workspace: buildCareerWorkspaceState(null),
+    };
+  }
+  if (!currentResume.jobDescription?.trim()) {
+    return {
+      assistantMessage: "I have your Career Memory, but no job description is stored for this workspace yet. Paste the role first, then ask whether you should apply.",
+      resume: currentResume,
+      resumeId: currentResume.id,
+      missingFields: ["job description"],
+      workspace: buildCareerWorkspaceState(currentResume),
+    };
+  }
+
+  const profile = currentResume.careerProfile || legacyProfileToCareerProfile(currentResume.profile, currentResume.userId);
+  const job = extractJobDescription(currentResume.jobDescription);
+  const intelligence = analyzeCareerLoopJob(job, profile);
+  const supported = intelligence.requirementEvidence
+    .filter((item) => item.status !== "missing")
+    .slice(0, 6)
+    .map((item) => `${item.requirement}${item.evidence.length ? ` — ${item.evidence[0]}` : ""}`);
+  const missing = intelligence.requirementEvidence
+    .filter((item) => item.status === "missing")
+    .slice(0, 6)
+    .map((item) => item.requirement);
+  const experienceGaps = intelligence.missingExperience || [];
+  const recommendation = intelligence.recommendation.toUpperCase();
+  const role = job.title || currentResume.targetRole || "this role";
+  const company = job.company ? ` at ${job.company}` : "";
+
+  const assistantMessage = [
+    `**Recommendation: ${recommendation}** — ${intelligence.fitPercentage}% evidence-backed fit for ${role}${company}.`,
+    intelligence.recommendationReason,
+    "",
+    "**Strongest overlap**",
+    ...(supported.length ? supported.map((item) => `- ${item}`) : ["- No strong requirement match is currently backed by Career Memory."]),
+    "",
+    "**Gaps to be transparent about**",
+    ...(missing.length || experienceGaps.length
+      ? [...missing, ...experienceGaps].slice(0, 8).map((item) => `- ${item}`)
+      : ["- No major evidence gap was detected."]),
+    "",
+    "I did not treat missing skills as experience and did not change Career Memory or your application tracker.",
+  ].join("\n");
+
+  return {
+    assistantMessage,
+    resume: currentResume,
+    resumeId: currentResume.id,
+    workspace: buildCareerWorkspaceState(currentResume),
+  };
 }
 
 export async function handleTrackJobApplication(message: string, currentResume: CareerPathResume | null, userId: string) {
@@ -75,11 +142,6 @@ export async function handleTrackJobApplication(message: string, currentResume: 
     fitRecommendation: intelligence?.recommendation,
   };
 
-  // job_applications is the canonical store for tracked jobs. Do not perform a
-  // second resume-row write after this insert: if that CAS conflicted, the API
-  // could report failure even though the job was already durably tracked, and a
-  // retry could create a duplicate. App-state reloads canonical jobs and attaches
-  // them to the resume on every request.
   await saveJobApplication(application, userId);
   const applications = [application, ...(currentResume.applications || []).filter((item) => item.id !== application.id)].slice(0, MAX_TRACKED_APPLICATIONS);
   currentResume.applications = applications;

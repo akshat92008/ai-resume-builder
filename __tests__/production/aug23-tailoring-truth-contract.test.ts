@@ -15,10 +15,12 @@ describe("Aug 23 production tailoring truth contract", () => {
     expect(verifiedResume).toContain("enforceResumeFactualIdentityBoundary(content, evidenceProfile)");
   });
 
-  it("reconciles chat tailoring metadata after final verification", () => {
-    expect(handler).toContain("reconcileVerifiedTailoringResult(tailoringResult, content, input.message)");
+  it("reconciles chat tailoring metadata after final verification against the resolved JD", () => {
+    expect(handler).toContain("resolveTailoringJobDescription(input.message, input.currentResume?.jobDescription)");
+    expect(handler).toContain("reconcileVerifiedTailoringResult(tailoringResult, content, resolvedJobDescription)");
     expect(handler).toContain("nextResume.tailoring = tailoringResult");
     expect(handler).toContain('const profileSeedInput = input.mode === "build" ? input.message : legacyProfile.rawNotes || "";');
+    expect(handler).toContain('jobDescription: input.mode === "tailor" ? resolvedJobDescription : input.currentResume?.jobDescription');
   });
 
   it("reconciles the standalone tailoring endpoint after final verification", () => {

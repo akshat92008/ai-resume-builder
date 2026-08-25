@@ -30,6 +30,11 @@ type AgentError = {
   recoverable: boolean;
 };
 
+function isDirectJobFitQuery(message: string) {
+  const text = message.replace(/\s+/g, " ").trim().toLowerCase();
+  return /\b(?:should i apply|should i apply to (?:this|the) (?:role|job)|overall fit|fit for (?:this|the) (?:role|job)|how good (?:is|am) my fit|strengths[^.!?]{0,80}gaps[^.!?]{0,80}fit)\b/.test(text);
+}
+
 function mapCommandIntent(commandIntent: string, hasResume: boolean): AgentIntent | null {
   switch (commandIntent) {
     case "generate_application_pack": return "GENERATE_APPLICATION_PACK";
@@ -123,6 +128,7 @@ export async function POST(request: Request) {
       resume: currentResume,
       applications: currentResume?.applications,
     });
+    const directJobFit = isDirectJobFitQuery(message);
 
     let quotaConsumed = false;
     async function consumeAiQuota() {
@@ -153,9 +159,8 @@ export async function POST(request: Request) {
       return null;
     }
 
-    // These operations are entirely deterministic. They must stay usable even
-    // after the AI budget is exhausted and must never consume an AI action.
-    const deterministicNoAi = isReadOnlyCareerMemoryQuery(message) || isFabricationInstruction(message);
+    // Entirely deterministic operations remain available without an AI call.
+    const deterministicNoAi = isReadOnlyCareerMemoryQuery(message) || isFabricationInstruction(message) || directJobFit;
     let intent: AgentIntent | null = deterministicNoAi ? "GENERAL_HELP" : mapCommandIntent(command.intent, Boolean(currentResume));
 
     if (!intent) {
@@ -165,9 +170,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Known product commands and high-confidence local intent matches only need
-    // deterministic injection protection. Unknown conversational input retains
-    // the semantic classifier, and that classifier is counted as an AI action.
     const needsSemanticGuardrail = !intent;
     if (needsSemanticGuardrail) {
       const limited = await consumeAiQuota();
@@ -221,9 +223,6 @@ export async function POST(request: Request) {
       operationId,
     });
 
-    // Interactive CareerOS actions execute in the request instead of waiting on
-    // a background queue. Provider calls are hard-bounded in llm.ts, making the
-    // latency predictable while preserving the same verified-resume pipeline.
     try {
       const result = await processCareerIntent(
         intent,

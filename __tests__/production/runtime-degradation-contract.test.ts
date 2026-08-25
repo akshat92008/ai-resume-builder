@@ -24,11 +24,14 @@ describe("production runtime degradation contract", () => {
     expect(verifiedResume).toContain("Scoring is advisory and must never be able to hold the truth-critical write");
   });
 
-  it("keeps dedicated improve/tailor/humanize paths available without inventing facts", () => {
+  it("keeps dedicated improve/tailor paths available and makes humanize timeout an explicit no-op", () => {
     expect(improveRoute).toContain("fallbackImproveResume");
     expect(tailorRoute).toContain("fallbackTailorResume");
-    expect(differentiationHandlers).toContain("fallbackHumanizedResume");
+    expect(differentiationHandlers).toContain("The humanizer timed out");
+    expect(differentiationHandlers).toContain("left your verified resume unchanged");
+    expect(differentiationHandlers).toContain("No wording changes were saved and no facts were added");
     expect(differentiationHandlers).toContain("verifyResumeCandidate");
+    expect(differentiationHandlers).not.toContain("fallbackHumanizedResume");
   });
 
   it("normalizes old and new Career Memory draft content before workspace derivation", () => {

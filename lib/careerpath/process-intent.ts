@@ -16,6 +16,7 @@ import {
   handleGenerateApplicationPack,
   handleTrackJobApplication,
   handleAnalyzeJobSearch,
+  handleAssessJobFit,
   handleStarInterview,
   handleHumanizeResume,
   handleEstimateImpact,
@@ -43,10 +44,29 @@ export function isDirectInternshipRecall(message: string) {
   return /^\s*(?:where\s+did\s+i\s+intern(?:\s+and\s+when)?|when\s+did\s+i\s+intern|which\s+company\s+did\s+i\s+intern\s+at)\s*\??\s*$/i.test(message);
 }
 
-function deterministicCommandIntent(message: string, classifiedIntent: AgentIntent): AgentIntent {
+/**
+ * Product-level job-fit questions are read-only and deterministic. Keep this
+ * detector local to the dispatcher too so the route and dispatcher cannot drift
+ * into separate behavior after command-taxonomy changes.
+ */
+export function isDirectJobFitQuery(message: string) {
+  const text = message.replace(/\s+/g, " ").trim().toLowerCase();
+  return /\b(?:should i apply|should i apply to (?:this|the) (?:role|job)|overall fit|fit for (?:this|the) (?:role|job)|how good (?:is|am) my fit|strengths[^.!?]{0,80}gaps[^.!?]{0,80}fit)\b/.test(text);
+}
+
+function commandIntent(command: unknown) {
+  return command && typeof command === "object" && "intent" in command
+    ? String((command as { intent?: unknown }).intent || "")
+    : "";
+}
+
+export function deterministicCommandIntent(message: string, classifiedIntent: AgentIntent): AgentIntent {
   const text = message.replace(/\s+/g, " ").trim().toLowerCase();
   if (/\b(?:humanize|humanise|less robotic|sound human|sound natural|natural wording|remove ai[- ]sounding|de[- ]?ai)\b/.test(text)) {
     return "HUMANIZE_RESUME";
+  }
+  if (/\b(?:more impressive|10x more impressive|stronger impact|more impactful)\b/.test(text) && /\b(?:resume|experience|internship|bullet|project|achievement)\b/.test(text)) {
+    return "IMPROVE_RESUME";
   }
   return classifiedIntent;
 }
@@ -135,12 +155,12 @@ export async function processCareerIntent(
         workspace: buildCareerWorkspaceState(currentResume),
       };
     case "GENERAL_HELP": {
-      if (
-        command &&
-        typeof command === "object" &&
-        "intent" in command &&
-        (command as { intent?: string }).intent === "optimize_linkedin"
-      ) {
+      if (isDirectJobFitQuery(message)) {
+        return handleAssessJobFit(currentResume);
+      }
+
+      const routedCommand = commandIntent(command);
+      if (routedCommand === "optimize_linkedin") {
         const workspace = buildCareerWorkspaceState(currentResume);
         const linkedIn = workspace.linkedInOptimization;
         return {

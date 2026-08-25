@@ -2,7 +2,7 @@ import type { CareerProfile } from "./types";
 
 const MUTATION_WORDS = /\b(?:add|update|change|correct|replace|remove|delete|forget|store|save|log|build|create|generate|rewrite|improve|tailor|edit|set|clear|refresh)\b/i;
 const MEMORY_READ_PHRASES = /(?:\b(?:show|tell|list|summari[sz]e|display|review|recap)\b[^.!?\n]{0,100}\b(?:career\s+memory|what\s+you\s+(?:know|remember)|stored|saved)\b|\bwhat\s+(?:do|did)\s+you\s+(?:currently\s+)?(?:know|remember)\s+about\s+me\b|\bwhat\s+is\s+(?:currently\s+)?(?:in|stored\s+in)\s+(?:my\s+)?career\s+memory\b|\beverything\s+you\s+(?:currently\s+)?know\s+about\s+me\b)/i;
-const FACT_READ_PHRASES = /(?:\bwhat\s+(?:university|college|school|institution)\s+do\s+i\s+(?:attend|go\s+to)\b|\bwhere\s+do\s+i\s+(?:study|go\s+to\s+(?:college|university|school))\b|\bwhat\s+(?:is|was)\s+my\s+(?:current\s+)?(?:cgpa|gpa|grade|score)\b|\b(?:what\s+are\s+my\s+skills|list\s+(?:every|all|my)\s+skills?|list\s+every\s+skill\s+you\s+(?:currently\s+)?know\s+about\s+me)\b|\bdo\s+i\s+(?:currently\s+)?know\b|\bwhat\s+(?:projects?|certifications?|achievements?|experience|education)\s+do\s+i\s+have\b|\bwhat\s+(?:was|is)\s+my\s+(?:internship|work)\s+(?:duration|dates?)\b|\bwhen\s+did\s+i\s+(?:work|intern)\s+at\b|\bwhat\s+(?:measurable\s+)?impact\s+did\s+i\s+have\b|\btell\s+me\s+what\s+you\s+remember\s+about\s+my\b)/i;
+const FACT_READ_PHRASES = /(?:\bwhat\s+(?:university|college|school|institution)\s+do\s+i\s+(?:attend|go\s+to)\b|\bwhere\s+do\s+i\s+(?:study|go\s+to\s+(?:college|university|school))\b|\bwhat\s+(?:is|was)\s+my\s+(?:current\s+)?(?:cgpa|gpa|grade|score)\b|\b(?:what\s+are\s+my\s+skills|list\s+(?:every|all|my)\s+skills?|list\s+every\s+skill\s+you\s+(?:currently\s+)?know\s+about\s+me)\b|\bwhat\s+(?:programming\s+languages?|technologies|tech(?:nology)?|tools?|frameworks?)\s+do\s+i\s+(?:actually\s+|currently\s+)?(?:know|have|use)\b|\bdo\s+i\s+(?:currently\s+)?know\b|\bwhat\s+(?:projects?|certifications?|achievements?|experience|education)\s+do\s+i\s+have\b|\bwhat\s+projects?\s+(?:have\s+i\s+built|did\s+i\s+build|have\s+i\s+made|did\s+i\s+make)\b|\bwhere\s+did\s+i\s+intern(?:\s+and\s+when)?\b|\bwhich\s+company\s+did\s+i\s+intern\s+at\b|\bwhen\s+did\s+i\s+intern\b|\bwhat\s+(?:was|is)\s+my\s+(?:internship|work)\s+(?:duration|dates?)\b|\bwhen\s+did\s+i\s+(?:work|intern)\s+at\b|\bwhat\s+(?:measurable\s+)?impact\s+did\s+i\s+have\b|\btell\s+me\s+what\s+you\s+remember\s+about\s+my\b)/i;
 
 /**
  * Read-only Career Memory questions must never reach mutation handlers or burn
@@ -81,7 +81,7 @@ export function answerCareerMemoryQuery(message: string, profile: CareerProfile 
       : "Career Memory does not currently contain a CGPA, GPA, grade, or academic score.";
   }
 
-  if (/\bskills?\b/.test(text) && /\b(?:what|list|know|remember)\b/.test(text)) {
+  if (/\b(?:skills?|programming\s+languages?|technologies|tech(?:nology)?|tools?|frameworks?)\b/.test(text) && /\b(?:what|list|know|remember|use|have)\b/.test(text)) {
     const skills = unique(profile.skills.map((item) => item.name));
     return skills.length
       ? `Skills currently stored in Career Memory: ${skills.join(", ")}.`
@@ -95,7 +95,7 @@ export function answerCareerMemoryQuery(message: string, profile: CareerProfile 
       : "Career Memory does not currently contain any certifications.";
   }
 
-  if (/\bprojects?\b/.test(text) && /\b(?:what|list|have|remember)\b/.test(text)) {
+  if (/\bprojects?\b/.test(text) && /\b(?:what|list|have|remember|built|build|made|make)\b/.test(text)) {
     const projects = profile.projects.map((item) => item.name).filter(Boolean);
     return projects.length
       ? `Projects currently stored in Career Memory: ${projects.join(", ")}.`
@@ -104,7 +104,7 @@ export function answerCareerMemoryQuery(message: string, profile: CareerProfile 
 
   const mentionedExperience = findMentionedExperience(message, profile);
   const internship = mentionedExperience || profile.experience.find((item) => /\bintern(?:ship)?\b/i.test(`${item.title} ${item.description || ""}`));
-  if (internship && /\b(?:duration|dates?|when)\b/.test(text)) {
+  if (internship && (/\b(?:duration|dates?|when)\b/.test(text) || /\bwhere\s+did\s+i\s+intern\b/.test(text) || /\bwhich\s+company\s+did\s+i\s+intern\s+at\b/.test(text))) {
     const dates = dateRange(internship.startDate, internship.endDate);
     const identity = joined([internship.title, internship.company]);
     return dates
