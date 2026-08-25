@@ -20,13 +20,19 @@ describe("production auth email verification contract", () => {
     expect(route).toContain('checkRateLimit(null, getClientIp(request), "signup", 20)');
   });
 
-  it("tells the user to verify their email instead of claiming email delivery is disabled", () => {
+  it("states verification is required without falsely guaranteeing repeated-signup delivery", () => {
     const signup = source("app/signup/page.tsx");
     const login = source("app/login/page.tsx");
-    expect(signup).toContain("Verification email requested");
+    const resend = source("app/api/auth/resend-verification/route.ts");
+    expect(signup).toContain("Email verification is required before you can sign in");
+    expect(signup).toContain("Resend verification email");
+    expect(signup).toContain("repeat signup attempts may be intentionally masked by Supabase");
     expect(signup).not.toContain("No inbox detour");
     expect(signup).not.toContain("delivery is not configured");
     expect(login).toContain("Your email is not verified yet");
+    expect(login).toContain("Resend verification email");
     expect(login).not.toContain("earlier beta signup flow");
+    expect(resend).toContain("supabase.auth.resend");
+    expect(resend).toContain('type: "signup"');
   });
 });
