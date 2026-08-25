@@ -16,6 +16,7 @@ import { createResumeRecord } from "@/lib/careerpath/agents";
 import {
   applyAchievementLog,
   buildCareerWorkspaceState,
+  extractJobDescription,
   generateSmartResumeVersions,
   isAchievementLogInput,
   legacyProfileToCareerProfile,
@@ -49,6 +50,26 @@ import type {
   CareerPathResumeContent,
   GapReport,
 } from "@/lib/careerpath/types";
+
+/**
+ * Distinguish a real pasted JD from a short command that merely refers to one.
+ * The production recording exposed why this matters: "Tailor my resume for the
+ * Nova Systems role" was previously treated as the JD itself, erasing the
+ * stored Requirements block and yielding matched=0/missing=0 on provider fallback.
+ */
+export function looksLikeEmbeddedJobDescription(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+  if (/(?:^|\n)\s*(?:job description|requirements?|responsibilities|qualifications|preferred(?: qualifications)?|about the role|what you(?:'|’)ll do|what we(?:'|’)re looking for)\s*:/im.test(text)) return true;
+  const bulletCount = (text.match(/(?:^|\n)\s*[-*•]\s+/g) || []).length;
+  return text.length >= 280 && bulletCount >= 2 && /\b(?:requirements?|responsibilities|qualifications|we are looking|preferred)\b/i.test(text);
+}
+
+export function resolveTailoringJobDescription(message: string, storedJobDescription?: string | null) {
+  if (looksLikeEmbeddedJobDescription(message)) return message.trim();
+  if (storedJobDescription?.trim()) return storedJobDescription.trim();
+  return message.trim();
+}
 
 export async function handleCreateResume(
   message: string,
@@ -165,6 +186,9 @@ export async function applyBrainToResume(input: {
   const structuredProfileInput = input.mode === "build" && looksLikeStructuredCareerProfile(input.message);
   const comprehensiveStructuredProfileInput = input.mode === "build"
     && looksLikeComprehensiveStructuredCareerProfile(input.message);
+  const resolvedJobDescription = input.mode === "tailor"
+    ? resolveTailoringJobDescription(input.message, input.currentResume?.jobDescription)
+    : input.currentResume?.jobDescription || "";
 
   if (input.mode === "build") {
     const previousLegacyProfile = legacyProfile;
@@ -246,17 +270,16 @@ export async function applyBrainToResume(input: {
   let matchedKeywords: string[] = [];
 
   if (input.mode === "tailor" && input.currentResume) {
-    const jobDesc = input.message;
     try {
       tailoringResult = await tailorResumeAgent(
         input.currentResume.content,
         input.currentResume.targetRole || "",
-        jobDesc,
+        resolvedJobDescription,
         input.metadata,
       );
     } catch {
       degradedByProvider = true;
-      tailoringResult = fallbackTailorResume(input.currentResume.content, jobDesc);
+      tailoringResult = fallbackTailorResume(input.currentResume.content, resolvedJobDescription);
     }
     candidateContent = tailoringResult.tailoredResume;
   } else if (input.mode === "improve" && input.currentResume) {
@@ -309,7 +332,13 @@ export async function applyBrainToResume(input: {
     message: input.mode === "build" ? input.message : "",
   });
 
-  const targetRole = input.currentResume?.targetRole || profile.target?.targetRoles?.[0] || "Target Role";
+  const resolvedJob = input.mode === "tailor" && resolvedJobDescription
+    ? extractJobDescription(resolvedJobDescription)
+    : null;
+  const existingTargetRole = input.currentResume?.targetRole && input.currentResume.targetRole !== "Target Role"
+    ? input.currentResume.targetRole
+    : "";
+  const targetRole = resolvedJob?.title || existingTargetRole || profile.target?.targetRoles?.[0] || "Target Role";
   const verified = await verifyResumeCandidate({
     content: candidateContent,
     currentResume: input.currentResume,
@@ -319,14 +348,14 @@ export async function applyBrainToResume(input: {
     instruction: input.message,
     mode: input.mode,
     targetRole,
-    jobDescription: input.mode === "tailor" ? input.message : input.currentResume?.jobDescription,
+    jobDescription: input.mode === "tailor" ? resolvedJobDescription : input.currentResume?.jobDescription,
     metadata: input.metadata,
   });
   const content = verified.content;
   profile = verified.careerProfile;
 
   if (tailoringResult && input.mode === "tailor") {
-    tailoringResult = reconcileVerifiedTailoringResult(tailoringResult, content, input.message);
+    tailoringResult = reconcileVerifiedTailoringResult(tailoringResult, content, resolvedJobDescription);
     missingKeywords = tailoringResult.missingKeywordsNotAdded;
     matchedKeywords = tailoringResult.matchedKeywords;
     assistantMessage = `Tailored the resume toward the job. Matched: ${matchedKeywords.join(", ") || "none yet"}. Missing from your resume: ${missingKeywords.join(", ") || "none detected"}. I did not add missing skills or experience without Career Memory evidence.`;
@@ -350,7 +379,9 @@ export async function applyBrainToResume(input: {
         content,
         score: verified.score,
         audit: verified.audit,
-        jobDescription: verified.validation.cleanedResume.target.jobDescription || input.currentResume.jobDescription,
+        jobDescription: input.mode === "tailor"
+          ? resolvedJobDescription
+          : verified.validation.cleanedResume.target.jobDescription || input.currentResume.jobDescription,
         version: input.currentResume.version + 1,
         updatedAt: now,
       }
@@ -369,9 +400,11 @@ export async function applyBrainToResume(input: {
     nextResume.tailoring = tailoringResult;
   }
 
-  decorateResumeForCareerOS(nextResume, input.mode === "build" ? input.message : undefined, {
-    versionType: input.mode === "tailor" ? "job_specific" : "master",
-  });
+  decorateResumeForCareerOS(
+    nextResume,
+    input.mode === "build" ? input.message : input.mode === "tailor" ? resolvedJobDescription : undefined,
+    { versionType: input.mode === "tailor" ? "job_specific" : "master" },
+  );
   await saveServerResume(
     nextResume,
     input.userId,
@@ -385,6 +418,6 @@ export async function applyBrainToResume(input: {
     resume: nextResume,
     resumeId: nextResume.id,
     versionCreated: input.versionCreated,
-    workspace: buildCareerWorkspaceState(nextResume, input.message),
+    workspace: buildCareerWorkspaceState(nextResume, input.mode === "tailor" ? resolvedJobDescription : input.message),
   };
 }
