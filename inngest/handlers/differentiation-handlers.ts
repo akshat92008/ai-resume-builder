@@ -5,7 +5,6 @@ import { starInterviewAgent, humanizeResumeAgent, estimateImpactAgent, analyzeCa
 import { legacyProfileToCareerProfile, buildCareerWorkspaceState } from "@/lib/careerpath/career-os";
 import { saveServerResume, saveResumeVersion } from "@/lib/careerpath/db";
 import { verifyResumeCandidate } from "@/lib/careerpath/verified-resume";
-import { fallbackHumanizedResume } from "@/lib/careerpath/runtime-fallbacks";
 import { normalizeResumeContent } from "@/lib/careerpath/resume-content-normalization";
 import type { CareerPathResume } from "@/lib/careerpath/types";
 
@@ -32,15 +31,23 @@ export async function handleHumanizeResume(currentResume: CareerPathResume | nul
   if (!currentResume) return { assistantMessage: "Build a resume first, then I can strip out AI-speak and make it sound genuinely human.", resume: null, resumeId: null, workspace: buildCareerWorkspaceState(null) };
   currentResume.content = normalizeResumeContent(currentResume.content);
   const expectedVersion = currentResume.version;
-  await saveResumeVersion({ userId, resumeId: currentResume.id, versionName: `Before humanize v${currentResume.version}`, resumeJson: currentResume.content, reason: "Pre-humanize snapshot" });
-  let providerDegraded = false;
+
   let result;
   try {
     result = await humanizeResumeAgent(currentResume.content, currentResume.targetRole, metadata);
   } catch {
-    providerDegraded = true;
-    result = fallbackHumanizedResume(currentResume.content);
+    // A provider timeout must be an explicit no-op. The production recording
+    // showed a timeout being reported as a successful humanization even though
+    // zero wording changes were made. Do not create a version or mutate state.
+    return {
+      assistantMessage: "The humanizer timed out, so CareerOS left your verified resume unchanged. No wording changes were saved and no facts were added. Retry the humanize action when you want another pass.",
+      resume: currentResume,
+      resumeId: currentResume.id,
+      workspace: buildCareerWorkspaceState(currentResume),
+    };
   }
+
+  await saveResumeVersion({ userId, resumeId: currentResume.id, versionName: `Before humanize v${currentResume.version}`, resumeJson: currentResume.content, reason: "Pre-humanize snapshot" });
   const verified = await verifyResumeCandidate({
     content: result.content,
     currentResume,
@@ -60,7 +67,10 @@ export async function handleHumanizeResume(currentResume: CareerPathResume | nul
   currentResume.score = verified.score;
   await persistMutation(currentResume, expectedVersion);
   const removed = verified.provenance.removedClaims;
-  return { assistantMessage: `Humanized ✓ — made ${result.changes.length} change${result.changes.length !== 1 ? "s" : ""}. Removed AI clichés: ${result.clisheesRemoved.slice(0, 6).join(", ") || "none found"}.${removed ? ` The truth layer removed ${removed} unsupported claim${removed === 1 ? "" : "s"} before saving.` : ""}${providerDegraded ? " The external AI service was slow, so CareerOS preserved the verified wording unchanged instead of failing or inventing replacements." : ""}\n\n${result.summary}\n\nYour resume now sounds more natural while staying inside verified Career Memory.`, resume: currentResume, resumeId: currentResume.id, versionCreated: true, workspace: buildCareerWorkspaceState(currentResume) };
+  const changeSummary = result.changes.length
+    ? `Humanized ✓ — made ${result.changes.length} change${result.changes.length !== 1 ? "s" : ""}. Removed AI clichés: ${result.clisheesRemoved.slice(0, 6).join(", ") || "none found"}.`
+    : "Humanize completed, but the verified resume did not need any wording changes.";
+  return { assistantMessage: `${changeSummary}${removed ? ` The truth layer removed ${removed} unsupported claim${removed === 1 ? "" : "s"} before saving.` : ""}\n\n${result.summary}${result.changes.length ? "\n\nYour resume now sounds more natural while staying inside verified Career Memory." : ""}`, resume: currentResume, resumeId: currentResume.id, versionCreated: true, workspace: buildCareerWorkspaceState(currentResume) };
 }
 
 export async function handleEstimateImpact(currentResume: CareerPathResume | null, userId: string, metadata: { userId: string; resumeId?: string }) {
